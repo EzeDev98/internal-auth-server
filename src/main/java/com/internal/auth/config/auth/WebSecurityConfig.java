@@ -11,6 +11,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.core.GrantedAuthorityDefaults;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -73,6 +74,17 @@ public class WebSecurityConfig {
                         // Allow public endpoints
                         .requestMatchers("/public/**").permitAll()
 
+                        // Step 14B - actuator now runs on a separate port (management.server.port,
+                        // see application.properties), but that alone does NOT exempt it from this
+                        // filter chain: a custom SecurityFilterChain bean (this one) makes Spring
+                        // Boot's own actuator-security auto-configuration back off entirely, and
+                        // this app's security applies across every connector/port it listens on,
+                        // not just the main one - confirmed the hard way (both ports returned this
+                        // app's own 401 JSON until this matcher was added). EndpointRequest matches
+                        // actuator's actual configured paths regardless of base-path/port, which is
+                        // more robust than hardcoding "/actuator/**" as a literal string.
+                        .requestMatchers(EndpointRequest.toAnyEndpoint()).permitAll()
+
                         // Allow robots.txt for crawlers
                         .requestMatchers("/robots.txt").permitAll()
 
@@ -86,8 +98,6 @@ public class WebSecurityConfig {
                                 "/webjars/**",
                                 "/api-docs/**"
                         ).permitAll()
-                        // Allow actuator health endpoint for Docker health checks
-                        .requestMatchers("/actuator/health").permitAll()
 
                         // Block malicious scanner probes
                         .requestMatchers(maliciousProbesMatcher()).denyAll()

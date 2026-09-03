@@ -1,12 +1,8 @@
 package com.internal.auth.config.auth;
 
-import com.nimbusds.jose.jwk.JWKSet;
-import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import com.internal.auth.feature.signingkey.service.SigningKeyService;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,24 +25,9 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Toke
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.security.web.SecurityFilterChain;
 
-import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
-import java.security.interfaces.RSAPrivateCrtKey;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.RSAPublicKeySpec;
-import java.util.Base64;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -90,21 +71,19 @@ import java.util.stream.Collectors;
  * ClientApplicationRegisteredClientRepository (a plain {@code @Component},
  * picked up automatically as the one bean of that type in the context).
  *
- * <p><b>Signing key (Step 12B):</b> loaded from
- * app.authorization-server.signing-key-pem, a Base64-encoded PKCS#8 PEM
- * RSA private key (generate one with
- * {@code openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048},
- * then Base64-encode the whole PEM file onto one line - env vars don't
- * tolerate embedded newlines well). The public key and a stable key ID
- * (a SHA-256 hash of the public key itself, not a random UUID) are derived
- * from it, so the same env var value always produces the same JWK. If the
- * property is blank, this falls back to a fresh in-memory key generated on
- * the spot (Step 12A's original behavior) with a warning logged - kept as
- * a deliberate local-dev convenience rather than failing the boot outright
- * like app.token-issuer-uri does, since nothing validates self-issued
- * tokens yet (Step 12D). Revisit this fallback once that cutover happens
- * or before any real deployment - Step 14E ("real secret management") is
- * the natural home for tightening it further.
+ * <p><b>Signing key (Step 12B, superseded by Step 14D):</b> key material
+ * now lives entirely in SigningKeyService, backed by the signing_key table
+ * (V16) instead of a single static env var. On first boot with an empty
+ * table, it seeds one row from app.authorization-server.signing-key-pem if
+ * set (same Base64-PEM format as before, so an existing deployment's key
+ * carries over and doesn't invalidate outstanding tokens on upgrade), or
+ * generates and persists a brand new one if that property is blank - no
+ * more "regenerates every restart" fallback; once a key exists in the
+ * table it survives restarts. Rotation (a new admin-only endpoint,
+ * SigningKeyController) generates a new key, makes it current for signing,
+ * and keeps the previous key valid for verification for
+ * AppConstant.SIGNING_KEY_GRACE_PERIOD_DAYS before retiring it. See
+ * SigningKeyServiceImpl's javadoc for the full lifecycle.
  *
  * <p><b>Issuer (app.self-issuer-uri):</b> deliberately a new, separate
  * property from app.token-issuer-uri. That existing property is this app's
@@ -150,13 +129,8 @@ import java.util.stream.Collectors;
 @Configuration
 public class AuthorizationServerConfig {
 
-    private static final Logger log = LoggerFactory.getLogger(AuthorizationServerConfig.class);
-
     @Value("${app.self-issuer-uri}")
     private String selfIssuerUri;
-
-    @Value("${app.authorization-server.signing-key-pem}")
-    private String signingKeyPemBase64;
 
     @Bean
     @Order(1)
@@ -169,16 +143,18 @@ public class AuthorizationServerConfig {
         return http.build();
     }
 
+    /**
+     * Step 14D: no longer builds a key itself - SigningKeyService owns all
+     * key material (generation, PEM encode/decode, persistence, rotation).
+     * This bean is a thin adapter: every JWKSource.get(...) call reads
+     * whatever SigningKeyService's cache currently holds, so a rotation
+     * takes effect for both this JWKS-endpoint-facing bean and the
+     * tokenGenerator() bean below (they share this exact instance) without
+     * either bean needing to be rebuilt or the app restarted.
+     */
     @Bean
-    public JWKSource<SecurityContext> jwkSource() {
-        KeyPair keyPair = loadOrGenerateRsaKey();
-        RSAPublicKey publicKey = (RSAPublicKey) keyPair.getPublic();
-        RSAPrivateKey privateKey = (RSAPrivateKey) keyPair.getPrivate();
-        RSAKey rsaKey = new RSAKey.Builder(publicKey)
-                .privateKey(privateKey)
-                .keyID(computeKeyId(publicKey))
-                .build();
-        return new ImmutableJWKSet<>(new JWKSet(rsaKey));
+    public JWKSource<SecurityContext> jwkSource(SigningKeyService signingKeyService) {
+        return (jwkSelector, securityContext) -> jwkSelector.select(signingKeyService.getJwkSet());
     }
 
     @Bean
@@ -246,10 +222,20 @@ public class AuthorizationServerConfig {
      * UsernamePasswordAuthenticationToken built from that user's
      * UserRole/Role rows, so this is what actually populates "roles" for
      * the first time.
+     *
+     * Step 14D addition: also stamps the JWS header's "kid" to whichever
+     * key SigningKeyService currently considers current, on every token
+     * type (not just access tokens) - not optional once jwkSource() can
+     * hold more than one same-algorithm key. NimbusJwtEncoder throws
+     * JwtEncodingException on an ambiguous multi-key match instead of
+     * picking one arbitrarily (confirmed against NimbusJwtEncoder's
+     * selectJwk() source, tag 7.1.1), so without this the moment a second
+     * key exists in the JWKSet every token mint would start failing.
      */
     @Bean
-    public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer() {
+    public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer(SigningKeyService signingKeyService) {
         return context -> {
+            context.getJwsHeader().keyId(signingKeyService.getCurrentKid());
             if (OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())) {
                 Collection<? extends GrantedAuthority> authorities = context.getPrincipal().getAuthorities();
                 if (authorities != null && !authorities.isEmpty()) {
@@ -260,75 +246,5 @@ public class AuthorizationServerConfig {
                 }
             }
         };
-    }
-
-    private KeyPair loadOrGenerateRsaKey() {
-        if (signingKeyPemBase64 == null || signingKeyPemBase64.isBlank()) {
-            log.warn("app.authorization-server.signing-key-pem is not set - generating a throwaway RSA key for this boot only. "
-                    + "Every token this server has minted becomes invalid the instant it restarts. Set AUTH_SIGNING_KEY_PEM "
-                    + "for a persistent key (see this class's javadoc for how to generate one).");
-            return generateEphemeralRsaKey();
-        }
-        return decodePemRsaKey(signingKeyPemBase64);
-    }
-
-    private KeyPair decodePemRsaKey(String base64EncodedPem) {
-        String pem;
-        try {
-            pem = new String(Base64.getDecoder().decode(base64EncodedPem), StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalStateException("app.authorization-server.signing-key-pem is not valid Base64", e);
-        }
-
-        String strippedBase64 = pem
-                .replace("-----BEGIN PRIVATE KEY-----", "")
-                .replace("-----END PRIVATE KEY-----", "")
-                .replaceAll("\\s", "");
-
-        byte[] der;
-        try {
-            der = Base64.getDecoder().decode(strippedBase64);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalStateException("app.authorization-server.signing-key-pem did not decode to a valid PEM body", e);
-        }
-
-        try {
-            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-            RSAPrivateCrtKey privateKey = (RSAPrivateCrtKey) keyFactory.generatePrivate(new PKCS8EncodedKeySpec(der));
-            RSAPublicKeySpec publicKeySpec = new RSAPublicKeySpec(privateKey.getModulus(), privateKey.getPublicExponent());
-            PublicKey publicKey = keyFactory.generatePublic(publicKeySpec);
-            return new KeyPair(publicKey, privateKey);
-        } catch (GeneralSecurityException | ClassCastException e) {
-            throw new IllegalStateException(
-                    "app.authorization-server.signing-key-pem must be a PKCS#8-encoded RSA private key "
-                            + "(e.g. from `openssl genpkey -algorithm RSA`)", e);
-        }
-    }
-
-    private static KeyPair generateEphemeralRsaKey() {
-        try {
-            KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
-            keyPairGenerator.initialize(2048);
-            return keyPairGenerator.generateKeyPair();
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("Failed to generate a fallback ephemeral signing key", ex);
-        }
-    }
-
-    /**
-     * A stable key ID derived from the key itself (SHA-256 of the public
-     * key's encoded form), not a random UUID - so the same signing key
-     * always produces the same "kid", instead of a new one every restart
-     * even when the key itself didn't change.
-     */
-    private static String computeKeyId(RSAPublicKey publicKey) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(publicKey.getEncoded());
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(hash).substring(0, 16);
-        } catch (NoSuchAlgorithmException e) {
-            // SHA-256 is guaranteed present on every JVM - unreachable in practice.
-            return UUID.randomUUID().toString();
-        }
     }
 }

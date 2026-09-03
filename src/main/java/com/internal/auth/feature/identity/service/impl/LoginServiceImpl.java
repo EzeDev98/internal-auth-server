@@ -1,5 +1,6 @@
 package com.internal.auth.feature.identity.service.impl;
 
+import com.internal.auth.feature.audit.service.AuditService;
 import com.internal.auth.common.exception.AccountDisabledException;
 import com.internal.auth.common.exception.AccountNotVerifiedException;
 import com.internal.auth.common.exception.InvalidCredentialsException;
@@ -115,6 +116,7 @@ public class LoginServiceImpl implements LoginService {
     // (see class javadoc), so this is a label, not an enforced value.
     private static final AuthorizationGrantType LOCAL_LOGIN_GRANT_TYPE = new AuthorizationGrantType("local_login");
 
+    private final AuditService auditService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final LoginMfaOtpRepository loginMfaOtpRepository;
@@ -166,6 +168,7 @@ public class LoginServiceImpl implements LoginService {
         }
 
         log.info("User id {} logged in", user.getId());
+        auditService.recordUserLoggedIn(user, clientApplicationId);
         String accessToken = mintAccessToken(user, clientApplicationId);
         return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false, accessToken);
     }
@@ -186,6 +189,7 @@ public class LoginServiceImpl implements LoginService {
                 .orElseThrow(() -> new InvalidCredentialsException(INVALID_CREDENTIALS_MESSAGE));
 
         log.info("User id {} completed MFA login step-up", user.getId());
+        auditService.recordUserLoggedIn(user, clientApplicationId);
         String accessToken = mintAccessToken(user, clientApplicationId);
         return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false, accessToken);
     }

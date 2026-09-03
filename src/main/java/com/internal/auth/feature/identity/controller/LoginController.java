@@ -6,6 +6,8 @@ import com.internal.auth.feature.identity.dto.LoginRequest;
 import com.internal.auth.feature.identity.dto.LoginResponse;
 import com.internal.auth.feature.identity.dto.VerifyLoginOtpRequest;
 import com.internal.auth.feature.identity.service.LoginService;
+import com.internal.auth.common.constant.AppConstant;
+import com.internal.auth.common.util.RateLimiterService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -15,6 +17,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.servlet.http.HttpServletRequest;
+
+import java.time.Duration;
 
 /**
  * Step 11A/11E. Same literal "/api/v1/auth" base as RegistrationController.
@@ -35,11 +40,14 @@ public class LoginController {
 
     private final LoginService loginService;
     private final ClientApplicationService clientApplicationService;
+    private final RateLimiterService rateLimiterService;
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
-            @RequestBody LoginRequest request) {
+            @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest) {
+        rateLimiterService.checkRateLimit(AppConstant.LOGIN_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_LOGIN_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_RATE_LIMIT_DURATION_MINUTES));
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
         return ResponseEntity.ok(loginService.login(request, client.getId()));
     }
@@ -47,7 +55,9 @@ public class LoginController {
     @PostMapping("/login/verify-otp")
     public ResponseEntity<LoginResponse> verifyLoginOtp(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
-            @RequestBody VerifyLoginOtpRequest request) {
+            @RequestBody VerifyLoginOtpRequest request,
+            HttpServletRequest httpRequest) {
+        rateLimiterService.checkRateLimit(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_LOGIN_OTP_VERIFY_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_DURATION_MINUTES));
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
         return ResponseEntity.ok(loginService.verifyLoginOtp(request, client.getId()));
     }

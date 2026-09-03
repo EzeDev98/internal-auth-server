@@ -28,8 +28,9 @@ Thumbs.db
 *.pem.b64
 *.key
 
-# Local-only property overrides, if you ever add one
+# Local-only property overrides (holds real secret material for local dev,
+# e.g. the signing key / secret-encryption-key - see application.properties'
+# comments). application.properties/-dev/-prod themselves are tracked
+# on purpose: they're structural config with env-var placeholders, not
+# real secrets (Step 14E review confirmed this).
 application-local.properties
-application.properties
-application-dev.properties
-application-prod.properties

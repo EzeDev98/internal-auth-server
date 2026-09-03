@@ -5,6 +5,8 @@ import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
 import com.internal.auth.feature.session.service.SessionManagementService;
+import com.internal.auth.common.constant.AppConstant;
+import com.internal.auth.common.util.RateLimiterService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.servlet.http.HttpServletRequest;
+
+import java.time.Duration;
 
 /**
  * Step 11B: @RequestParam changed from phoneNumber to username. Keeping it
@@ -38,6 +43,7 @@ public class UserSessionController {
 
     private final SessionManagementService sessionService;
     private final ClientApplicationService clientApplicationService;
+    private final RateLimiterService rateLimiterService;
 
     /**
      * Fixes a confirmed broken-access-control gap found while confirming
@@ -51,7 +57,8 @@ public class UserSessionController {
     @Operation(method = "POST", summary = "Invalidate session", description = "This an admin endpoint for invalidating a user's session in case they mistakenly got locked out of the app. This will be on very rare occasion")
     @PreAuthorize(Roles.HAS_ADMIN)
     @PostMapping("/session/invalidate")
-    public ResponseEntity<InvalidatedSessionResponse> invalidateSession(@RequestParam String username, @RequestParam String clientId) {
+    public ResponseEntity<InvalidatedSessionResponse> invalidateSession(@RequestParam String username, @RequestParam String clientId, HttpServletRequest httpRequest) {
+        rateLimiterService.checkRateLimit(AppConstant.SESSION_INVALIDATE_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_SESSION_INVALIDATE_REQUEST, Duration.ofHours(AppConstant.SESSION_INVALIDATE_RATE_LIMIT_DURATION_HOURS));
         ClientApplication client = clientApplicationService.getEnabledClientByClientId(clientId);
         InvalidatedSessionResponse response = sessionService.invalidateUserSessionByAdmin(username, client.getId());
         return ResponseEntity.ok(response);

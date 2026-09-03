@@ -91,4 +91,47 @@ public class AppConstant {
     public static final int COMPLETE_RESET_RATE_LIMIT_DURATION_HOURS = 1;
 
     public static final int MAX_COMPLETE_RESET_REQUEST = 10;
+
+    /**
+     * Step 14C: rate limits login attempts by client IP. No per-account
+     * lockout exists yet (confirmed absent from User/LoginServiceImpl), so
+     * this is the first line of brute-force defense on this endpoint.
+     */
+    public static final String LOGIN_RATE_LIMIT_KEY_PREFIX = "ratelimit:login:ip:";
+    public static final int LOGIN_RATE_LIMIT_DURATION_MINUTES = 15;
+    public static final int MAX_LOGIN_REQUEST = 10;
+
+    /**
+     * Step 14C: rate limits login MFA OTP verification attempts by client
+     * IP, mirroring LOGIN_RATE_LIMIT_* above.
+     */
+    public static final String LOGIN_OTP_VERIFY_RATE_LIMIT_KEY_PREFIX = "ratelimit:login-otp-verify:ip:";
+    public static final int LOGIN_OTP_VERIFY_RATE_LIMIT_DURATION_MINUTES = 15;
+    public static final int MAX_LOGIN_OTP_VERIFY_REQUEST = 10;
+
+    /**
+     * Step 14C: rate limits the admin-only session-invalidate endpoint by
+     * caller IP. Already @PreAuthorize-gated to admins, so this is
+     * abuse-prevention rather than brute-force defense, hence the more
+     * generous limit.
+     */
+    public static final String SESSION_INVALIDATE_RATE_LIMIT_KEY_PREFIX = "ratelimit:session-invalidate:ip:";
+    public static final int SESSION_INVALIDATE_RATE_LIMIT_DURATION_HOURS = 1;
+    public static final int MAX_SESSION_INVALIDATE_REQUEST = 20;
+
+    /**
+     * Step 14D: grace period an old signing key stays ACTIVE (verifiable)
+     * after being superseded as current, before SigningKeyServiceImpl
+     * retires it on the next rotation.
+     */
+    public static final int SIGNING_KEY_GRACE_PERIOD_DAYS = 7;
+
+    /**
+     * Step 14D: rate limits the admin-only signing-key rotation endpoint
+     * by caller IP, same abuse-prevention rationale as
+     * SESSION_INVALIDATE_RATE_LIMIT_* above.
+     */
+    public static final String SIGNING_KEY_ROTATE_RATE_LIMIT_KEY_PREFIX = "ratelimit:signing-key-rotate:ip:";
+    public static final int SIGNING_KEY_ROTATE_RATE_LIMIT_DURATION_DAYS = 1;
+    public static final int MAX_SIGNING_KEY_ROTATE_REQUEST = 5;
 }
