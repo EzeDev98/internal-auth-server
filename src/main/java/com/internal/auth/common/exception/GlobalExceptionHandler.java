@@ -7,12 +7,14 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Stage 1 punch-list item 7: a single place that turns every exception this
@@ -77,6 +79,36 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<InternalAuthApiResponse<Void>> handleMissingParam(MissingServletRequestParameterException ex) {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), null);
+    }
+
+    /**
+     * Catches NoResourceFoundException - thrown for literally any request
+     * whose path matches no controller mapping. Ground-truthed via javap
+     * against spring-webmvc 7.0.9
+     * (org.springframework.web.servlet.resource.NoResourceFoundException):
+     * it extends jakarta.servlet.ServletException - a CHECKED exception, so
+     * it can never reach handleRuntimeException below, which only catches
+     * RuntimeException - and separately implements
+     * org.springframework.web.ErrorResponse, which is what makes
+     * getStatusCode()/getBody() available here even though it isn't itself
+     * a RuntimeException. Without this handler it falls through everything
+     * to handleUnexpected, turning "no such endpoint" into a misleading 500
+     * for every unmapped URL this app has ever received.
+     *
+     * History: an earlier version of this handler targeted
+     * ErrorResponseException instead, on the unverified assumption that
+     * NoResourceFoundException extended it. It doesn't - the javap output
+     * above is the ground truth - so that handler never matched and this
+     * bug wasn't actually fixed until now.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<InternalAuthApiResponse<Void>> handleNoResourceFound(NoResourceFoundException ex) {
+        HttpStatusCode status = ex.getStatusCode();
+        String message = ex.getBody().getDetail();
+        if (message == null || message.isBlank()) {
+            message = "The requested resource could not be found.";
+        }
+        return ResponseEntity.status(status).body(InternalAuthApiResponse.<Void>error(message));
     }
 
     /**
