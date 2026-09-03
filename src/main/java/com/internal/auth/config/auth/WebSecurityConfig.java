@@ -15,7 +15,8 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtDecoders;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
@@ -33,7 +34,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WebSecurityConfig {
 
-    private final KeycloakJwtRolesConverter jwtAuthenticationConverter;
+    // Step 12E: swapped from KeycloakJwtRolesConverter to the equivalent for
+    // this app's own self-issued claims shape - see SelfIssuedJwtRolesConverter's
+    // javadoc for the claim-shape rationale and current ground-truth status
+    // (correct but inert until Step 12F adds a token customizer that
+    // populates the "roles" claim it reads).
+    private final SelfIssuedJwtRolesConverter jwtAuthenticationConverter;
 
     private final CustomAccessDenied customAccessDenied;
 
@@ -43,10 +49,11 @@ public class WebSecurityConfig {
 
     /**
      * OIDC issuer this resource server validates bearer tokens against.
-     * Must be set externally (application.properties / env) to a real,
-     * reachable issuer - there is no safe default. See the Stage 1
-     * assessment's "Token Management" notes: today that's Keycloak; longer
-     * term this becomes Internal Auth's own OIDC/JWKS endpoint (Stage 4).
+     * Step 12D: defaults to this app's own authorization server
+     * (app.self-issuer-uri) rather than Keycloak - see
+     * application.properties' app.token-issuer-uri comment for the full
+     * rationale, and jwtDecoder()'s javadoc below for why it's built from
+     * the JWKS URI directly rather than via issuer-location discovery.
      */
     @Value("${app.token-issuer-uri}")
     private String tokenIssuerUrl;
@@ -179,9 +186,40 @@ public class WebSecurityConfig {
         return source;
     }
 
+    /**
+     * Step 12D history worth keeping: this was originally
+     * {@code JwtDecoders.fromIssuerLocation(tokenIssuerUrl)}, then briefly
+     * {@code @Lazy}-annotated in an attempt to defer that call until after
+     * boot. Neither worked once tokenIssuerUrl started pointing at this
+     * app's own issuer. {@code fromIssuerLocation(...)} does an eager HTTP
+     * GET to {issuer}/.well-known/openid-configuration inside its own
+     * {@code .build()} - unavoidable no matter when {@code .build()} runs.
+     * {@code @Lazy} on this bean method didn't help either: it only stops
+     * Spring's own automatic singleton pre-instantiation from creating the
+     * bean eagerly, but
+     * {@code OAuth2ResourceServerConfigurer.JwtConfigurer.getJwtDecoder()}
+     * calls {@code applicationContext.getBean(JwtDecoder.class)} directly,
+     * which always forces real construction immediately regardless of
+     * {@code @Lazy} on the bean definition - confirmed by reproducing the
+     * exact same ConnectException with @Lazy in place.
+     *
+     * <p>The actual fix: build the decoder from the JWKS URI directly
+     * ({@code NimbusJwtDecoder.withJwkSetUri(...)}, confirmed via
+     * {@code javap} to return a plain {@code NimbusJwtDecoder} with no
+     * network I/O in {@code .build()} itself) instead of via issuer-
+     * location discovery. The underlying JWKSource fetches keys lazily on
+     * the first token it actually needs to verify, by which point the
+     * server is definitely up. Since {@code withJwkSetUri(...)} doesn't
+     * set up issuer validation the way {@code fromIssuerLocation(...)}
+     * does automatically, {@code JwtValidators.createDefaultWithIssuer(...)}
+     * adds that back explicitly so a token minted by a different issuer is
+     * still rejected.
+     */
     @Bean
     public JwtDecoder jwtDecoder() {
-        return JwtDecoders.fromIssuerLocation(tokenIssuerUrl);
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(tokenIssuerUrl + "/oauth2/jwks").build();
+        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(tokenIssuerUrl));
+        return decoder;
     }
 
     @Bean
