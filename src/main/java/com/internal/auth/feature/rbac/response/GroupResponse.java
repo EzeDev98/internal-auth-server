@@ -1,0 +1,27 @@
+package com.internal.auth.feature.rbac.response;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.util.List;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+public class GroupResponse {
+
+    private Long groupId;
+
+    private String groupName;
+
+    private String description;
+
+    private String keycloakGroupId;
+
+    private List<GroupedUserResponse> userResponses;
+
+    private List<AssociatedRolesResponse> roles;
+}
