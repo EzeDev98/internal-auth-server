@@ -16,6 +16,8 @@ services:
       - 'POSTGRES_USER=myuser'
     ports:
       - '5432'
+    labels:
+      org.springframework.boot.ignore: true
   redis:
     image: 'redis:latest'
     ports:
