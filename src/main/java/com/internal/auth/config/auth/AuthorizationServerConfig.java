@@ -14,7 +14,19 @@ import org.springframework.core.annotation.Order;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.oauth2.core.OAuth2Token;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.authorization.InMemoryOAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
+import org.springframework.security.oauth2.server.authorization.token.DelegatingOAuth2TokenGenerator;
+import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
+import org.springframework.security.oauth2.server.authorization.token.JwtGenerator;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2AccessTokenGenerator;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.security.web.SecurityFilterChain;
 
 import java.nio.charset.StandardCharsets;
@@ -31,7 +43,11 @@ import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.RSAPublicKeySpec;
 import java.util.Base64;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Step 12A/12B - stands up Spring Authorization Server itself.
@@ -170,6 +186,80 @@ public class AuthorizationServerConfig {
         return AuthorizationServerSettings.builder()
                 .issuer(selfIssuerUri)
                 .build();
+    }
+
+    /**
+     * Step 12F. Declared explicitly rather than left to whatever
+     * OAuth2AuthorizationServerConfigurer defaults to internally when no
+     * bean of this type exists (client_credentials worked fine on that
+     * implicit default through Step 12D, but that default isn't visible
+     * outside the /oauth2/* filter chain - and LoginServiceImpl needs to
+     * save an OAuth2Authorization record from a plain @Service, not from
+     * inside that filter chain, since it mints a token directly on local
+     * login success rather than routing through /oauth2/token - see that
+     * class's javadoc). Declaring this bean makes the authorization server
+     * itself use this exact instance too (OAuth2ConfigurerUtils checks the
+     * application context for a bean of this type before falling back to
+     * building its own), so client_credentials and local-login tokens now
+     * share one authorization record store instead of two invisible ones.
+     * Plain in-memory for now, same tradeoff as the ephemeral signing-key
+     * fallback above - revisit alongside real secret/session persistence
+     * (Step 14E) before any real deployment.
+     */
+    @Bean
+    public OAuth2AuthorizationService authorizationService() {
+        return new InMemoryOAuth2AuthorizationService();
+    }
+
+    /**
+     * Step 12F. Declared explicitly for the same reason as
+     * authorizationService() above - so both the /oauth2/token endpoint and
+     * LoginServiceImpl's direct in-process minting share the exact same
+     * token generator, which is what makes jwtTokenCustomizer() below apply
+     * uniformly to every self-issued token instead of only the ones minted
+     * through the filter chain. Hand-assembled (JwtGenerator +
+     * OAuth2AccessTokenGenerator, no refresh token generator - nothing
+     * requests refresh tokens yet) instead of relying on
+     * OAuth2AuthorizationServerConfigurer's own default composition, since
+     * that default isn't a retrievable bean either.
+     */
+    @Bean
+    public OAuth2TokenGenerator<OAuth2Token> tokenGenerator(
+            JWKSource<SecurityContext> jwkSource,
+            OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer) {
+        NimbusJwtEncoder jwtEncoder = new NimbusJwtEncoder(jwkSource);
+        JwtGenerator jwtGenerator = new JwtGenerator(jwtEncoder);
+        jwtGenerator.setJwtCustomizer(jwtTokenCustomizer);
+        OAuth2AccessTokenGenerator accessTokenGenerator = new OAuth2AccessTokenGenerator();
+        return new DelegatingOAuth2TokenGenerator(jwtGenerator, accessTokenGenerator);
+    }
+
+    /**
+     * Step 12F - stamps a "roles" claim onto every self-issued access token
+     * from whatever GrantedAuthority collection is on the token's principal
+     * (see SelfIssuedJwtRolesConverter's javadoc for why "roles" is this
+     * app's own flat claim shape, replacing Keycloak's three-claim split).
+     * For client_credentials tokens the principal is the authenticated
+     * client, which carries no authorities today, so this correctly adds
+     * no "roles" claim there - unchanged from Step 12E's ground truth. For
+     * LoginServiceImpl's directly-minted tokens, the principal is a
+     * UsernamePasswordAuthenticationToken built from that user's
+     * UserRole/Role rows, so this is what actually populates "roles" for
+     * the first time.
+     */
+    @Bean
+    public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer() {
+        return context -> {
+            if (OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())) {
+                Collection<? extends GrantedAuthority> authorities = context.getPrincipal().getAuthorities();
+                if (authorities != null && !authorities.isEmpty()) {
+                    Set<String> roles = authorities.stream()
+                            .map(GrantedAuthority::getAuthority)
+                            .collect(Collectors.toCollection(LinkedHashSet::new));
+                    context.getClaims().claim("roles", roles);
+                }
+            }
+        };
     }
 
     private KeyPair loadOrGenerateRsaKey() {
