@@ -1,6 +1,8 @@
 package com.internal.auth.feature.session.web;
 
 import com.internal.auth.config.auth.Roles;
+import com.internal.auth.feature.client.model.ClientApplication;
+import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
 import com.internal.auth.feature.session.service.SessionManagementService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +22,13 @@ import org.springframework.web.bind.annotation.RestController;
  * username is mandatory on every account, consistent with how the rest of
  * this app moved off phone/wmUniqueId-based lookups onto username
  * (Stage 2 item 1).
+ *
+ * Multi-tenant redesign, sessions step: username alone is no longer
+ * enough to identify a unique account (see User's class Javadoc, V8) - the
+ * admin must now also supply clientId, resolved here to a
+ * client_application_id via ClientApplicationService#getEnabledClientByClientId
+ * (a plain lookup, not a credential check - this caller is already an
+ * authenticated admin, not an integrating app authenticating itself).
  */
 @RequiredArgsConstructor
 @RestController
@@ -28,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserSessionController {
 
     private final SessionManagementService sessionService;
+    private final ClientApplicationService clientApplicationService;
 
     /**
      * Fixes a confirmed broken-access-control gap found while confirming
@@ -41,8 +51,9 @@ public class UserSessionController {
     @Operation(method = "POST", summary = "Invalidate session", description = "This an admin endpoint for invalidating a user's session in case they mistakenly got locked out of the app. This will be on very rare occasion")
     @PreAuthorize(Roles.HAS_ADMIN)
     @PostMapping("/session/invalidate")
-    public ResponseEntity<InvalidatedSessionResponse> invalidateSession(@RequestParam String username) {
-        InvalidatedSessionResponse response = sessionService.invalidateUserSessionByAdmin(username);
+    public ResponseEntity<InvalidatedSessionResponse> invalidateSession(@RequestParam String username, @RequestParam String clientId) {
+        ClientApplication client = clientApplicationService.getEnabledClientByClientId(clientId);
+        InvalidatedSessionResponse response = sessionService.invalidateUserSessionByAdmin(username, client.getId());
         return ResponseEntity.ok(response);
     }
 }

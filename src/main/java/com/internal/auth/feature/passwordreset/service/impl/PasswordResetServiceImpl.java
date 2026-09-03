@@ -58,6 +58,15 @@ import static com.internal.auth.common.constant.AppConstant.PASSWORD_RESET_COOLD
  * so calling with it silently no-opped for any email-only user (their
  * session never got invalidated after a password reset). username is
  * mandatory on every account.
+ *
+ * Multi-tenant redesign, OTP/token flows step: requestOtp/verifyOtp are
+ * now scoped by clientApplicationId (resolved by PasswordResetController
+ * from HTTP Basic client credentials) - the user lookup, the OTP lookup,
+ * and the Redis resend-cooldown bucket key all incorporate it now, since
+ * phoneNumber alone can belong to accounts in different apps (see User's
+ * and PasswordResetOtp's class Javadocs, and the V8/V9 migrations).
+ * completeReset is untouched - it resolves everything from the reset
+ * token's own hash, which was never ambiguous.
  */
 @RequiredArgsConstructor
 @Service
@@ -79,14 +88,18 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     @Override
     @Transactional
-    public PasswordResetResponse requestOtp(PasswordResetRequestDto request) {
+    public PasswordResetResponse requestOtp(PasswordResetRequestDto request, Long clientApplicationId) {
         resetValidator.validatePhoneNumberFoResetOperations(request.getPhoneNumber());
         String phoneNumber = request.getPhoneNumber();
 
-        RBucket<String> cooldownBucket = otpResetEngine.getCooldownBucket(redissonClient, PASSWORD_RESET_COOLDOWN_KEY_PREFIX, phoneNumber);
+        // Composite cooldown key (multi-tenant redesign) - a bare phone
+        // number would let one app's OTP request cooldown-lock a
+        // different app's user who happens to share that phone number.
+        String cooldownKey = clientApplicationId + ":" + phoneNumber;
+        RBucket<String> cooldownBucket = otpResetEngine.getCooldownBucket(redissonClient, PASSWORD_RESET_COOLDOWN_KEY_PREFIX, cooldownKey);
         otpResetEngine.rejectIfCoolingDown(cooldownBucket);
 
-        Optional<User> userOptional = userRepository.findByPhoneNumber(phoneNumber);
+        Optional<User> userOptional = userRepository.findByPhoneNumberAndClientApplicationId(phoneNumber, clientApplicationId);
 
         // User enumeration protection: only generate/send an OTP if the
         // phone number is registered, but always return the same generic
@@ -94,13 +107,14 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         if (userOptional.isPresent()) {
             User user = userOptional.get();
             otpResetEngine.invalidateExisting(
-                    passwordResetOtpRepository.findTopByPhoneNumberAndStatusOrderByCreatedAtDesc(phoneNumber, PasswordResetStatus.ACTIVE),
+                    passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, PasswordResetStatus.ACTIVE),
                     passwordResetOtpRepository::save);
 
             String rawOtp = otpService.generateOtp(properties.getOtp().getLength());
 
             PasswordResetOtp otpEntity = new PasswordResetOtp();
             otpEntity.setUserId(user.getId());
+            otpEntity.setClientApplicationId(clientApplicationId);
             otpResetEngine.populateNewOtp(otpEntity, phoneNumber, rawOtp, properties.getOtp().getExpirationMinutes(), properties.getOtp().getMaxAttempts());
             passwordResetOtpRepository.save(otpEntity);
 
@@ -117,12 +131,12 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     @Override
     @Transactional
-    public VerifyOtpResponse verifyOtp(VerifyOtpRequest request) {
+    public VerifyOtpResponse verifyOtp(VerifyOtpRequest request, Long clientApplicationId) {
         resetValidator.validatePhoneNumberFoResetOperations(request.getPhoneNumber());
         resetValidator.validateOtpFormat(request.getOtp(), properties.getOtp().getLength());
 
         String phoneNumber = request.getPhoneNumber();
-        PasswordResetOtp otpEntity = passwordResetOtpRepository.findTopByPhoneNumberAndStatusOrderByCreatedAtDesc(phoneNumber, PasswordResetStatus.ACTIVE)
+        PasswordResetOtp otpEntity = passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, PasswordResetStatus.ACTIVE)
                 .orElseThrow(() -> new OtpInvalidException("The verification code is invalid."));
 
         otpResetEngine.verify(otpEntity, request.getOtp(), passwordResetOtpRepository::save);
@@ -160,7 +174,12 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         otpResetEngine.markUsed(resetToken, passwordResetTokenRepository::save);
 
-        sessionManagementService.invalidateUserSessionByAdmin(user.getUsername());
+        // Multi-tenant redesign, sessions step: calls invalidateActiveSessionForUser
+        // directly with the already-resolved userId, rather than
+        // invalidateUserSessionByAdmin's username-based lookup - this
+        // caller already has the User row, so there's no ambiguity to
+        // resolve and no clientApplicationId to thread through.
+        sessionManagementService.invalidateActiveSessionForUser(user.getId());
 
         log.info("Password reset completed successfully for user id {}", user.getId());
         return new PasswordResetResponse("Password reset successful. Please log in with your new password.", 200);

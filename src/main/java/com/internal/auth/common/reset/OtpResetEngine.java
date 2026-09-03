@@ -49,9 +49,16 @@ public class OtpResetEngine {
      * than one method, because both callers need to hold the bucket
      * reference between the pre-check (at the top of requestOtp) and
      * arming it (at the very end, after the OTP — if any — was sent).
+     *
+     * cooldownKey is opaque to this method - originally always a bare
+     * phone number, but PasswordResetServiceImpl now composes it as
+     * "clientApplicationId:phoneNumber" (multi-tenant redesign, OTP/token
+     * flows step) so two different apps' users sharing a phone number
+     * don't share a cooldown bucket. LoginServiceImpl still passes a bare
+     * phone number as of this step - that's the next one.
      */
-    public RBucket<String> getCooldownBucket(RedissonClient redissonClient, String keyPrefix, String phoneNumber) {
-        return redissonClient.getBucket(keyPrefix + phoneNumber);
+    public RBucket<String> getCooldownBucket(RedissonClient redissonClient, String keyPrefix, String cooldownKey) {
+        return redissonClient.getBucket(keyPrefix + cooldownKey);
     }
 
     public void rejectIfCoolingDown(RBucket<String> cooldownBucket) {

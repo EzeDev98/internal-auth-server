@@ -24,6 +24,11 @@ import java.time.LocalDateTime;
  * only because ResettableOtp's contract is typed to it - a generic OTP
  * lifecycle state, not something specific to password reset, despite the
  * enum's name.
+ *
+ * clientApplicationId (multi-tenant redesign, OTP/token flows step - see
+ * V9 migration): same reasoning as PasswordResetOtp.clientApplicationId -
+ * phoneNumber alone stops being a safe lookup key once the same phone
+ * number can belong to accounts in different client applications.
  */
 @Getter
 @Setter
@@ -39,6 +44,9 @@ public class LoginMfaOtp implements ResettableOtp {
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
+
+    @Column(name = "client_application_id", nullable = false)
+    private Long clientApplicationId;
 
     @Column(name = "phone_number", nullable = false)
     private String phoneNumber;

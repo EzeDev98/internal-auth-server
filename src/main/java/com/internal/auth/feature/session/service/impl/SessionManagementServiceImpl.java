@@ -40,6 +40,14 @@ import static com.internal.auth.common.constant.AppConstant.*;
  * This is also the prerequisite for Step 11B's other decision - scoping
  * sessions per (user, application) once Step 12 exists: userId is the
  * anchor a future clientApplicationId column pairs with, not phoneNumber.
+ *
+ * Multi-tenant redesign, sessions step: findByUserIdAndIsActiveTrue and
+ * findByTokenHash were already unambiguous (see SessionManagementService's
+ * class Javadoc) - no schema change needed here. The one real fix is
+ * invalidateUserSessionByAdmin, which now takes clientApplicationId to
+ * scope its username lookup, plus the new invalidateActiveSessionForUser
+ * for callers that already have a userId and shouldn't go through an
+ * ambiguous username lookup at all.
  */
 @Service
 public class SessionManagementServiceImpl implements SessionManagementService {
@@ -87,10 +95,20 @@ public class SessionManagementServiceImpl implements SessionManagementService {
 
     @Override
     @Transactional
-    public InvalidatedSessionResponse invalidateUserSessionByAdmin(String username) {
-        User user = userRepository.findByUsername(username).orElse(null);
+    public void invalidateActiveSessionForUser(Long userId) {
+        userSessionRepository.findByUserIdAndIsActiveTrue(userId)
+                .ifPresent(session -> {
+                    closeSession(session, ADMIN_ACTION);
+                    log.info("Session invalidated for user id: {}", userId);
+                });
+    }
+
+    @Override
+    @Transactional
+    public InvalidatedSessionResponse invalidateUserSessionByAdmin(String username, Long clientApplicationId) {
+        User user = userRepository.findByUsernameAndClientApplicationId(username, clientApplicationId).orElse(null);
         if (user == null) {
-            log.warn("No user found for username {} during admin session invalidation", username);
+            log.warn("No user found for username {} in client application {} during admin session invalidation", username, clientApplicationId);
             return new InvalidatedSessionResponse(HttpServletResponse.SC_NOT_FOUND, "No user found with username " + username);
         }
 

@@ -3,15 +3,19 @@ package com.internal.auth.feature.passwordreset.web;
 import com.internal.auth.common.reset.dto.VerifyOtpRequest;
 import com.internal.auth.common.reset.dto.VerifyOtpResponse;
 import com.internal.auth.common.util.RateLimiterService;
+import com.internal.auth.feature.client.model.ClientApplication;
+import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.passwordreset.dto.CompletePasswordResetRequest;
 import com.internal.auth.feature.passwordreset.dto.PasswordResetRequestDto;
 import com.internal.auth.feature.passwordreset.dto.PasswordResetResponse;
 import com.internal.auth.feature.passwordreset.service.PasswordResetService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,6 +31,18 @@ import static com.internal.auth.common.constant.AppConstant.VERIFY_OTP_RATE_LIMI
 import static com.internal.auth.common.constant.AppConstant.VERIFY_OTP_RATE_LIMIT_KEY_PREFIX;
 
 
+/**
+ * Multi-tenant redesign, OTP/token flows step: "/request" and
+ * "/verify-otp" now require the same HTTP Basic client-credential header
+ * RegistrationController/LoginController resolve (see
+ * RegistrationController's Javadoc for the full rationale). Rate-limiter
+ * keys are namespaced by the resolved client_application_id too - a bare
+ * phone-number key would let one app's caller exhaust the rate limit for a
+ * different app's user who happens to share that phone number.
+ * "/complete" is untouched - it resolves everything from the reset
+ * token's own hash, which was never ambiguous, so there's no caller
+ * identity to resolve there.
+ */
 @RestController
 @RequestMapping("${app.title}/password-reset")
 @Tag(name = "Password Reset API", description = "Phone-number OTP based password reset flow")
@@ -34,26 +50,34 @@ public class PasswordResetController {
 
     private final PasswordResetService passwordResetService;
     private final RateLimiterService rateLimiterService;
+    private final ClientApplicationService clientApplicationService;
 
-    public PasswordResetController(PasswordResetService passwordResetService, RateLimiterService rateLimiterService) {
+    public PasswordResetController(PasswordResetService passwordResetService, RateLimiterService rateLimiterService, ClientApplicationService clientApplicationService) {
         this.passwordResetService = passwordResetService;
         this.rateLimiterService = rateLimiterService;
+        this.clientApplicationService = clientApplicationService;
     }
 
     @PostMapping("/request")
-    public ResponseEntity<PasswordResetResponse> requestOtp(@RequestBody PasswordResetRequestDto request) {
-        rateLimiterService.checkRateLimit("ratelimit:password-reset-otp:phone:" + request.getPhoneNumber(), MAX_RESET_PASSWORD_REQUEST, Duration.ofHours(RESET_PASSWORD_RATE_LIMIT_DURATION));
-        return ResponseEntity.ok(passwordResetService.requestOtp(request));
+    public ResponseEntity<PasswordResetResponse> requestOtp(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
+            @RequestBody PasswordResetRequestDto request) {
+        ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
+        rateLimiterService.checkRateLimit("ratelimit:password-reset-otp:phone:" + client.getId() + ":" + request.getPhoneNumber(), MAX_RESET_PASSWORD_REQUEST, Duration.ofHours(RESET_PASSWORD_RATE_LIMIT_DURATION));
+        return ResponseEntity.ok(passwordResetService.requestOtp(request, client.getId()));
     }
 
     @PostMapping("/verify-otp")
-    public ResponseEntity<VerifyOtpResponse> verifyOtp(@RequestBody VerifyOtpRequest request) {
+    public ResponseEntity<VerifyOtpResponse> verifyOtp(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
+            @RequestBody VerifyOtpRequest request) {
+        ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
         // Step 11F: guards against the per-OTP attemptCount getting reset by
         // simply requesting a fresh OTP every cooldown window — this caps
         // total guess attempts per phone number independently of how many
         // OTPs were issued.
-        rateLimiterService.checkRateLimit(VERIFY_OTP_RATE_LIMIT_KEY_PREFIX + request.getPhoneNumber(), MAX_VERIFY_OTP_REQUEST, Duration.ofHours(VERIFY_OTP_RATE_LIMIT_DURATION_HOURS));
-        return ResponseEntity.ok(passwordResetService.verifyOtp(request));
+        rateLimiterService.checkRateLimit(VERIFY_OTP_RATE_LIMIT_KEY_PREFIX + client.getId() + ":" + request.getPhoneNumber(), MAX_VERIFY_OTP_REQUEST, Duration.ofHours(VERIFY_OTP_RATE_LIMIT_DURATION_HOURS));
+        return ResponseEntity.ok(passwordResetService.verifyOtp(request, client.getId()));
     }
 
     @PostMapping("/complete")

@@ -47,6 +47,12 @@ import static com.internal.auth.common.constant.AppConstant.LOGIN_MFA_OTP_COOLDO
  * calls verifyLoginOtp() with the phone number and code to actually
  * complete the login. No token is issued at either step - Step 11A's
  * scoping decision (token issuance is Step 12) still holds.
+ *
+ * Multi-tenant redesign: clientApplicationId is resolved by
+ * LoginController from the caller's HTTP Basic client credentials for
+ * both login() and verifyLoginOtp() now, and scopes the username lookup
+ * (see User's class Javadoc, V8) and the login-MFA OTP lookup/cooldown
+ * key (see LoginMfaOtp's class Javadoc, V9) respectively.
  */
 @Service
 @RequiredArgsConstructor
@@ -65,13 +71,13 @@ public class LoginServiceImpl implements LoginService {
     private final RedissonClient redissonClient;
 
     @Override
-    public LoginResponse login(LoginRequest request) {
+    public LoginResponse login(LoginRequest request, Long clientApplicationId) {
         String username = request.getUsername() == null ? null : request.getUsername().trim();
         if (username == null || username.isBlank() || request.getPassword() == null) {
             throw new InvalidCredentialsException(INVALID_CREDENTIALS_MESSAGE);
         }
 
-        Optional<User> userOptional = userRepository.findByUsername(username);
+        Optional<User> userOptional = userRepository.findByUsernameAndClientApplicationId(username, clientApplicationId);
         if (userOptional.isEmpty()) {
             throw new InvalidCredentialsException(INVALID_CREDENTIALS_MESSAGE);
         }
@@ -93,7 +99,7 @@ public class LoginServiceImpl implements LoginService {
         }
 
         if (user.isMfaEnabled()) {
-            sendLoginOtp(user);
+            sendLoginOtp(user, clientApplicationId);
             return new LoginResponse(null, user.getUsername(), "A verification code has been sent to your registered phone number.", true);
         }
 
@@ -102,13 +108,13 @@ public class LoginServiceImpl implements LoginService {
     }
 
     @Override
-    public LoginResponse verifyLoginOtp(VerifyLoginOtpRequest request) {
+    public LoginResponse verifyLoginOtp(VerifyLoginOtpRequest request, Long clientApplicationId) {
         String phoneNumber = request.getPhoneNumber();
         if (phoneNumber == null || phoneNumber.isBlank()) {
             throw new OtpInvalidException("The verification code is invalid.");
         }
 
-        LoginMfaOtp otp = loginMfaOtpRepository.findTopByPhoneNumberAndStatusOrderByCreatedAtDesc(phoneNumber, PasswordResetStatus.ACTIVE)
+        LoginMfaOtp otp = loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, PasswordResetStatus.ACTIVE)
                 .orElseThrow(() -> new OtpInvalidException("The verification code is invalid."));
 
         otpResetEngine.verify(otp, request.getOtp(), loginMfaOtpRepository::save);
@@ -120,20 +126,24 @@ public class LoginServiceImpl implements LoginService {
         return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false);
     }
 
-    private void sendLoginOtp(User user) {
+    private void sendLoginOtp(User user, Long clientApplicationId) {
         String phoneNumber = user.getPhoneNumber();
 
-        RBucket<String> cooldownBucket = otpResetEngine.getCooldownBucket(redissonClient, LOGIN_MFA_OTP_COOLDOWN_KEY_PREFIX, phoneNumber);
+        // Composite cooldown key (multi-tenant redesign) - see
+        // PasswordResetServiceImpl.requestOtp for the same reasoning.
+        String cooldownKey = clientApplicationId + ":" + phoneNumber;
+        RBucket<String> cooldownBucket = otpResetEngine.getCooldownBucket(redissonClient, LOGIN_MFA_OTP_COOLDOWN_KEY_PREFIX, cooldownKey);
         otpResetEngine.rejectIfCoolingDown(cooldownBucket);
 
         otpResetEngine.invalidateExisting(
-                loginMfaOtpRepository.findTopByPhoneNumberAndStatusOrderByCreatedAtDesc(phoneNumber, PasswordResetStatus.ACTIVE),
+                loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, PasswordResetStatus.ACTIVE),
                 loginMfaOtpRepository::save);
 
         String rawOtp = otpService.generateOtp(loginMfaProperties.getOtpLength());
 
         LoginMfaOtp otpEntity = new LoginMfaOtp();
         otpEntity.setUserId(user.getId());
+        otpEntity.setClientApplicationId(clientApplicationId);
         otpResetEngine.populateNewOtp(otpEntity, phoneNumber, rawOtp, loginMfaProperties.getOtpExpirationMinutes(), loginMfaProperties.getMaxAttempts());
         loginMfaOtpRepository.save(otpEntity);
 

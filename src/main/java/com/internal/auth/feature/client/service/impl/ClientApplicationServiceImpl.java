@@ -2,6 +2,7 @@ package com.internal.auth.feature.client.service.impl;
 
 import com.internal.auth.common.exception.BadRequestException;
 import com.internal.auth.common.exception.ClientAlreadyExistsException;
+import com.internal.auth.common.exception.InvalidClientCredentialsException;
 import com.internal.auth.feature.client.dto.CreateClientApplicationRequest;
 import com.internal.auth.feature.client.dto.CreateClientApplicationResponse;
 import com.internal.auth.feature.client.model.ClientApplication;
@@ -15,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.Optional;
@@ -43,6 +45,8 @@ import static com.internal.auth.common.constant.AppConstant.SECURE_RANDOM;
 public class ClientApplicationServiceImpl implements ClientApplicationService {
 
     private static final Logger log = LoggerFactory.getLogger(ClientApplicationServiceImpl.class);
+    private static final String BASIC_PREFIX = "Basic ";
+    private static final String INVALID_CLIENT_CREDENTIALS_MESSAGE = "Invalid client credentials";
 
     private final ClientApplicationRepository clientApplicationRepository;
     private final PasswordEncoder passwordEncoder;
@@ -102,6 +106,48 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
             return false;
         }
         return passwordEncoder.matches(rawSecret, client.getClientSecretHash());
+    }
+
+    @Override
+    public ClientApplication authenticateClient(String clientId, String rawSecret) {
+        if (clientId == null || rawSecret == null) {
+            throw new InvalidClientCredentialsException(INVALID_CLIENT_CREDENTIALS_MESSAGE);
+        }
+        ClientApplication client = clientApplicationRepository.findByClientId(clientId)
+                .orElseThrow(() -> new InvalidClientCredentialsException(INVALID_CLIENT_CREDENTIALS_MESSAGE));
+        if (!client.isEnabled() || client.getClientSecretHash() == null
+                || !passwordEncoder.matches(rawSecret, client.getClientSecretHash())) {
+            throw new InvalidClientCredentialsException(INVALID_CLIENT_CREDENTIALS_MESSAGE);
+        }
+        return client;
+    }
+
+    @Override
+    public ClientApplication authenticateClientFromBasicAuthHeader(String authorizationHeader) {
+        if (authorizationHeader == null || !authorizationHeader.regionMatches(true, 0, BASIC_PREFIX, 0, BASIC_PREFIX.length())) {
+            throw new InvalidClientCredentialsException(INVALID_CLIENT_CREDENTIALS_MESSAGE);
+        }
+        String decoded;
+        try {
+            decoded = new String(Base64.getDecoder().decode(authorizationHeader.substring(BASIC_PREFIX.length()).trim()), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidClientCredentialsException(INVALID_CLIENT_CREDENTIALS_MESSAGE);
+        }
+        int colonIndex = decoded.indexOf(':');
+        if (colonIndex < 0) {
+            throw new InvalidClientCredentialsException(INVALID_CLIENT_CREDENTIALS_MESSAGE);
+        }
+        return authenticateClient(decoded.substring(0, colonIndex), decoded.substring(colonIndex + 1));
+    }
+
+    @Override
+    public ClientApplication getEnabledClientByClientId(String clientId) {
+        ClientApplication client = clientApplicationRepository.findByClientId(clientId)
+                .orElseThrow(() -> new BadRequestException("Unknown clientId"));
+        if (!client.isEnabled()) {
+            throw new BadRequestException("Unknown clientId");
+        }
+        return client;
     }
 
     private String generateClientSecret() {

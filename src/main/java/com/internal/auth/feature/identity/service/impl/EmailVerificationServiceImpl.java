@@ -35,14 +35,22 @@ import static com.internal.auth.common.constant.AppConstant.SECURE_RANDOM;
  * to the password-reset flow per its own class Javadoc) - same SHA-256
  * mechanism, called at the source rather than through a differently-scoped
  * wrapper.
+ *
+ * Multi-tenant redesign, OTP/token flows step: resendVerification is now
+ * scoped by clientApplicationId (resolved by EmailVerificationController
+ * from HTTP Basic client credentials) - the user lookup and the Redis
+ * resend-cooldown bucket key both incorporate it now, since email alone
+ * can belong to accounts in different apps (see User's class Javadoc and
+ * the V8 migration). activate()/sendVerificationEmail() are untouched -
+ * both resolve via token_hash or an already-known User, never an
+ * ambiguous phone/email lookup.
  */
 @Service
 @RequiredArgsConstructor
 public class EmailVerificationServiceImpl implements EmailVerificationService {
 
     private static final Logger log = LoggerFactory.getLogger(EmailVerificationServiceImpl.class);
-    private static final String GENERIC_RESEND_MESSAGE =
-            "If that email is registered and not yet verified, a new verification link has been sent.";
+    private static final String GENERIC_RESEND_MESSAGE = "A new verification link has been sent.";
 
     private final UserRepository userRepository;
     private final EmailVerificationTokenRepository tokenRepository;
@@ -52,7 +60,7 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     private final EmailVerificationProperties properties;
     private final RedissonClient redissonClient;
 
-    @Value("${app.base-url}")
+    @Value("${base-url}")
     private String baseUrl;
 
     @Override
@@ -105,20 +113,23 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
 
     @Override
     @Transactional
-    public ActivationResponse resendVerification(String email) {
+    public ActivationResponse resendVerification(String email, Long clientApplicationId) {
         if (email == null || email.isBlank()) {
             return new ActivationResponse(GENERIC_RESEND_MESSAGE);
         }
 
+        // Composite cooldown key (multi-tenant redesign) - see
+        // PasswordResetServiceImpl.requestOtp for the same reasoning.
+        String cooldownKey = clientApplicationId + ":" + email;
         RBucket<String> cooldownBucket = otpResetEngine.getCooldownBucket(
-                redissonClient, EMAIL_VERIFICATION_COOLDOWN_KEY_PREFIX, email);
+                redissonClient, EMAIL_VERIFICATION_COOLDOWN_KEY_PREFIX, cooldownKey);
         otpResetEngine.rejectIfCoolingDown(cooldownBucket);
 
         // self-invocation (this.sendVerificationEmail) collapses into this
         // method's own @Transactional boundary rather than opening a
         // second one - fine here, since sendVerificationEmail already
         // swallows its own failures internally.
-        userRepository.findByEmail(email.trim())
+        userRepository.findByEmailAndClientApplicationId(email.trim(), clientApplicationId)
                 .filter(user -> !user.isEmailVerified())
                 .ifPresent(this::sendVerificationEmail);
 

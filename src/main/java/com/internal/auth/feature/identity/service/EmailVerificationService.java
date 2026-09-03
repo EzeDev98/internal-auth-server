@@ -19,6 +19,15 @@ public interface EmailVerificationService {
      * Enumeration-resistant: always returns the same generic response
      * regardless of whether the email is registered, already verified, or
      * unknown - mirrors PasswordResetServiceImpl#requestOtp's approach.
+     *
+     * @param clientApplicationId the calling app's resolved
+     *   client_application_id (see EmailVerificationController - resolved
+     *   from the request's Authorization: Basic clientId:clientSecret
+     *   header, multi-tenant redesign). Scopes the user lookup and the
+     *   resend-cooldown bucket, since email alone can now belong to
+     *   accounts in different apps. activate()/sendVerificationEmail() are
+     *   untouched - both resolve via token_hash or an already-known User,
+     *   never an ambiguous phone/email lookup.
      */
-    ActivationResponse resendVerification(String email);
+    ActivationResponse resendVerification(String email, Long clientApplicationId);
 }

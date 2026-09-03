@@ -57,26 +57,56 @@ import java.time.LocalDateTime;
  * Toggled by an admin (MfaAdminController) rather than self-service for
  * now, since local login (Step 11A) issues no token yet for a user to
  * authenticate a follow-up request with - see that controller's Javadoc.
+ *
+ * `clientApplicationId` (multi-tenant user namespace redesign, schema/model
+ * step - see V8 migration): each integrating app (SyncPoint, Notare, ...)
+ * gets its own isolated namespace. username/phoneNumber/email are unique
+ * only within one client_application_id now, not globally - see this
+ * class's @Table(uniqueConstraints = ...) below, which replaces the old
+ * per-column unique=true (that alone would have kept dev, which runs
+ * Hibernate ddl-auto=update directly against MySQL with Flyway disabled,
+ * silently enforcing GLOBAL uniqueness while prod enforced per-app
+ * uniqueness via this migration - table-level constraints keep dev and
+ * prod consistent). Plain Long FK field rather than a @ManyToOne relation,
+ * consistent with every other cross-entity reference added since Stage 2
+ * (UserSession.userId, PasswordResetOtp.userId, EmailVerificationToken.userId,
+ * etc.) - RBAC's older entities use real JPA relations, but nothing built
+ * since Step 6 does.
+ *
+ * NOTE - transient state: RegistrationServiceImpl/LoginServiceImpl and
+ * UserRepository's findByUsername/findByPhoneNumber/findByEmail have NOT
+ * been updated to scope by clientApplicationId yet (that's the next step).
+ * Those three finders are UNSAFE the moment two different apps register
+ * the same username/phone/email - do not exercise that scenario until the
+ * registration/login step lands.
  */
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
-@Table(name = "users")
+@Table(name = "users", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_users_client_username", columnNames = {"client_application_id", "username"}),
+        @UniqueConstraint(name = "uk_users_client_phone_number", columnNames = {"client_application_id", "phone_number"}),
+        @UniqueConstraint(name = "uk_users_client_email", columnNames = {"client_application_id", "email"})
+})
 public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "username", nullable = false, unique = true)
+    /** FK to ClientApplication.id (see V8 migration). */
+    @Column(name = "client_application_id", nullable = false)
+    private Long clientApplicationId;
+
+    @Column(name = "username", nullable = false)
     private String username;
 
-    @Column(name = "phone_number", unique = true)
+    @Column(name = "phone_number")
     private String phoneNumber;
 
-    @Column(name = "email", unique = true)
+    @Column(name = "email")
     private String email;
 
     /**

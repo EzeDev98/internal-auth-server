@@ -34,6 +34,13 @@ import org.springframework.transaction.annotation.Transactional;
  * the uniqueness pre-checks below being check-then-act, not atomic.
  * Step 10C: on successful save, if an email was supplied, a verification
  * link is sent - failure to send never fails registration itself.
+ *
+ * Multi-tenant redesign, registration step: clientApplicationId is
+ * resolved by RegistrationController from the caller's HTTP Basic client
+ * credentials before this method ever runs - every uniqueness check below
+ * and the created User row are scoped to it, since username/phone/email
+ * are now only unique within one client_application_id (see User's class
+ * Javadoc and the V8 migration).
  */
 @Service
 @RequiredArgsConstructor
@@ -49,7 +56,7 @@ public class RegistrationServiceImpl implements RegistrationService {
 
     @Override
     @Transactional
-    public RegisterResponse register(RegisterRequest request) {
+    public RegisterResponse register(RegisterRequest request, Long clientApplicationId) {
         registrationValidator.validateUsername(request.getUsername());
         registrationValidator.validateContactInfoPresent(request.getPhoneNumber(), request.getEmail());
         registrationValidator.validatePhoneNumberIfPresent(request.getPhoneNumber());
@@ -60,21 +67,22 @@ public class RegistrationServiceImpl implements RegistrationService {
         resetValidator.validateNewPassword(request.getPassword(), request.getConfirmPassword());
 
         String username = request.getUsername().trim();
-        if (userRepository.findByUsername(username).isPresent()) {
+        if (userRepository.findByUsernameAndClientApplicationId(username, clientApplicationId).isPresent()) {
             throw new UserAlreadyExistsException("Username or password is incorrect");
         }
 
         String phoneNumber = normalize(request.getPhoneNumber());
-        if (phoneNumber != null && userRepository.findByPhoneNumber(phoneNumber).isPresent()) {
+        if (phoneNumber != null && userRepository.findByPhoneNumberAndClientApplicationId(phoneNumber, clientApplicationId).isPresent()) {
             throw new UserAlreadyExistsException("Phone number or password is incorrect");
         }
 
         String email = normalize(request.getEmail());
-        if (email != null && userRepository.findByEmail(email).isPresent()) {
+        if (email != null && userRepository.findByEmailAndClientApplicationId(email, clientApplicationId).isPresent()) {
             throw new UserAlreadyExistsException("Email or password is incorrect");
         }
 
         User user = new User();
+        user.setClientApplicationId(clientApplicationId);
         user.setUsername(username);
         user.setPhoneNumber(phoneNumber);
         user.setEmail(email);
