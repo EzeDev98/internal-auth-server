@@ -19,7 +19,6 @@ public class SubGroupResponse {
 
     private String description;
 
-    private String subgroupKeycloakGroupId;
 
     private List<GroupedUserResponse> userResponses;
 

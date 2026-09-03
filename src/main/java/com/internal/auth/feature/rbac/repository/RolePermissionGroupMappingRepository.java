@@ -21,6 +21,6 @@ public interface RolePermissionGroupMappingRepository extends JpaRepository<Role
     void deleteAllByPermissionGroup(@Param("group") PermissionGroup group);
 
     @Modifying
-    @Query("DELETE FROM RolePermissionGroupMapping m WHERE m.subPermissionGroup.parentGroupId = :parentGroupId")
-    void deleteAllByParentGroupId(@Param("parentGroupId") String parentGroupId);
+    @Query("DELETE FROM RolePermissionGroupMapping m WHERE m.subPermissionGroup.parentGroup = :parentGroup")
+    void deleteAllByParentGroup(@Param("parentGroup") PermissionGroup parentGroup);
 }

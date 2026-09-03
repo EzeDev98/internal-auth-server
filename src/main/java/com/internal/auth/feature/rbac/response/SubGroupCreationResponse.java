@@ -13,6 +13,5 @@ public class SubGroupCreationResponse {
     private Long groupId;
     private String groupName;
     private String description;
-    private String superGroupId;
-    private String keycloakGroupId;
+    private Long superGroupId;
 }

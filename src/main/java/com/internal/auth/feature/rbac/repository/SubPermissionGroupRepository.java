@@ -1,5 +1,6 @@
 package com.internal.auth.feature.rbac.repository;
 
+import com.internal.auth.feature.rbac.model.PermissionGroup;
 import com.internal.auth.feature.rbac.model.SubPermissionGroup;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -13,6 +14,6 @@ public interface SubPermissionGroupRepository extends JpaRepository<SubPermissio
     boolean existsByGroupName(String groupName);
 
     @Modifying
-    @Query("DELETE FROM SubPermissionGroup spg WHERE spg.parentGroupId = :parentGroupId")
-    void deleteAllByParentGroupId(@Param("parentGroupId") String parentGroupId);
+    @Query("DELETE FROM SubPermissionGroup spg WHERE spg.parentGroup = :parentGroup")
+    void deleteAllByParentGroup(@Param("parentGroup") PermissionGroup parentGroup);
 }

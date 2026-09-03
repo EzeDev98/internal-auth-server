@@ -14,5 +14,4 @@ public class PermissionGroupResponse {
     private Long groupId;
     private String groupName;
     private String description;
-    private String keycloakGroupId;
 }

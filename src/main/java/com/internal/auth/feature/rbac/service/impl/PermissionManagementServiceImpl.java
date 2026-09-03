@@ -97,7 +97,7 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
             // No keycloakRoleId to mirror any more — pass null rather than a
             // synthetic placeholder, since there's no external system for the
             // value to mean anything about.
-            RoleResponse roleResponse = permissionEntityService.createRole(roleName, description, null);
+            RoleResponse roleResponse = permissionEntityService.createRole(roleName, description);
             return new BaseResponse(HttpStatus.CREATED.value(), "Role created successfully", roleResponse);
         } catch (PermissionException ex) {
             throw ex;
@@ -121,7 +121,7 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
         groupName = groupName.toLowerCase().trim();
 
         try {
-            GroupCreationResponse superGroupResponse = permissionEntityService.createSuperGroup(groupName, description, null);
+            GroupCreationResponse superGroupResponse = permissionEntityService.createSuperGroup(groupName, description);
             return new BaseResponse(HttpStatus.CREATED.value(), "Group created successfully", superGroupResponse);
         } catch (PermissionException ex) {
             throw ex;
@@ -132,16 +132,17 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
 
     @Override
     @Transactional
-    public BaseResponse createSubGroup(String groupName, String description, String parentGroupId) {
+    public BaseResponse createSubGroup(String groupName, String description, String parentGroupName) {
 
-        if (StringUtils.isBlank(groupName) || StringUtils.isBlank(parentGroupId)) {
-            throw PermissionException.emptyField("Subgroup name and the parent group ID fields are mandatory");
+        if (StringUtils.isBlank(groupName) || StringUtils.isBlank(parentGroupName)) {
+            throw PermissionException.emptyField("Subgroup name and the parent group name fields are mandatory");
         }
 
         groupName = groupName.toLowerCase().trim();
+        parentGroupName = parentGroupName.toLowerCase().trim();
 
         try {
-            SubGroupCreationResponse response = permissionEntityService.createSubGroup(groupName, description, parentGroupId, null);
+            SubGroupCreationResponse response = permissionEntityService.createSubGroup(groupName, description, parentGroupName);
             return new BaseResponse(HttpStatus.CREATED.value(), "Subgroup created successfully", response);
         } catch (PermissionException ex) {
             throw ex;

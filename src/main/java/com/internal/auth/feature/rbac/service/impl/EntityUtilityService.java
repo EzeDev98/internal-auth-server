@@ -164,21 +164,17 @@ public class EntityUtilityService {
         PermissionGroup parentGroup = permissionGroupsRepository.findByGroupName(groupName)
                 .orElseThrow(() -> PermissionException.groupNotFound(groupName));
 
-        deleteAllSubGroups(parentGroup.getKeycloakGroupId());
+        deleteAllSubGroups(parentGroup);
 
         rolePermissionGroupMappingRepository.deleteAllByPermissionGroup(parentGroup);
         userPermissionGroupRepository.deleteAllByPermissionGroup(parentGroup);
         permissionGroupsRepository.delete(parentGroup);
     }
 
-    private void deleteAllSubGroups(String parentGroupId) {
-        if (parentGroupId == null || parentGroupId.trim().isEmpty()) {
-            return;
-        }
-
-        rolePermissionGroupMappingRepository.deleteAllByParentGroupId(parentGroupId);
-        userPermissionGroupRepository.deleteAllByParentGroupId(parentGroupId);
-        subPermissionGroupRepository.deleteAllByParentGroupId(parentGroupId);
+    private void deleteAllSubGroups(PermissionGroup parentGroup) {
+        rolePermissionGroupMappingRepository.deleteAllByParentGroup(parentGroup);
+        userPermissionGroupRepository.deleteAllByParentGroup(parentGroup);
+        subPermissionGroupRepository.deleteAllByParentGroup(parentGroup);
     }
 
     public List<UserPermissionGroup> fetchAllUserPermissionGroups(String parentGroupName, String subGroupName) {
@@ -186,18 +182,10 @@ public class EntityUtilityService {
         PermissionGroup superGroup = permissionGroupsRepository.findByGroupName(parentGroupName)
                 .orElseThrow(() -> PermissionException.subGroupNotFound(parentGroupName));
 
-        if (superGroup.getKeycloakGroupId() == null) {
-            throw PermissionException.keycloakServiceError("Parent group has no Keycloak ID assigned.");
-        }
-
         SubPermissionGroup subPermissionGroup = subPermissionGroupRepository.findByGroupName(subGroupName)
                 .orElseThrow(() -> PermissionException.superGroupNotFound(" for the provided subgroup name " + subGroupName));
 
-        if (subPermissionGroup.getParentGroupId() == null) {
-            throw PermissionException.keycloakServiceError("Sub group has no Parent ID assigned.");
-        }
-
-        if (!superGroup.getKeycloakGroupId().equals(subPermissionGroup.getParentGroupId())) {
+        if (!subPermissionGroup.getParentGroup().getId().equals(superGroup.getId())) {
             throw PermissionException.keycloakServiceError("Sub group " + subGroupName + " is not a child of super group " + parentGroupName + ".");
         }
 
@@ -214,18 +202,10 @@ public class EntityUtilityService {
         PermissionGroup superGroup = permissionGroupsRepository.findByGroupName(parentGroupName)
                 .orElseThrow(() -> PermissionException.superGroupNotFound(" for the provided group name " + parentGroupName));
 
-        if (superGroup.getKeycloakGroupId() == null) {
-            throw PermissionException.keycloakServiceError("Parent group has no Keycloak ID assigned.");
-        }
-
         SubPermissionGroup subPermissionGroup = subPermissionGroupRepository.findByGroupName(subGroupName)
                 .orElseThrow(() -> PermissionException.subGroupNotFound(" for the provided subgroup name " + subGroupName));
 
-        if (subPermissionGroup.getParentGroupId() == null) {
-            throw PermissionException.keycloakServiceError("Sub group has no Parent ID assigned.");
-        }
-
-        if (!superGroup.getKeycloakGroupId().equals(subPermissionGroup.getParentGroupId())) {
+        if (!subPermissionGroup.getParentGroup().getId().equals(superGroup.getId())) {
             throw PermissionException.keycloakServiceError("Sub group " + subGroupName + " is not a child of super group " + parentGroupName + ".");
         }
 

@@ -27,11 +27,18 @@ public class SubPermissionGroup {
     @Column(name = "description")
     private String description;
 
-    @Column(name = "parent_group_id")
-    private String parentGroupId;
+    /**
+     * Step 13D - real FK to the parent PermissionGroup, replacing the old
+     * Keycloak-ID string match (parentGroupId used to be compared against
+     * PermissionGroup.keycloakGroupId, which every group now always has as
+     * null since Step 13C's control-flow rewrite stopped calling Keycloak
+     * at all - that comparison was silently broken for every subgroup
+     * created under current code).
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_group_id", nullable = false)
+    private PermissionGroup parentGroup;
 
-    @Column(name = "keycloak_group_id")
-    private String keycloakGroupId;
 
     @OneToMany(mappedBy = "subPermissionGroup", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<RolePermissionGroupMapping> rolePermissionGroupMappings;

@@ -31,13 +31,13 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
     }
 
     @Override
-    public RoleResponse createRole(String roleName, String description, String keycloakRoleId) {
+    public RoleResponse createRole(String roleName, String description) {
 
         if (entityUtils.isRoleExist(roleName)) {
             throw PermissionException.alreadyExists("Role already exists in the database");
         }
 
-        Role newRole = createNewRole(roleName, description, keycloakRoleId);
+        Role newRole = createNewRole(roleName, description);
         try {
             Role savedRole = entityUtils.saveRole(newRole);
             return mapper.buildRoleResponse(savedRole);
@@ -46,23 +46,22 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
         }
     }
 
-    private Role createNewRole(String roleName, String description, String keycloakId) {
+    private Role createNewRole(String roleName, String description) {
         Role newRole = new Role();
         newRole.setRoleName(roleName);
         newRole.setDescription(description);
-        newRole.setKeycloakRoleId(keycloakId);
         newRole.setCreatedAt(LocalDateTime.now());
         return newRole;
     }
 
     @Override
-    public GroupCreationResponse createSuperGroup(String groupName, String description, String groupId) {
+    public GroupCreationResponse createSuperGroup(String groupName, String description) {
 
         if (entityUtils.isGroupExist(groupName)) {
             throw PermissionException.alreadyExists("Group already exists in the database");
         }
 
-        PermissionGroup group = createGroup(groupName, description, groupId);
+        PermissionGroup group = createGroup(groupName, description);
         try {
             PermissionGroup savedGroup = entityUtils.savePermissionGroup(group);
             return mapper.buildPermissionGroupResponse(savedGroup);
@@ -71,23 +70,23 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
         }
     }
 
-    private PermissionGroup createGroup(String groupName, String description, String groupId) {
+    private PermissionGroup createGroup(String groupName, String description) {
         PermissionGroup permissionGroup = new PermissionGroup();
         permissionGroup.setGroupName(groupName);
         permissionGroup.setDescription(description);
-        permissionGroup.setKeycloakGroupId(groupId);
         permissionGroup.setCreatedAt(LocalDateTime.now());
         return permissionGroup;
     }
 
     @Override
-    public SubGroupCreationResponse createSubGroup(String groupName, String description, String parentGroupId, String groupId) {
+    public SubGroupCreationResponse createSubGroup(String groupName, String description, String parentGroupName) {
 
         if (entityUtils.isSubGroupExist(groupName)) {
             throw PermissionException.alreadyExists("Subgroup already exists in the database");
         }
 
-        SubPermissionGroup group = createGroup(groupName, description, parentGroupId, groupId);
+        PermissionGroup parentGroup = entityUtils.getPermissionGroup(parentGroupName);
+        SubPermissionGroup group = createGroup(groupName, description, parentGroup);
         try {
             SubPermissionGroup savedGroup = entityUtils.saveSubPermissionGroup(group);
             return mapper.buildSubPermissionGroupResponse(savedGroup);
@@ -96,12 +95,11 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
         }
     }
 
-    private SubPermissionGroup createGroup(String groupName, String description, String parentGroupId, String groupId) {
+    private SubPermissionGroup createGroup(String groupName, String description, PermissionGroup parentGroup) {
         SubPermissionGroup subGroup = new SubPermissionGroup();
         subGroup.setGroupName(groupName);
         subGroup.setDescription(description);
-        subGroup.setParentGroupId(parentGroupId);
-        subGroup.setKeycloakGroupId(groupId);
+        subGroup.setParentGroup(parentGroup);
         subGroup.setCreatedAt(LocalDateTime.now());
         return subGroup;
     }

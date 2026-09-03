@@ -25,7 +25,6 @@ public class DtoMapper {
         groupResponse.setGroupId(permissionGroup.getId());
         groupResponse.setGroupName(permissionGroup.getGroupName());
         groupResponse.setDescription(permissionGroup.getDescription());
-        groupResponse.setKeycloakGroupId(permissionGroup.getKeycloakGroupId());
         groupResponse.setRoles(createRoleResponses(permissionGroup));
 
         if (CollectionUtils.isEmpty(userGroups)) {
@@ -51,7 +50,6 @@ public class DtoMapper {
         groupResponse.setSubGroupId(subPermissionGroup.getId());
         groupResponse.setSubgroupName(subPermissionGroup.getGroupName());
         groupResponse.setDescription(subPermissionGroup.getDescription());
-        groupResponse.setSubgroupKeycloakGroupId(subPermissionGroup.getKeycloakGroupId());
         groupResponse.setRoles(createRoleResponses(subPermissionGroup));
         groupResponse.setUserResponses(createGroupedUserResponse(userGroups));
 
@@ -114,7 +112,6 @@ public class DtoMapper {
         AssociatedRolesResponse roleResponse = new AssociatedRolesResponse();
         roleResponse.setId(role.getId());
         roleResponse.setRoleName(role.getRoleName());
-        roleResponse.setKeycloakRoleId(role.getKeycloakRoleId());
         roleResponse.setDescription(role.getDescription());
         return roleResponse;
     }
@@ -130,7 +127,6 @@ public class DtoMapper {
         newGroupResponse.setGroupId(group.getId());
         newGroupResponse.setGroupName(group.getGroupName());
         newGroupResponse.setDescription(group.getDescription());
-        newGroupResponse.setKeycloakGroupId(group.getKeycloakGroupId());
         return newGroupResponse;
     }
 
@@ -139,8 +135,7 @@ public class DtoMapper {
         newGroupResponse.setGroupId(group.getId());
         newGroupResponse.setGroupName(group.getGroupName());
         newGroupResponse.setDescription(group.getDescription());
-        newGroupResponse.setKeycloakGroupId(group.getKeycloakGroupId());
-        newGroupResponse.setSuperGroupId(group.getParentGroupId());
+        newGroupResponse.setSuperGroupId(group.getParentGroup().getId());
         return newGroupResponse;
     }
 
@@ -149,7 +144,6 @@ public class DtoMapper {
         newRoleResponse.setRoleId(role.getId());
         newRoleResponse.setRoleName(role.getRoleName());
         newRoleResponse.setDescription(role.getDescription());
-        newRoleResponse.setKeycloakRoleId(role.getKeycloakRoleId());
         return newRoleResponse;
     }
 
@@ -239,7 +233,6 @@ public class DtoMapper {
             permissionGroupResponse.setGroupId(permissionGroup.getId());
             permissionGroupResponse.setGroupName(permissionGroup.getGroupName());
             permissionGroupResponse.setDescription(permissionGroup.getDescription());
-            permissionGroupResponse.setKeycloakGroupId(permissionGroup.getKeycloakGroupId());
 
             permissionGroupResponses.add(permissionGroupResponse);
         }
@@ -259,7 +252,6 @@ public class DtoMapper {
             RoleResponse roleResponse = new RoleResponse();
             roleResponse.setRoleId(role.getId());
             roleResponse.setRoleName(role.getRoleName());
-            roleResponse.setKeycloakRoleId(role.getKeycloakRoleId());
             roleResponse.setDescription(role.getDescription());
             roleResponses.add(roleResponse);
         }

@@ -24,8 +24,8 @@ public interface UserPermissionGroupRepository extends JpaRepository<UserPermiss
     void deleteAllByPermissionGroup(@Param("group") PermissionGroup group);
 
     @Modifying
-    @Query("DELETE FROM UserPermissionGroup upg WHERE upg.subPermissionGroup.parentGroupId = :parentGroupId")
-    void deleteAllByParentGroupId(@Param("parentGroupId") String parentGroupId);
+    @Query("DELETE FROM UserPermissionGroup upg WHERE upg.subPermissionGroup.parentGroup = :parentGroup")
+    void deleteAllByParentGroup(@Param("parentGroup") PermissionGroup parentGroup);
 
     List<UserPermissionGroup> findAllByUser(User user);
 

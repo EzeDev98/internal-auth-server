@@ -91,7 +91,7 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_ADMIN_OR_SERVICE)
-    @Operation(summary = "Create a subgroup", description = "Creates a child group under a specified parent group in Keycloak and the database.")
+    @Operation(summary = "Create a subgroup", description = "Creates a child group under a specified, already-existing parent group.")
     @PostMapping("/groups/create/sub")
     public ResponseEntity<?> createSubGroup(
 
@@ -101,9 +101,9 @@ public class PermissionController {
             @Parameter(description = "Description of the subgroup", example = "This group will contain specific type of sellers")
             @RequestParam String description,
 
-            @Parameter(description = "ID of the parent group from keycloak", required = true, example = "a1b2c3d4-e5f6-g7h8-i9j0-k1l2m3n4o5p6")
-            @RequestParam String keycloakParentGroupId) {
-        BaseResponse groupResponse = permissionService.createSubGroup(groupName, description, keycloakParentGroupId);
+            @Parameter(description = "Name of the existing parent group", required = true, example = "SELLERS_GROUP")
+            @RequestParam String parentGroupName) {
+        BaseResponse groupResponse = permissionService.createSubGroup(groupName, description, parentGroupName);
         return ResponseEntity.ok(groupResponse);
     }
 

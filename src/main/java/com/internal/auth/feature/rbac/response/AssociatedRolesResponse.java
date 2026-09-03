@@ -17,5 +17,4 @@ public class AssociatedRolesResponse {
 
     private String description;
 
-    private String keycloakRoleId;
 }

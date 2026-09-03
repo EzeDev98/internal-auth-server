@@ -19,7 +19,6 @@ public class GroupResponse {
 
     private String description;
 
-    private String keycloakGroupId;
 
     private List<GroupedUserResponse> userResponses;
 

@@ -7,7 +7,7 @@ import java.util.List;
 public interface PermissionManagementService {
     BaseResponse createRole(String name, String description);
     BaseResponse createSuperGroup(String groupName, String description);
-    BaseResponse createSubGroup(String groupName, String description, String parentGroupId);
+    BaseResponse createSubGroup(String groupName, String description, String parentGroupName);
     BaseResponse assignRoleToUser(String username, String role);
     BaseResponse assignRoleToGroup(String groupName, String role);
     BaseResponse addUserToParentGroup(String username, String groupName);

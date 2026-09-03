@@ -15,5 +15,4 @@ public class RoleResponse {
     private Long roleId;
     private String roleName;
     private String description;
-    private String keycloakRoleId;
 }

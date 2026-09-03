@@ -13,5 +13,4 @@ public class GroupCreationResponse {
     private Long groupId;
     private String groupName;
     private String description;
-    private String keycloakGroupId;
 }
