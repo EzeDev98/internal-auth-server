@@ -8,23 +8,6 @@ import java.util.Map;
 /**
  * Single unified exception for the Permission module.
  *
- * <p>Replaces all 29 narrow exception classes in {@code com.wm.permission.exception}:
- * {@code AlreadyExistException}, {@code AlreadyExistInKeycloakException},
- * {@code DuplicateRoleAssignmentException}, {@code EmptyFieldException},
- * {@code EmptyRequestException}, {@code GroupCreationException},
- * {@code GroupNotFoundException}, {@code GroupPersistenceException},
- * {@code GroupRoleMappingPersistenceException}, {@code InternalServerException},
- * {@code KeycloakGroupCreationException}, {@code KeycloakRoleCreationException},
- * {@code NotFoundException}, {@code PermissionGroupNotFoundException},
- * {@code RoleAssignmentException}, {@code RoleAssignmentVerificationException},
- * {@code RoleCreationException}, {@code RoleNotAssignedException},
- * {@code RoleNotFoundException}, {@code RolePersistenceException},
- * {@code RoleRetrievalException}, {@code RollbackFailedException},
- * {@code ServiceException}, {@code SubGroupNotFoundException},
- * {@code SubGroupPersistenceException}, {@code SuperGroupNotFoundException},
- * {@code UserGroupMappingPersistenceException}, {@code UserNotAddedTOGroupException},
- * and {@code UserRolePersistenceException}.
- *
  * <pre>{@code
  * throw PermissionException.roleNotFound("BUYER");
  * throw PermissionException.groupNotFound("WealthMarket-Buyers");
