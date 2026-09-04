@@ -9,10 +9,11 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
 /**
- * Small helper for pulling the caller's username out of the current
- * request's JWT, and for the ownership/authority checks that build on it.
- * Centralized here so JwtSessionTrackingFilter and any future self-service
- * endpoint (e.g. "who am I") share one claim-lookup convention instead of
+ * Small helper for pulling the caller's username (and, since the
+ * self-service MFA endpoint needed it, their client_application_id) out
+ * of the current request's JWT, and for the ownership/authority checks
+ * that build on it. Centralized here so JwtSessionTrackingFilter and any
+ * self-service endpoint share one claim-lookup convention instead of
  * re-deriving it inline.
  */
 @Component
@@ -33,6 +34,26 @@ public class AuthenticationHelper {
 
         String username = jwt.getClaimAsString("preferred_username");
         return username != null ? username : jwt.getSubject();
+    }
+
+    /**
+     * Returns the "client_application_id" claim of the current request's
+     * JWT - stamped by AuthorizationServerConfig#jwtTokenCustomizer onto
+     * every self-issued access token minted for a local user
+     * (LoginServiceImpl#mintAccessToken sets it via the principal's
+     * details). Returns null if there is no JWT-authenticated principal,
+     * or the claim is absent - a Keycloak-issued admin JWT and a
+     * client_credentials token both lack it, since neither represents one
+     * specific local user in one specific client application.
+     */
+    public Long getCurrentClientApplicationId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication != null && authentication.getPrincipal() instanceof Jwt jwt)) {
+            return null;
+        }
+
+        Object claim = jwt.getClaim("client_application_id");
+        return (claim instanceof Number number) ? number.longValue() : null;
     }
 
     /**

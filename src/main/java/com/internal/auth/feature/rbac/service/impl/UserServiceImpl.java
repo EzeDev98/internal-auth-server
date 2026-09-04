@@ -16,6 +16,10 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.internal.auth.common.constant.AppConstant.ADMIN_PERMISSION_GROUP;
+import static com.internal.auth.common.constant.AppConstant.ADMIN_PERMISSION_GROUP_DESCRIPTION;
+import static com.internal.auth.common.constant.AppConstant.ADMIN_ROLE;
+import static com.internal.auth.common.constant.AppConstant.ADMIN_ROLE_DESCRIPTION;
 import static com.internal.auth.common.constant.AppConstant.DEFAULT_PERMISSION_GROUP;
 import static com.internal.auth.common.constant.AppConstant.DEFAULT_PERMISSION_GROUP_DESCRIPTION;
 import static com.internal.auth.common.constant.AppConstant.DEFAULT_ROLE;
@@ -24,9 +28,14 @@ import static com.internal.auth.common.constant.AppConstant.DEFAULT_ROLE_DESCRIP
 /**
  * Exception policy: throws only {@link PermissionException}.
  *
- * <p>{@link #addUserToDefaultPermissionGroup} is an orchestrator that is designed
- * to return a {@link BaseResponse} error instead of propagating exceptions — this
- * behavior is fully preserved.
+ * <p>{@link #addUserToDefaultPermissionGroup} and
+ * {@link #addUserToAdminPermissionGroup} are orchestrators designed to
+ * return a {@link BaseResponse} error instead of propagating exceptions —
+ * this behavior is fully preserved. Both now share one parameterized
+ * implementation ({@code addUserToPermissionGroup}) - same get-or-create
+ * group/role/mapping/membership logic, just pointed at a different
+ * group/role name pair (DEFAULT_* for every new user, ADMIN_* for the admin
+ * bootstrap flow in AdminRegistrationServiceImpl).
  *
  * <p><b>Keycloak-mirroring control flow — decision record (Stage 1 punch-list
  * item 2):</b> this class used to branch every "does the default role/group
@@ -38,6 +47,17 @@ import static com.internal.auth.common.constant.AppConstant.DEFAULT_ROLE_DESCRIP
  * local state — so the Keycloak-vs-local duality collapses to a plain
  * "create it locally if it's missing" and the {@code KeycloakUtils}
  * dependency is gone entirely.
+ *
+ * <p><b>Create-vs-create race (V20):</b> validateAndCreateGroup/
+ * validateAndCreateRole below follow a get-then-create-if-missing pattern,
+ * which is itself a check-then-act race when two callers (e.g. two
+ * concurrent registrations) both find the default group/role missing and
+ * both attempt to create it. PermissionEntityServiceImpl now backs its own
+ * pre-check with a DB unique constraint and turns the loser's constraint
+ * violation into a PermissionException.alreadyExists(...) rather than a raw
+ * persistence failure — the two methods below catch that specific case and
+ * treat it as success (the row exists, just not because of this call)
+ * instead of failing the whole assignment.
  */
 @Service
 public class UserServiceImpl implements UserService {
@@ -56,14 +76,29 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public BaseResponse addUserToDefaultPermissionGroup(String username) {
+        return addUserToPermissionGroup(username,
+                DEFAULT_PERMISSION_GROUP, DEFAULT_PERMISSION_GROUP_DESCRIPTION,
+                DEFAULT_ROLE, DEFAULT_ROLE_DESCRIPTION);
+    }
+
+    @Override
+    @Transactional
+    public BaseResponse addUserToAdminPermissionGroup(String username) {
+        return addUserToPermissionGroup(username,
+                ADMIN_PERMISSION_GROUP, ADMIN_PERMISSION_GROUP_DESCRIPTION,
+                ADMIN_ROLE, ADMIN_ROLE_DESCRIPTION);
+    }
+
+    private BaseResponse addUserToPermissionGroup(String username, String groupName, String groupDescription,
+                                                    String roleName, String roleDescription) {
         try {
-            PermissionGroup permissionGroup = validateAndCreateGroup();
-            validateAndCreateRole();
-            validateAndAssignRoleToGroup(permissionGroup);
+            PermissionGroup permissionGroup = validateAndCreateGroup(groupName, groupDescription);
+            validateAndCreateRole(roleName, roleDescription);
+            validateAndAssignRoleToGroup(permissionGroup, roleName);
             addUserToGroup(username, permissionGroup.getGroupName());
             assignGroupRoleToUser(username, permissionGroup.getGroupName());
 
-            return new BaseResponse(HttpServletResponse.SC_CREATED, "User " + username + " successfully added into " + DEFAULT_PERMISSION_GROUP + " with role " + DEFAULT_ROLE);
+            return new BaseResponse(HttpServletResponse.SC_CREATED, "User " + username + " successfully added into " + groupName + " with role " + roleName);
 
         } catch (PermissionException ex) {
             /*
@@ -151,31 +186,47 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    private PermissionGroup validateAndCreateGroup() {
+    private PermissionGroup validateAndCreateGroup(String groupName, String groupDescription) {
         try {
-            return entityUtils.getPermissionGroup(DEFAULT_PERMISSION_GROUP);
+            return entityUtils.getPermissionGroup(groupName);
         } catch (PermissionException e) {
             if (e.getErrorCode() == PermissionErrorCode.PERMISSION_GROUP_NOT_FOUND) {
-                BaseResponse response = permissionService.createSuperGroup(
-                        DEFAULT_PERMISSION_GROUP, DEFAULT_PERMISSION_GROUP_DESCRIPTION);
-                if (response.getStatusCode() != HttpServletResponse.SC_CREATED) {
-                    throw PermissionException.groupCreationFailed(
-                            "Failed to create default permission group");
+                try {
+                    BaseResponse response = permissionService.createSuperGroup(groupName, groupDescription);
+                    if (response.getStatusCode() != HttpServletResponse.SC_CREATED) {
+                        throw PermissionException.groupCreationFailed(
+                                "Failed to create permission group " + groupName);
+                    }
+                } catch (PermissionException createEx) {
+                    // Lost a create-vs-create race (V20) - the group now
+                    // genuinely exists, just not because of this call. Fall
+                    // through to the re-fetch below instead of failing.
+                    if (createEx.getErrorCode() != PermissionErrorCode.ALREADY_EXISTS) {
+                        throw createEx;
+                    }
                 }
-                return entityUtils.getPermissionGroup(DEFAULT_PERMISSION_GROUP);
+                return entityUtils.getPermissionGroup(groupName);
             }
             throw e;
         }
     }
 
-    private void validateAndCreateRole() {
+    private void validateAndCreateRole(String roleName, String roleDescription) {
         try {
-            entityUtils.getRole(DEFAULT_ROLE);
+            entityUtils.getRole(roleName);
         } catch (PermissionException ex) {
             if (ex.getErrorCode() == PermissionErrorCode.ROLE_NOT_FOUND) {
-                BaseResponse response = permissionService.createRole(DEFAULT_ROLE, DEFAULT_ROLE_DESCRIPTION);
-                if (response.getStatusCode() != HttpServletResponse.SC_CREATED) {
-                    throw PermissionException.roleCreationFailed("Failed to create default role");
+                try {
+                    BaseResponse response = permissionService.createRole(roleName, roleDescription);
+                    if (response.getStatusCode() != HttpServletResponse.SC_CREATED) {
+                        throw PermissionException.roleCreationFailed("Failed to create role " + roleName);
+                    }
+                } catch (PermissionException createEx) {
+                    // Same create-vs-create race as validateAndCreateGroup
+                    // above (V20).
+                    if (createEx.getErrorCode() != PermissionErrorCode.ALREADY_EXISTS) {
+                        throw createEx;
+                    }
                 }
                 return;
             }
@@ -183,25 +234,25 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    private void validateAndAssignRoleToGroup(PermissionGroup permissionGroup) {
+    private void validateAndAssignRoleToGroup(PermissionGroup permissionGroup, String roleName) {
         try {
-            Role role = entityUtils.getRole(DEFAULT_ROLE);
+            Role role = entityUtils.getRole(roleName);
             if (entityUtils.isRoleAndPermissionGroupMappingExisting(role, permissionGroup)) {
                 return;
             }
 
-            BaseResponse response = permissionService.assignRoleToGroup(permissionGroup.getGroupName(), DEFAULT_ROLE);
+            BaseResponse response = permissionService.assignRoleToGroup(permissionGroup.getGroupName(), roleName);
             // 201 = newly assigned, 200 = assignRoleToGroup's own idempotency
             // path found it already assigned — both are success here.
             if (response.getStatusCode() != HttpServletResponse.SC_CREATED
                     && response.getStatusCode() != HttpServletResponse.SC_OK) {
                 throw PermissionException.roleNotAssigned(
-                        "Failed to assign default role to group");
+                        "Failed to assign role " + roleName + " to group");
             }
         } catch (PermissionException ex) {
             if (ex.getErrorCode() == PermissionErrorCode.ROLE_NOT_FOUND) {
                 throw PermissionException.internalError(
-                        "Default role not found in the local database");
+                        "Role " + roleName + " not found in the local database");
             }
             throw ex;
         }
@@ -211,7 +262,7 @@ public class UserServiceImpl implements UserService {
         BaseResponse addUserResponse = permissionService.addUserToParentGroup(username, groupName);
         if (addUserResponse.getStatusCode() != HttpServletResponse.SC_CREATED) {
             throw PermissionException.userNotAddedToGroup(
-                    "Failed to add user to default permission group");
+                    "Failed to add user to permission group " + groupName);
         }
     }
 }

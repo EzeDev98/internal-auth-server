@@ -231,6 +231,20 @@ public class AuthorizationServerConfig {
      * picking one arbitrarily (confirmed against NimbusJwtEncoder's
      * selectJwk() source, tag 7.1.1), so without this the moment a second
      * key exists in the JWKSet every token mint would start failing.
+     *
+     * This-patch addition: also stamps "client_application_id" onto every
+     * access token, read off the principal's details rather than a new
+     * context attribute - LoginServiceImpl#mintAccessToken stashes it
+     * there via Authentication#setDetails before building the token
+     * context, the same extension point Spring Security's own
+     * WebAuthenticationDetails uses, chosen specifically because
+     * context.getPrincipal() is already proven reachable here (the roles
+     * claim above already reads authorities off this exact object). Fixes
+     * MfaAdminServiceImpl's previously-unscoped username lookup for the
+     * self-service MFA path, which - unlike the admin path - has no
+     * admin-supplied clientId to resolve it from instead. client_credentials
+     * tokens never go through mintAccessToken, so their principal's
+     * details is unset and this correctly adds no claim there.
      */
     @Bean
     public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer(SigningKeyService signingKeyService) {
@@ -243,6 +257,11 @@ public class AuthorizationServerConfig {
                             .map(GrantedAuthority::getAuthority)
                             .collect(Collectors.toCollection(LinkedHashSet::new));
                     context.getClaims().claim("roles", roles);
+                }
+
+                Object details = context.getPrincipal().getDetails();
+                if (details instanceof Long clientApplicationId) {
+                    context.getClaims().claim("client_application_id", clientApplicationId);
                 }
             }
         };

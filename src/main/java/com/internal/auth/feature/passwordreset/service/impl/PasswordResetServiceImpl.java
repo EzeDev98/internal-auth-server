@@ -9,6 +9,7 @@ import com.internal.auth.common.reset.ResetValidator;
 import com.internal.auth.common.reset.delivery.OtpDeliveryService;
 import com.internal.auth.common.reset.dto.VerifyOtpRequest;
 import com.internal.auth.common.reset.dto.VerifyOtpResponse;
+import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.passwordreset.config.PasswordResetProperties;
 import com.internal.auth.feature.passwordreset.dto.CompletePasswordResetRequest;
 import com.internal.auth.feature.passwordreset.dto.PasswordResetRequestDto;
@@ -85,6 +86,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private final ResetValidator resetValidator;
     private final RedissonClient redissonClient;
     private final OtpResetEngine otpResetEngine;
+    private final ClientApplicationService clientApplicationService;
 
     @Override
     @Transactional
@@ -118,7 +120,11 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             otpResetEngine.populateNewOtp(otpEntity, phoneNumber, rawOtp, properties.getOtp().getExpirationMinutes(), properties.getOtp().getMaxAttempts());
             passwordResetOtpRepository.save(otpEntity);
 
-            otpDeliveryService.sendPasswordResetOtp(phoneNumber, rawOtp);
+            // Branded per calling app (SyncPoint/Notare/...) rather than a
+            // single global sender name, so the SMS text matches whichever
+            // app the user actually registered under.
+            String appName = clientApplicationService.getById(clientApplicationId).getName();
+            otpDeliveryService.sendPasswordResetOtp(phoneNumber, rawOtp, appName);
             log.info("Password reset OTP requested for a registered phone number");
         } else {
             log.info("Password reset OTP requested for an unregistered phone number");

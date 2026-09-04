@@ -17,14 +17,19 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.internal.auth.common.response.InternalAuthApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.Duration;
 
 /**
- * Step 11A/11E. Same literal "/api/v1/auth" base as RegistrationController.
- * "/login/verify-otp" needed its own new permitAll rule in WebSecurityConfig,
- * same reasoning as "/login" itself - see that file's diff.
+ * Step 11A/11E. Mapped under the "${app.title}" property, same base as
+ * RegistrationController - see that class's javadoc for why this reverted
+ * from a hardcoded "/api/v1/auth" literal back to the property (API-contract
+ * review, step 1): WebSecurityConfig now builds its own permitAll() matcher
+ * paths from the same "app.title" property, so the two can't drift apart
+ * regardless of representation.
  *
  * Multi-tenant redesign: both "/login" and "/login/verify-otp" now
  * require the same HTTP Basic client-credential header
@@ -33,7 +38,7 @@ import java.time.Duration;
  * client_application_id now too (see LoginServiceImpl's class Javadoc).
  */
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("${app.title}/auth")
 @Tag(name = "Login API", description = "Local credential authentication with optional MFA step-up (Stage 3/4 Steps 11A/11E)")
 @RequiredArgsConstructor
 public class LoginController {
@@ -43,22 +48,24 @@ public class LoginController {
     private final RateLimiterService rateLimiterService;
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(
+    public ResponseEntity<InternalAuthApiResponse<LoginResponse>> login(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
             @RequestBody LoginRequest request,
             HttpServletRequest httpRequest) {
         rateLimiterService.checkRateLimit(AppConstant.LOGIN_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_LOGIN_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_RATE_LIMIT_DURATION_MINUTES));
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
-        return ResponseEntity.ok(loginService.login(request, client.getId()));
+        LoginResponse response = loginService.login(request, client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 
     @PostMapping("/login/verify-otp")
-    public ResponseEntity<LoginResponse> verifyLoginOtp(
+    public ResponseEntity<InternalAuthApiResponse<LoginResponse>> verifyLoginOtp(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
             @RequestBody VerifyLoginOtpRequest request,
             HttpServletRequest httpRequest) {
         rateLimiterService.checkRateLimit(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_LOGIN_OTP_VERIFY_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_DURATION_MINUTES));
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
-        return ResponseEntity.ok(loginService.verifyLoginOtp(request, client.getId()));
+        LoginResponse response = loginService.verifyLoginOtp(request, client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 }

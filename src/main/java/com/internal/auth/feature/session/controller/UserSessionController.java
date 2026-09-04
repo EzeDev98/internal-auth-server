@@ -1,4 +1,6 @@
-package com.internal.auth.feature.session.web;
+package com.internal.auth.feature.session.controller;
+
+import com.internal.auth.common.response.InternalAuthApiResponse;
 
 import com.internal.auth.config.auth.Roles;
 import com.internal.auth.feature.client.model.ClientApplication;
@@ -12,7 +14,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -56,11 +59,11 @@ public class UserSessionController {
      */
     @Operation(method = "POST", summary = "Invalidate session", description = "This an admin endpoint for invalidating a user's session in case they mistakenly got locked out of the app. This will be on very rare occasion")
     @PreAuthorize(Roles.HAS_ADMIN)
-    @PostMapping("/session/invalidate")
-    public ResponseEntity<InvalidatedSessionResponse> invalidateSession(@RequestParam String username, @RequestParam String clientId, HttpServletRequest httpRequest) {
+    @DeleteMapping("/users/{username}/sessions")
+    public ResponseEntity<InternalAuthApiResponse<InvalidatedSessionResponse>> invalidateSession(@PathVariable String username, @RequestParam String clientId, HttpServletRequest httpRequest) {
         rateLimiterService.checkRateLimit(AppConstant.SESSION_INVALIDATE_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_SESSION_INVALIDATE_REQUEST, Duration.ofHours(AppConstant.SESSION_INVALIDATE_RATE_LIMIT_DURATION_HOURS));
         ClientApplication client = clientApplicationService.getEnabledClientByClientId(clientId);
         InvalidatedSessionResponse response = sessionService.invalidateUserSessionByAdmin(username, client.getId());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 }

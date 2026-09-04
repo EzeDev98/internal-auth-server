@@ -18,4 +18,15 @@ public interface UserRolesRepository extends JpaRepository<UserRole, Long> {
 
     @Query("SELECT DISTINCT userRole.role FROM UserRole userRole " + "WHERE userRole.user.username = :username")
     List<Role> findRolesByUsername(String username);
+
+    /**
+     * Admin bootstrap (AdminRegistrationServiceImpl): "does any user in the
+     * whole system already hold this role" - deliberately not scoped by
+     * client_application_id, consistent with RBAC being global (your
+     * decision: role/group management stays inside internal-auth-server,
+     * not per tenant app). Used to self-limit admin registration: open with
+     * no auth required only until the first create-admin user exists.
+     */
+    @Query("SELECT COUNT(userRole) > 0 FROM UserRole userRole " + "JOIN userRole.role role " + "WHERE role.roleName = :roleName")
+    boolean existsByRoleRoleName(@Param("roleName") String roleName);
 }

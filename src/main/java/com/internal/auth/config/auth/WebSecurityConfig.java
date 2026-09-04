@@ -35,6 +35,17 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WebSecurityConfig {
 
+    /**
+     * API-contract review (step 1): single source of truth for the API
+     * base path, shared with every controller's own "${app.title}"
+     * @RequestMapping. Used below to build the permitAll() matcher paths
+     * instead of hardcoded "/api/v1/..." literals, so a controller's
+     * mapping and its security rule can never drift apart.
+     */
+    @Value("${app.title}")
+    private String appTitle;
+
+
     // Step 12E: swapped from KeycloakJwtRolesConverter to the equivalent for
     // this app's own self-issued claims shape - see SelfIssuedJwtRolesConverter's
     // javadoc for the claim-shape rationale and current ground-truth status
@@ -119,24 +130,45 @@ public class WebSecurityConfig {
                         // "/api/v1/auth/register", "/api/v1/auth/activate" and
                         // "/api/v1/auth/resend-activation" are now implemented (RegistrationController,
                         // EmailVerificationController - Steps 10A/10C), not pre-wired stubs anymore.
+                        // "/api/v1/auth/verify-phone" and "/api/v1/auth/resend-phone-verification"
+                        // (self-service phone verification, PhoneVerificationController) fix the
+                        // previously-permanent phone-only-account login gate - no self-service flow
+                        // existed anywhere in this app to ever set phoneVerified=true, and a
+                        // phone-only user hitting that gate by definition has no bearer token yet.
+                        // "/api/v1/password-reset/request", "/verify-otp" and "/complete" were
+                        // previously unreachable here: PasswordResetController used to map under
+                        // "${app.title}/password-reset" (a property, not a literal), which fell
+                        // through to anyReguest().authenticated() with no matching permitAll rule -
+                        // the same trap RegistrationController's own Javadoc warns about, and it
+                        // made password reset uncallable by the locked-out, token-less user it's
+                        // for. PasswordResetController's mapping is now the literal
+                        // "/api/v1/password-reset", matching every other pre-auth controller here,
+                        // so this list can't silently drift from the controller again.
                         // "/api/v1/admin/register" and "/api/v1/otp/**" remain pre-wiring for
                         // not-yet-built work - confirmed with the project owner (Stage 1).
                         .requestMatchers(HttpMethod.POST,
-                                "/api/v1/auth/register",
-                                "/api/v1/auth/login",
-                                "/api/v1/auth/login/verify-otp",
-                                "/api/v1/auth/activate",
-                                "/api/v1/auth/resend-activation",
-                                "/api/v1/admin/register",
-                                "/api/v1/otp/**"
+                                appTitle + "/auth/register",
+                                appTitle + "/auth/login",
+                                appTitle + "/auth/login/verify-otp",
+                                appTitle + "/auth/activate",
+                                appTitle + "/auth/resend-activation",
+                                appTitle + "/auth/verify-phone",
+                                appTitle + "/auth/resend-phone-verification",
+                                appTitle + "/password-reset/request",
+                                appTitle + "/password-reset/verify-otp",
+                                appTitle + "/password-reset/complete",
+                                appTitle + "/admin/register",
+                                appTitle + "/admin/login",
+                                appTitle + "/admin/login/verify-otp",
+                                appTitle + "/otp/**"
                         ).permitAll()
 
-                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/activate").permitAll()
+                        .requestMatchers(HttpMethod.GET, appTitle + "/auth/activate").permitAll()
 
                         // OIDC back-channel logout - called server-to-server by Keycloak, not by a
                         // logged-in user, so there's no bearer token to check here. It authenticates
                         // itself via the signed logout_token validated in BackchannelLogoutService.
-                        .requestMatchers(HttpMethod.POST, "/api/v1/logout/backchannel").permitAll()
+                        .requestMatchers(HttpMethod.POST, appTitle + "/logout/backchannel").permitAll()
 
                         .anyRequest().authenticated())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))

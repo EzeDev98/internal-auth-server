@@ -1,4 +1,6 @@
-package com.internal.auth.feature.signingkey.web;
+package com.internal.auth.feature.signingkey.controller;
+
+import com.internal.auth.common.response.InternalAuthApiResponse;
 
 import com.internal.auth.common.constant.AppConstant;
 import com.internal.auth.common.util.RateLimiterService;
@@ -42,9 +44,10 @@ public class SigningKeyController {
     @Operation(method = "POST", summary = "Rotate signing key", description = "Generates a new JWT signing key and makes it current. The previous key stays valid for verification during the grace period.")
     @PreAuthorize(Roles.HAS_ADMIN)
     @PostMapping("/admin/signing-keys/rotate")
-    public ResponseEntity<SigningKeyResponse> rotate(HttpServletRequest httpRequest) {
+    public ResponseEntity<InternalAuthApiResponse<SigningKeyResponse>> rotate(HttpServletRequest httpRequest) {
         rateLimiterService.checkRateLimit(AppConstant.SIGNING_KEY_ROTATE_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_SIGNING_KEY_ROTATE_REQUEST, Duration.ofDays(AppConstant.SIGNING_KEY_ROTATE_RATE_LIMIT_DURATION_DAYS));
         SigningKey newKey = signingKeyService.rotate();
-        return ResponseEntity.ok(new SigningKeyResponse(newKey.getKid(), newKey.getStatus().name(), newKey.isCurrent(), newKey.getCreatedAt()));
+        SigningKeyResponse response = new SigningKeyResponse(newKey.getKid(), newKey.getStatus().name(), newKey.isCurrent(), newKey.getCreatedAt());
+        return ResponseEntity.ok(InternalAuthApiResponse.success("Signing key rotated successfully.", response));
     }
 }

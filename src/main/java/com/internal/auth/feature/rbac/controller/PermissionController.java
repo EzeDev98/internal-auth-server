@@ -5,8 +5,9 @@ import com.internal.auth.config.auth.Roles;
 import com.internal.auth.feature.rbac.service.PermissionEntityService;
 import com.internal.auth.feature.rbac.service.PermissionManagementService;
 import com.internal.auth.common.response.BaseResponse;
+import com.internal.auth.feature.rbac.dto.*;
+import com.internal.auth.common.response.InternalAuthApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -66,228 +66,185 @@ public class PermissionController {
 
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Create a new role", description = "Creates a role in the local database. Roles define permissions that can be assigned to users or groups.")
-    @PostMapping("/roles/create")
-    public ResponseEntity<?> createRole(
-            @Parameter(description = "Name of the role to create", required = true, example = "ROLE_ADMIN")
-            @RequestParam String roleName,
-
-            @Parameter(description = "Description of the role's purpose", example = "Administrator with full access")
-            @RequestParam String description) {
-        BaseResponse roleResponse = permissionService.createRole(roleName, description);
-        return ResponseEntity.ok(roleResponse);
+    @PostMapping("/roles")
+    public ResponseEntity<InternalAuthApiResponse<Object>> createRole(@RequestBody RolesRequest request) {
+        BaseResponse roleResponse = permissionService.createRole(request.getRoleName(), request.getDescription());
+        return ResponseEntity.status(roleResponse.getStatusCode())
+                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), roleResponse.getData()));
     }
 
-    @PreAuthorize(Roles.HAS_ADMIN_OR_SERVICE)
+    @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Create a parent group", description = "Creates a top-level group in the database. Parent groups can contain subgroups and users.")
-    @PostMapping("/groups/create/super")
-    public ResponseEntity<?> createSuperGroup(
-            @Parameter(description = "Name of the parent group", required = true, example = "FOOD_SELLERS")
-            @RequestParam String groupName,
-
-            @Parameter(description = "Description of the group's purpose", example = "Food seller's group")
-            @RequestParam String description) {
-        BaseResponse groupResponse = permissionService.createSuperGroup(groupName, description);
-        return ResponseEntity.ok(groupResponse);
+    @PostMapping("/groups")
+    public ResponseEntity<InternalAuthApiResponse<Object>> createSuperGroup(@RequestBody GroupRequest request) {
+        BaseResponse groupResponse = permissionService.createSuperGroup(request.getGroupName(), request.getDescription());
+        return ResponseEntity.status(groupResponse.getStatusCode())
+                .body(InternalAuthApiResponse.success(groupResponse.getDescription(), groupResponse.getData()));
     }
 
-    @PreAuthorize(Roles.HAS_ADMIN_OR_SERVICE)
+    @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Create a subgroup", description = "Creates a child group under a specified, already-existing parent group.")
-    @PostMapping("/groups/create/sub")
-    public ResponseEntity<?> createSubGroup(
-
-            @Parameter(description = "Name of the subgroup", required = true, example = "FOOD_SELLERS")
-            @RequestParam String groupName,
-
-            @Parameter(description = "Description of the subgroup", example = "This group will contain specific type of sellers")
-            @RequestParam String description,
-
-            @Parameter(description = "Name of the existing parent group", required = true, example = "SELLERS_GROUP")
-            @RequestParam String parentGroupName) {
-        BaseResponse groupResponse = permissionService.createSubGroup(groupName, description, parentGroupName);
-        return ResponseEntity.ok(groupResponse);
+    @PostMapping("/groups/{parentGroupName}/subgroups")
+    public ResponseEntity<InternalAuthApiResponse<Object>> createSubGroup(@PathVariable String parentGroupName, @RequestBody SubGroupRequest request) {
+        BaseResponse groupResponse = permissionService.createSubGroup(request.getGroupName(), request.getDescription(), parentGroupName);
+        return ResponseEntity.status(groupResponse.getStatusCode())
+                .body(InternalAuthApiResponse.success(groupResponse.getDescription(), groupResponse.getData()));
     }
 
-    @PreAuthorize(Roles.HAS_SERVICE)
+    @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Assign role to user automatically", description = "Grants a specific role to a user and records the assignment in the local database automatically. For automatic service-to-service usage. Restricted to the roles configured in app.service-role-assignment.allowed-roles.")
-    @PostMapping("/service/roles/assign/user")
-    public ResponseEntity<?> assignRoleToUserForServiceToService(
-            @Parameter(description = "Username to assign role to", required = true, example = "Sarah")
-            @RequestParam String username,
-
-            @Parameter(description = "Role name to assign", required = true, example = "ADMIN")
-            @RequestParam String role) {
-        if (!serviceAssignableRoles.contains(role.trim().toLowerCase(Locale.ROOT))) {
-            throw new AccessDeniedException("Service credentials are not permitted to assign role '" + role + "'. " + "Configure app.service-role-assignment.allowed-roles to permit specific roles.");
+    @PostMapping("/service/users/{username}/roles")
+    public ResponseEntity<InternalAuthApiResponse<Object>> assignRoleToUserForServiceToService(@PathVariable String username, @RequestBody AssignRoleRequest request) {
+        if (!serviceAssignableRoles.contains(request.getRoleName().trim().toLowerCase(Locale.ROOT))) {
+            throw new AccessDeniedException("Service credentials are not permitted to assign role '" + request.getRoleName() + "'. " + "Configure app.service-role-assignment.allowed-roles to permit specific roles.");
         }
-        BaseResponse roleResponse = permissionService.assignRoleToUser(username, role);
-        return ResponseEntity.ok(roleResponse);
+        BaseResponse roleResponse = permissionService.assignRoleToUser(username, request.getRoleName());
+        return ResponseEntity.status(roleResponse.getStatusCode())
+                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), roleResponse.getData()));
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Assign role to user", description = "Grants a specific role to a user and records the assignment in the local database.")
-    @PostMapping("/roles/assign/user")
-    public ResponseEntity<?> assignRoleToUser(
-            @Parameter(description = "Username to assign role to", required = true, example = "Sarah")
-            @RequestParam String username,
-
-            @Parameter(description = "Role name to assign", required = true, example = "ADMIN")
-            @RequestParam String role) {
-        BaseResponse roleResponse = permissionService.assignRoleToUser(username, role);
-        return ResponseEntity.ok(roleResponse);
+    @PostMapping("/users/{username}/roles")
+    public ResponseEntity<InternalAuthApiResponse<Object>> assignRoleToUser(@PathVariable String username, @RequestBody AssignRoleRequest request) {
+        BaseResponse roleResponse = permissionService.assignRoleToUser(username, request.getRoleName());
+        return ResponseEntity.status(roleResponse.getStatusCode())
+                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), roleResponse.getData()));
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Assign role to parent group", description = "Assigns a role to all members of a parent group. All users in the group inherit the role.")
-    @PostMapping("/roles/assign/super-group")
-    public ResponseEntity<?> assignRoleToGroup(
-            @Parameter(description = "Name of the parent group", required = true, example = "SELLER'S_GROUP")
-            @RequestParam String groupName,
-
-            @Parameter(description = "Role name to assign", required = true, example = "SERVICE_PROVIDER")
-            @RequestParam String role) {
-        BaseResponse roleResponse = permissionService.assignRoleToGroup(groupName, role);
-        return ResponseEntity.ok(roleResponse);
+    @PostMapping("/groups/{groupName}/roles")
+    public ResponseEntity<InternalAuthApiResponse<Object>> assignRoleToGroup(@PathVariable String groupName, @RequestBody AssignRoleToGroupRequest request) {
+        BaseResponse roleResponse = permissionService.assignRoleToGroup(groupName, request.getRoleName());
+        return ResponseEntity.status(roleResponse.getStatusCode())
+                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), roleResponse.getData()));
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Assign role to subgroup", description = "Assigns a role to a specific subgroup within a parent group hierarchy.")
-    @PostMapping("/roles/assign/sub-group")
-    public ResponseEntity<?> assignRoleToSubGroup(
-            @Parameter(description = "Name of the parent group", required = true, example = "SELLER'S_GROUP")
-            @RequestParam String superGroup,
-
-            @Parameter(description = "Name of the subgroup", required = true, example = "FOOD_SELLERS")
-            @RequestParam String subGroup,
-
-            @Parameter(description = "Role name to assign", required = true, example = "SERVICE_PROVIDER")
-            @RequestParam String role) {
-        BaseResponse roleResponse = permissionService.assignRoleToSubGroup(superGroup, subGroup, role);
-        return ResponseEntity.ok(roleResponse);
+    @PostMapping("/groups/{parentGroupName}/subgroups/{subGroupName}/roles")
+    public ResponseEntity<InternalAuthApiResponse<Object>> assignRoleToSubGroup(@PathVariable String parentGroupName, @PathVariable String subGroupName, @RequestBody AssignRoleToSubGroupRequest request) {
+        BaseResponse roleResponse = permissionService.assignRoleToSubGroup(parentGroupName, subGroupName, request.getRoleName());
+        return ResponseEntity.status(roleResponse.getStatusCode())
+                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), roleResponse.getData()));
     }
 
-    @PreAuthorize(Roles.HAS_ADMIN_OR_SERVICE)
+    @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Add user to parent group", description = "Adds a user directly to a parent group, granting them all roles assigned to that group.")
-    @PostMapping("/users/add/super-group")
-    public ResponseEntity<?> addUsersToParentGroup(
-            @Parameter(description = "Username to add", required = true, example = "Sarah")
-            @RequestParam String username,
-
-            @Parameter(description = "Name of the parent group", required = true, example = "SELLER'S_GROUP")
-            @RequestParam String groupName) {
-        BaseResponse response = permissionService.addUserToParentGroup(username, groupName);
-        return ResponseEntity.ok(response);
+    @PostMapping("/groups/{groupName}/users")
+    public ResponseEntity<InternalAuthApiResponse<Object>> addUsersToParentGroup(@PathVariable String groupName, @RequestBody AddUserToGroupRequest request) {
+        BaseResponse response = permissionService.addUserToParentGroup(request.getUsername(), groupName);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
-    @PreAuthorize(Roles.HAS_ADMIN_OR_SERVICE)
+    @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Add user to subgroup", description = "Adds a user to a specific subgroup within a parent group hierarchy.")
-    @PostMapping("/users/add/sub-group")
-    public ResponseEntity<?> addUsersToSubGroup(
-            @Parameter(description = "Username to add", required = true, example = "Sarah")
-            @RequestParam String username,
-
-            @Parameter(description = "Name of the parent group", required = true, example = "SELLER'S_GROUP")
-            @RequestParam String superGroupName,
-
-            @Parameter(description = "Name of the subgroup", required = true, example = "FOOD_SELLERS")
-            @RequestParam String subGroupName) {
-        BaseResponse response = permissionService.addUserToSubGroup(username, superGroupName, subGroupName);
-        return ResponseEntity.ok(response);
+    @PostMapping("/groups/{parentGroupName}/subgroups/{subGroupName}/users")
+    public ResponseEntity<InternalAuthApiResponse<Object>> addUsersToSubGroup(@PathVariable String parentGroupName, @PathVariable String subGroupName, @RequestBody AddUserToSubGroupRequest request) {
+        BaseResponse response = permissionService.addUserToSubGroup(request.getUsername(), parentGroupName, subGroupName);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Add user to multiple subgroups", description = "Adds a user to several subgroups within the same parent group in a single operation.")
-    @PostMapping("/users/add/sub-groups")
-    public ResponseEntity<?> addUsersToSubGroups(
-            @Parameter(description = "Username to add", required = true, example = "sarah")
-            @RequestParam String username,
-
-            @Parameter(description = "Name of the parent group", required = true, example = "SELLER'S_GROUP")
-            @RequestParam String superGroupName,
-
-            @Parameter(description = "List of subgroup names", required = true, example = "[\"FOOD_SELLERS\", \"CLOTHE_SELLERS\"]")
-            @RequestParam List<String> subGroupNames) {
-        BaseResponse response = permissionService.addUserToSubGroups(username, superGroupName, subGroupNames);
-        return ResponseEntity.ok(response);
+    @PostMapping("/groups/{parentGroupName}/users/{username}/subgroups")
+    public ResponseEntity<InternalAuthApiResponse<Object>> addUsersToSubGroups(@PathVariable String parentGroupName, @PathVariable String username, @RequestBody AddUserToSubGroupsRequest request) {
+        BaseResponse response = permissionService.addUserToSubGroups(username, parentGroupName, request.getSubGroupNames());
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Unassigns a role to a user", description = "Removes the role that has been assigned to a user in the local database.")
-    @PostMapping("/users/remove/role")
-    public ResponseEntity<?> unassignRole(@RequestParam String username, @RequestParam String roleName) {
+    @DeleteMapping("/users/{username}/roles/{roleName}")
+    public ResponseEntity<InternalAuthApiResponse<Object>> unassignRole(@PathVariable String username, @PathVariable String roleName) {
         BaseResponse response = permissionService.unassignRole(username, roleName);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Removes a user from a permission group", description = "Removes a user from a permission in the local database.")
-    @PostMapping("/users/remove/group")
-    public ResponseEntity<?> removeUserFromGroup(@RequestParam String username, @RequestParam String groupName) {
+    @DeleteMapping("/groups/{groupName}/users/{username}")
+    public ResponseEntity<InternalAuthApiResponse<Object>> removeUserFromGroup(@PathVariable String groupName, @PathVariable String username) {
         BaseResponse response = permissionService.removeUserFromGroup(username, groupName);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Delete a parent permission group", description = "Deletes a parent permission group in the local database.")
-    @DeleteMapping("/delete/group/parent")
-    public ResponseEntity<?> deleteParentGroup(@RequestParam String groupName) {
+    @DeleteMapping("/groups/{groupName}")
+    public ResponseEntity<InternalAuthApiResponse<Object>> deleteParentGroup(@PathVariable String groupName) {
         BaseResponse response = permissionService.deleteSuperGroup(groupName);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
-    @PreAuthorize(Roles.HAS_SERVICE)
+    @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Fetch a permission group", description = "Fetches a permission group from the local database using the group name as a parameter.")
-    @GetMapping("/group/by-name")
-    public ResponseEntity<?> fetchPermissionGroupByName(@RequestParam String groupName) {
+    @GetMapping("/groups/{groupName}")
+    public ResponseEntity<InternalAuthApiResponse<Object>> fetchPermissionGroupByName(@PathVariable String groupName) {
         BaseResponse response = permissionEntityService.getPermissionGroupUsersByGroupName(groupName);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
-    @PreAuthorize(Roles.HAS_SERVICE)
+    @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Fetch a sub permission group", description = "Fetches a sub permission group from the local database using the sub group name as a parameter.")
-    @GetMapping("/subgroup/by-name")
-    public ResponseEntity<?> fetchSubPermissionGroupByName(@RequestParam String parentGroupName, @RequestParam String subGroupName) {
+    @GetMapping("/groups/{parentGroupName}/subgroups/{subGroupName}")
+    public ResponseEntity<InternalAuthApiResponse<Object>> fetchSubPermissionGroupByName(@PathVariable String parentGroupName, @PathVariable String subGroupName) {
         BaseResponse response = permissionEntityService.getSubGroupByName(parentGroupName, subGroupName);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
-    @PreAuthorize(Roles.HAS_SERVICE)
+    @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Fetch all the users in a specific sub permission group", description = "Fetches all users in a sub permission group from the local database using the super group name and the sub group name as a parameter.")
-    @GetMapping("/subgroup/users/by-name")
-    public ResponseEntity<?> fetchSubPermissionGroupUsersByName(@RequestParam String parentGroupName, @RequestParam String subGroupName) {
+    @GetMapping("/groups/{parentGroupName}/subgroups/{subGroupName}/users")
+    public ResponseEntity<InternalAuthApiResponse<Object>> fetchSubPermissionGroupUsersByName(@PathVariable String parentGroupName, @PathVariable String subGroupName) {
         BaseResponse response = permissionEntityService.getSubPermissionGroupUsersByGroupName(parentGroupName, subGroupName);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
-    @PreAuthorize(Roles.HAS_SERVICE)
+    @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Add user to a specific permission group", description = "Adds a user to any permission group using the group name and the username as a parameter.")
-    @PostMapping("/groups/users/by-name")
-    public ResponseEntity<?> addUserToAnyGroup(@RequestParam String username, @RequestParam String groupName) {
+    @PostMapping("/permission-groups/{groupName}/users/{username}")
+    public ResponseEntity<InternalAuthApiResponse<Object>> addUserToAnyGroup(@PathVariable String groupName, @PathVariable String username) {
         BaseResponse response = permissionService.addUserToSpecificPermissionGroup(username, groupName);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
-    @PreAuthorize(Roles.HAS_ADMIN_OR_USER)
+    @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Fetch all user permission groups", description = "Fetches all the permission groups a user belongs to from the local database using the user's username as a parameter. Callers without the admin role may only fetch their own.")
-    @GetMapping("/groups/users/{username}")
-    public ResponseEntity<?> fetchUserPermissionGroups(@PathVariable String username) {
+    @GetMapping("/users/{username}/permission-groups")
+    public ResponseEntity<InternalAuthApiResponse<Object>> fetchUserPermissionGroups(@PathVariable String username) {
         authenticationHelper.requireSelfOrAdmin(username);
         BaseResponse response = permissionEntityService.retrieveUserGroups(username);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Fetch all user roles", description = "Fetches all the roles a user belongs to from the local database using the user's username as a parameter.")
-    @GetMapping("/roles/users/{username}")
-    public ResponseEntity<?> fetchUserRoles(@PathVariable String username) {
+    @GetMapping("/users/{username}/roles")
+    public ResponseEntity<InternalAuthApiResponse<Object>> fetchUserRoles(@PathVariable String username) {
         BaseResponse response = permissionEntityService.retrieveUserRoles(username);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Add users to a specific permission group", description = "Adds a list of users to any permission group using the group name and a list of usernames as a parameter.")
-    @PostMapping("/groups/users/by-names")
-    public ResponseEntity<?> addUsersToAnyGroup(@RequestParam List<String> usernames, @RequestParam String groupName) {
-        BaseResponse response = permissionService.addUsersToAnyGroup(usernames, groupName);
-        return ResponseEntity.ok(response);
+    @PostMapping("/permission-groups/{groupName}/users")
+    public ResponseEntity<InternalAuthApiResponse<Object>> addUsersToAnyGroup(@PathVariable String groupName, @RequestBody AddUsersToGroupRequest request) {
+        BaseResponse response = permissionService.addUsersToAnyGroup(request.getUsernames(), groupName);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 }

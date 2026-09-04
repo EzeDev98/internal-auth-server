@@ -10,7 +10,6 @@ import lombok.Setter;
 @AllArgsConstructor
 @NoArgsConstructor
 public class SubGroupRequest {
-    private String subgroupName;
+    private String groupName;
     private String description;
-    private String parentGroupId;
 }

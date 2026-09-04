@@ -5,7 +5,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Request body for POST ${app.title}/mfa/{username} (Step 11E, admin-only). */
+/**
+ * Request body shared by both MFA toggle endpoints: POST
+ * ${app.title}/mfa/{username} (MfaAdminController, admin-only) and POST
+ * ${app.title}/mfa/self (MfaSelfServiceController, self-service).
+ */
 @Getter
 @Setter
 @NoArgsConstructor

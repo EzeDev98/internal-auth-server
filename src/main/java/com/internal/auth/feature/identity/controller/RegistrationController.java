@@ -16,18 +16,27 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.internal.auth.common.response.InternalAuthApiResponse;
+
 /**
- * Step 10A. Mapped to the literal "/api/v1/auth" base path - not the
- * ${app.title} convention PasswordResetController/PermissionController use
- * - because WebSecurityConfig already permits POST /api/v1/auth/register
- * without a bearer token at that exact hardcoded path (its
- * securityFilterChain() comment notes this was "confirmed with the project
- * owner"). Using ${app.title} here would silently fall through to
- * .anyRequest().authenticated() and make registration impossible to call
- * without a JWT you can't have yet.
+ * Step 10A. Mapped under the "${app.title}" property, same as every other
+ * controller in the app.
+ *
+ * API-contract review follow-up (step 1): this used to hardcode the literal
+ * "/api/v1/auth" instead, specifically because WebSecurityConfig's
+ * permitAll() matchers were themselves hardcoded literal strings - using
+ * "${app.title}" here while WebSecurityConfig expected a different literal
+ * would have silently fallen through to .anyRequest().authenticated() and
+ * made registration impossible to call without a JWT you can't have yet.
+ * That's now fixed at the source: WebSecurityConfig reads the same
+ * "app.title" property to build its own matcher paths (see that class's
+ * javadoc), so this controller and its security rule can never drift apart
+ * regardless of which representation either side uses. Reverting to the
+ * property here is what actually keeps them in sync going forward, rather
+ * than pinning one side to a literal and hoping the other never changes.
  *
  * Multi-tenant redesign, registration step: the caller (SyncPoint, Notare,
- * ...) now identifies itself via HTTP Basic auth (Authorization: Basic
+ * ...) identifies itself via HTTP Basic auth (Authorization: Basic
  * base64(clientId:clientSecret)), verified here against the already-built
  * Step 10D admin-registered ClientApplication rows
  * (ClientApplicationService#authenticateClientFromBasicAuthHeader). This is
@@ -41,7 +50,7 @@ import org.springframework.web.bind.annotation.RestController;
  * your explicit decision.
  */
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("${app.title}/auth")
 @Tag(name = "Registration API", description = "Account creation (Stage 3/4 Step 10A)")
 @RequiredArgsConstructor
 public class RegistrationController {
@@ -50,11 +59,11 @@ public class RegistrationController {
     private final ClientApplicationService clientApplicationService;
 
     @PostMapping("/register")
-    public ResponseEntity<RegisterResponse> register(
+    public ResponseEntity<InternalAuthApiResponse<RegisterResponse>> register(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
             @RequestBody RegisterRequest request) {
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
         RegisterResponse response = registrationService.register(request, client.getId());
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 }

@@ -33,7 +33,16 @@ import static com.internal.auth.common.constant.AppConstant.REQUEST_TIMEOUT;
  * Delivery failures are logged but never thrown: a provider outage must not
  * change the response returned by the password-reset "request OTP" endpoint,
  * or it would leak whether a phone number is registered (only registered
- * numbers trigger an actual send attempt).
+ * numbers trigger an actual send attempt). The send() helper below is
+ * shared by all three OTP purposes so that behavior stays identical for
+ * each - only the message text and sender branding differ.
+ *
+ * appName (per-call, from ClientApplication.name - the app the OTP's
+ * owning user actually belongs to, e.g. "SyncPoint" vs "Notare") is used
+ * as the SMS sender label instead of the single global
+ * contiguity.sender-app-name property, so a Notare user no longer gets a
+ * text branded "SyncPoint". That property is kept as a fallback default
+ * for the (should-never-happen) case a caller passes a blank appName.
  */
 @Service
 @ConditionalOnProperty(prefix = "app.otp", name = "provider", havingValue = "contiguity")
@@ -50,18 +59,34 @@ public class ContiguityOtpDeliveryService implements OtpDeliveryService {
     @Value("${contiguity.base-url:https://api.contiguity.com}")
     private String baseUrl;
 
+    /** Fallback sender label, used only if a caller passes a blank appName. */
     @Value("${contiguity.sender-app-name:SyncPoint}")
-    private String appName;
+    private String defaultAppName;
 
     @Override
-    public void sendPasswordResetOtp(String phoneNumber, String otp) {
+    public void sendPasswordResetOtp(String phoneNumber, String otp, String appName) {
+        send(phoneNumber, "Your password reset code is " + otp + ". It expires shortly. Do not share this code with anyone.", "password reset", appName);
+    }
+
+    @Override
+    public void sendPhoneVerificationOtp(String phoneNumber, String otp, String appName) {
+        send(phoneNumber, "Your phone verification code is " + otp + ". It expires shortly. Do not share this code with anyone.", "phone verification", appName);
+    }
+
+    @Override
+    public void sendLoginOtp(String phoneNumber, String otp, String appName) {
+        send(phoneNumber, "Your login verification code is " + otp + ". It expires shortly. Do not share this code with anyone.", "login", appName);
+    }
+
+    private void send(String phoneNumber, String messageBody, String purpose, String appName) {
         if (apiKey == null || apiKey.isBlank()) {
             log.error("Contiguity is selected as the OTP provider but contiguity.api-key is not configured.");
             return;
         }
 
         String recipient = toE164(phoneNumber);
-        String message = appName + ": Your password reset code is " + otp + ". It expires shortly. " + "Do not share this code with anyone.";
+        String senderName = (appName == null || appName.isBlank()) ? defaultAppName : appName;
+        String message = senderName + ": " + messageBody;
 
         try {
             String requestBody = objectMapper.writeValueAsString(Map.of(
@@ -80,12 +105,12 @@ public class ContiguityOtpDeliveryService implements OtpDeliveryService {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                log.info("Password reset OTP sent via Contiguity for a registered phone number");
+                log.info("{} OTP sent via Contiguity for a registered phone number (app={})", purpose, senderName);
             } else {
                 log.error("Contiguity OTP send failed with status {}: {}", response.statusCode(), safeErrorSummary(response.body()));
             }
         } catch (Exception ex) {
-            log.error("Failed to send password reset OTP via Contiguity", ex);
+            log.error("Failed to send {} OTP via Contiguity", purpose, ex);
         }
     }
 

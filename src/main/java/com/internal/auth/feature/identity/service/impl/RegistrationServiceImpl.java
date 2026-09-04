@@ -2,13 +2,17 @@ package com.internal.auth.feature.identity.service.impl;
 
 import com.internal.auth.common.exception.UserAlreadyExistsException;
 import com.internal.auth.common.reset.ResetValidator;
+import com.internal.auth.common.response.BaseResponse;
 import com.internal.auth.feature.identity.dto.RegisterRequest;
 import com.internal.auth.feature.identity.dto.RegisterResponse;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.identity.service.EmailVerificationService;
+import com.internal.auth.feature.identity.service.PhoneVerificationService;
 import com.internal.auth.feature.identity.service.RegistrationService;
 import com.internal.auth.feature.identity.validation.RegistrationValidator;
+import com.internal.auth.feature.rbac.service.UserService;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +37,20 @@ import org.springframework.transaction.annotation.Transactional;
  * catch DataIntegrityViolationException as a defensive backstop against
  * the uniqueness pre-checks below being check-then-act, not atomic.
  * Step 10C: on successful save, if an email was supplied, a verification
- * link is sent - failure to send never fails registration itself.
+ * link is sent - failure to send never fails registration itself. If a
+ * phone number was supplied, a verification OTP is sent the same way.
+ *
+ * Default-role gap fix: every fresh user is enrolled into the default
+ * permission group/role via the existing (previously never-invoked)
+ * UserService.addUserToDefaultPermissionGroup orchestration, so a brand
+ * new account isn't locked out of every role-gated endpoint until an
+ * admin manually assigns one. That orchestration is itself designed to
+ * never throw - it always returns a BaseResponse - so this is soft-fail
+ * and log-only here too, same as the email/phone verification sends
+ * above it. Note this reuses the RBAC subsystem as-is, which (like the
+ * rest of roles/permission groups) is not yet scoped by
+ * clientApplicationId - that's a separate, already-deferred gap, not
+ * something this fix changes.
  *
  * Multi-tenant redesign, registration step: clientApplicationId is
  * resolved by RegistrationController from the caller's HTTP Basic client
@@ -53,6 +70,8 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final ResetValidator resetValidator;
     private final PasswordEncoder passwordEncoder;
     private final EmailVerificationService emailVerificationService;
+    private final PhoneVerificationService phoneVerificationService;
+    private final UserService userService;
 
     @Override
     @Transactional
@@ -105,6 +124,21 @@ public class RegistrationServiceImpl implements RegistrationService {
         // swallows its own delivery/provider exceptions internally, so a
         // failure here never rolls back the account that was just created.
         emailVerificationService.sendVerificationEmail(saved);
+
+        // Self-service phone verification fix: same soft-fail contract as
+        // email above - sendVerificationOtp swallows its own delivery
+        // failures internally.
+        phoneVerificationService.sendVerificationOtp(saved);
+
+        // Default-role gap fix: enroll the new user into the default
+        // permission group/role. addUserToDefaultPermissionGroup never
+        // throws - it always returns a BaseResponse - so this is
+        // soft-fail/log-only, same contract as the two sends above.
+        BaseResponse roleAssignment = userService.addUserToDefaultPermissionGroup(saved.getUsername());
+        if (roleAssignment.getStatusCode() != HttpServletResponse.SC_CREATED) {
+            log.warn("Default role assignment did not complete cleanly for user id {} (status={}, message={})",
+                    saved.getId(), roleAssignment.getStatusCode(), roleAssignment.getDescription());
+        }
 
         log.info("New user registered, id={}", saved.getId());
 

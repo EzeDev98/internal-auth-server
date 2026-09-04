@@ -134,4 +134,53 @@ public class AppConstant {
     public static final String SIGNING_KEY_ROTATE_RATE_LIMIT_KEY_PREFIX = "ratelimit:signing-key-rotate:ip:";
     public static final int SIGNING_KEY_ROTATE_RATE_LIMIT_DURATION_DAYS = 1;
     public static final int MAX_SIGNING_KEY_ROTATE_REQUEST = 5;
+
+    /**
+     * Self-service phone verification (fixes the previously-permanent
+     * phone-only-account login gate): Redis cooldown-bucket key prefix for
+     * phone-verification OTP resends, mirroring
+     * EMAIL_VERIFICATION_COOLDOWN_KEY_PREFIX's pattern.
+     */
+    public static final String PHONE_VERIFICATION_COOLDOWN_KEY_PREFIX = "phone-verification:resend-cooldown:";
+
+    /**
+     * Rate limits /verify-phone, keyed by client+phone same as
+     * VERIFY_OTP_RATE_LIMIT_* above - the OTP's own attemptCount resets on
+     * every fresh code request, so this caps guessing independently of how
+     * many separate OTPs were issued.
+     */
+    public static final String PHONE_VERIFICATION_VERIFY_RATE_LIMIT_KEY_PREFIX = "ratelimit:phone-verification-verify:phone:";
+    public static final int PHONE_VERIFICATION_VERIFY_RATE_LIMIT_DURATION_HOURS = 24;
+    public static final int MAX_PHONE_VERIFICATION_VERIFY_REQUEST = 10;
+
+    /**
+     * Client-secret rotation (fixes "no client-secret rotation endpoint -
+     * you must create a new client application"): rate limits the
+     * admin-only rotate-secret endpoint by caller IP, same
+     * abuse-prevention rationale and same limit as
+     * SIGNING_KEY_ROTATE_RATE_LIMIT_* above.
+     */
+    public static final String CLIENT_SECRET_ROTATE_RATE_LIMIT_KEY_PREFIX = "ratelimit:client-secret-rotate:ip:";
+    public static final int CLIENT_SECRET_ROTATE_RATE_LIMIT_DURATION_DAYS = 1;
+    public static final int MAX_CLIENT_SECRET_ROTATE_REQUEST = 5;
+    /**
+     * Admin bootstrap (AdminController/AdminRegistrationServiceImpl):
+     * ADMIN_ROLE matches Roles.HAS_ADMIN's literal ("create-admin") exactly
+     * - a Role row with this name is what actually makes hasRole('create-admin')
+     * true for a logged-in admin's JWT. ADMIN_PERMISSION_GROUP mirrors
+     * DEFAULT_PERMISSION_GROUP's shape/purpose, just for admins instead of
+     * every new user. INTERNAL_ADMIN_CLIENT_ID is the reserved
+     * ClientApplication clientId seeded by V21 that admin User rows are
+     * scoped under.
+     */
+    public static final String ADMIN_ROLE = "create-admin";
+
+    public static final String ADMIN_ROLE_DESCRIPTION = "Full administrative access - equivalent to Keycloak's realm-admin role. Can manage users, roles, permission groups, client applications, sessions, and signing keys.";
+
+    public static final String ADMIN_PERMISSION_GROUP = "admin-group";
+
+    public static final String ADMIN_PERMISSION_GROUP_DESCRIPTION = "Administrative group granting full platform access.";
+
+    public static final String INTERNAL_ADMIN_CLIENT_ID = "internal-auth-admin-console";
+
 }

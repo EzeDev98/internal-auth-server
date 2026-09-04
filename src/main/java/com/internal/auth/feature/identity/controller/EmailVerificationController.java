@@ -18,12 +18,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.internal.auth.common.response.InternalAuthApiResponse;
+
 /**
- * Step 10C. Same literal "/api/v1/auth" base path as RegistrationController,
- * for the same reason: WebSecurityConfig permits GET and POST
- * /api/v1/auth/activate and POST /api/v1/auth/resend-activation at these
- * exact hardcoded paths without a bearer token - the ${app.title}
- * convention other controllers use would break that.
+ * Step 10C. Mapped under the "${app.title}" property, same base as
+ * RegistrationController/LoginController - see RegistrationController's
+ * javadoc for why this reverted from a hardcoded "/api/v1/auth" literal
+ * back to the property (API-contract review, step 1): WebSecurityConfig now
+ * builds its GET/POST "/activate" and "/resend-activation" matcher paths
+ * from the same "app.title" property, so they can't drift apart.
  *
  * Multi-tenant redesign, OTP/token flows step: "/resend-activation" now
  * requires the same HTTP Basic client-credential header
@@ -34,7 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
  * ambiguous, so there's no caller identity to resolve there.
  */
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("${app.title}/auth")
 @Tag(name = "Email Verification API", description = "Account activation via emailed link (Stage 3/4 Step 10C)")
 @RequiredArgsConstructor
 public class EmailVerificationController {
@@ -44,21 +47,24 @@ public class EmailVerificationController {
 
     /** For a browser following the emailed link directly. */
     @GetMapping("/activate")
-    public ResponseEntity<ActivationResponse> activateViaLink(@RequestParam String token) {
-        return ResponseEntity.ok(emailVerificationService.activate(token));
+    public ResponseEntity<InternalAuthApiResponse<Void>> activateViaLink(@RequestParam String token) {
+        ActivationResponse response = emailVerificationService.activate(token);
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage()));
     }
 
     /** For an API client (e.g. a SPA intercepting the link) submitting the token itself. */
     @PostMapping("/activate")
-    public ResponseEntity<ActivationResponse> activateViaApi(@RequestBody ActivationRequest request) {
-        return ResponseEntity.ok(emailVerificationService.activate(request.getToken()));
+    public ResponseEntity<InternalAuthApiResponse<Void>> activateViaApi(@RequestBody ActivationRequest request) {
+        ActivationResponse response = emailVerificationService.activate(request.getToken());
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage()));
     }
 
     @PostMapping("/resend-activation")
-    public ResponseEntity<ActivationResponse> resendActivation(
+    public ResponseEntity<InternalAuthApiResponse<Void>> resendActivation(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
             @RequestBody ResendActivationRequest request) {
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
-        return ResponseEntity.ok(emailVerificationService.resendVerification(request.getEmail(), client.getId()));
+        ActivationResponse response = emailVerificationService.resendVerification(request.getEmail(), client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage()));
     }
 }

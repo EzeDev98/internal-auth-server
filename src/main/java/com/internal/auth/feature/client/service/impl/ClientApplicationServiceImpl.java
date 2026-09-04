@@ -39,6 +39,16 @@ import static com.internal.auth.common.constant.AppConstant.SECURE_RANDOM;
  * findByClientId is check-then-act, so save() is wrapped to catch
  * DataIntegrityViolationException as a backstop against client_applications'
  * uk_client_applications_client_id constraint.
+ *
+ * rotateClientSecret (fixes "no client-secret rotation endpoint") reuses
+ * the exact same generateClientSecret()/BCrypt-encode logic createClient
+ * uses, just against an already-existing row instead of a new one -
+ * deliberately no dual-valid grace period like SigningKeyService's key
+ * rotation has: a client secret used over HTTP Basic isn't embedded in
+ * already-issued tokens the way a signing key is, so there's nothing
+ * still in flight that a grace period would protect, and the scenario
+ * this fixes ("I lost the secret") has no old secret worth keeping valid
+ * anyway.
  */
 @Service
 @RequiredArgsConstructor
@@ -150,6 +160,32 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         return client;
     }
 
+    @Override
+    public ClientApplication getById(Long id) {
+        return clientApplicationRepository.findById(id)
+                .orElseThrow(() -> new BadRequestException("Unknown client application"));
+    }
+
+    @Override
+    @Transactional
+    public CreateClientApplicationResponse rotateClientSecret(String clientId) {
+        ClientApplication client = getEnabledClientByClientId(clientId);
+
+        String rawSecret = generateClientSecret();
+        client.setClientSecretHash(passwordEncoder.encode(rawSecret));
+        ClientApplication saved = clientApplicationRepository.save(client);
+
+        log.info("Client secret rotated for client application id={}, clientId={}", saved.getId(), saved.getClientId());
+
+        return new CreateClientApplicationResponse(
+                saved.getId(),
+                saved.getClientId(),
+                rawSecret,
+                saved.getName(),
+                "Save this client secret now - it will not be shown again. The previous secret no longer works."
+        );
+    }
+
     private String generateClientSecret() {
         byte[] bytes = new byte[CLIENT_SECRET_BYTES];
         SECURE_RANDOM.nextBytes(bytes);
@@ -166,4 +202,36 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         }
         return value.trim();
     }
+    @Override
+    @Transactional
+    public ClientApplication getOrCreateInternalAdminClient() {
+        String internalAdminClientId = com.internal.auth.common.constant.AppConstant.INTERNAL_ADMIN_CLIENT_ID;
+
+        Optional<ClientApplication> existing = clientApplicationRepository.findByClientId(internalAdminClientId);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        ClientApplication client = new ClientApplication();
+        client.setClientId(internalAdminClientId);
+        // No secret on purpose - a public/no-secret client (see class
+        // javadoc on ClientApplication.clientSecretHash). Nothing ever
+        // authenticates against this row via HTTP Basic; AdminController
+        // resolves it by clientId only.
+        client.setClientSecretHash(null);
+        client.setName("Internal Auth Admin Console");
+        client.setDescription("Reserved client application internal-auth-server's own admin accounts are grouped under. Not a real integrating app - never authenticated against via HTTP Basic.");
+        // enabled defaults to true on the entity itself.
+
+        try {
+            return clientApplicationRepository.save(client);
+        } catch (DataIntegrityViolationException e) {
+            // Lost a create-vs-create race against a concurrent first call -
+            // same backstop pattern as createClient() above.
+            log.warn("Internal admin client application creation lost a uniqueness race at save-time");
+            return clientApplicationRepository.findByClientId(internalAdminClientId)
+                    .orElseThrow(() -> new BadRequestException("Failed to resolve internal admin client application after a create-vs-create race"));
+        }
+    }
+
 }

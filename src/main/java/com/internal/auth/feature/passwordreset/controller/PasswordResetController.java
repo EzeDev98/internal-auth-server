@@ -1,4 +1,6 @@
-package com.internal.auth.feature.passwordreset.web;
+package com.internal.auth.feature.passwordreset.controller;
+
+import com.internal.auth.common.response.InternalAuthApiResponse;
 
 import com.internal.auth.common.reset.dto.VerifyOtpRequest;
 import com.internal.auth.common.reset.dto.VerifyOtpResponse;
@@ -32,6 +34,15 @@ import static com.internal.auth.common.constant.AppConstant.VERIFY_OTP_RATE_LIMI
 
 
 /**
+ * Mapped under the "${app.title}" property, same as every other controller
+ * in the app. API-contract review (step 1): this was briefly pinned to the
+ * literal "/api/v1/password-reset" because WebSecurityConfig's permitAll()
+ * matchers didn't yet cover the "${app.title}" form for these paths - that
+ * was the wrong fix for the underlying problem. WebSecurityConfig now reads
+ * the same "app.title" property to build its own matcher paths, so this
+ * controller and its security rule move together no matter which
+ * representation either side uses.
+ *
  * Multi-tenant redesign, OTP/token flows step: "/request" and
  * "/verify-otp" now require the same HTTP Basic client-credential header
  * RegistrationController/LoginController resolve (see
@@ -59,16 +70,17 @@ public class PasswordResetController {
     }
 
     @PostMapping("/request")
-    public ResponseEntity<PasswordResetResponse> requestOtp(
+    public ResponseEntity<InternalAuthApiResponse<PasswordResetResponse>> requestOtp(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
             @RequestBody PasswordResetRequestDto request) {
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
         rateLimiterService.checkRateLimit("ratelimit:password-reset-otp:phone:" + client.getId() + ":" + request.getPhoneNumber(), MAX_RESET_PASSWORD_REQUEST, Duration.ofHours(RESET_PASSWORD_RATE_LIMIT_DURATION));
-        return ResponseEntity.ok(passwordResetService.requestOtp(request, client.getId()));
+        PasswordResetResponse response = passwordResetService.requestOtp(request, client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 
     @PostMapping("/verify-otp")
-    public ResponseEntity<VerifyOtpResponse> verifyOtp(
+    public ResponseEntity<InternalAuthApiResponse<VerifyOtpResponse>> verifyOtp(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
             @RequestBody VerifyOtpRequest request) {
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
@@ -77,16 +89,18 @@ public class PasswordResetController {
         // total guess attempts per phone number independently of how many
         // OTPs were issued.
         rateLimiterService.checkRateLimit(VERIFY_OTP_RATE_LIMIT_KEY_PREFIX + client.getId() + ":" + request.getPhoneNumber(), MAX_VERIFY_OTP_REQUEST, Duration.ofHours(VERIFY_OTP_RATE_LIMIT_DURATION_HOURS));
-        return ResponseEntity.ok(passwordResetService.verifyOtp(request, client.getId()));
+        VerifyOtpResponse response = passwordResetService.verifyOtp(request, client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success("OTP verified successfully.", response));
     }
 
     @PostMapping("/complete")
-    public ResponseEntity<PasswordResetResponse> completeReset(@RequestBody CompletePasswordResetRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<InternalAuthApiResponse<PasswordResetResponse>> completeReset(@RequestBody CompletePasswordResetRequest request, HttpServletRequest httpRequest) {
         // Step 11F: CompletePasswordResetRequest carries no phone number, and
         // the reset token itself is a 256-bit random value that can't
         // realistically be brute-forced, so this is generic abuse/DoS
         // protection keyed by client IP rather than a guessing defense.
         rateLimiterService.checkRateLimit(COMPLETE_RESET_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), MAX_COMPLETE_RESET_REQUEST, Duration.ofHours(COMPLETE_RESET_RATE_LIMIT_DURATION_HOURS));
-        return ResponseEntity.ok(passwordResetService.completeReset(request));
+        PasswordResetResponse response = passwordResetService.completeReset(request);
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 }

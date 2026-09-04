@@ -70,8 +70,7 @@ public class ClientApplicationRegisteredClientRepository implements RegisteredCl
 
     @Override
     public void save(RegisteredClient registeredClient) {
-        throw new UnsupportedOperationException(
-                "Client applications are created via ClientApplicationService#createClient, not through Spring Authorization Server's own registration path.");
+        throw new UnsupportedOperationException("Client applications are created via ClientApplicationService#createClient, not through Spring Authorization Server's own registration path.");
     }
 
     @Override

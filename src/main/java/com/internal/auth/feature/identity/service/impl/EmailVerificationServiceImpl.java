@@ -97,6 +97,24 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
         EmailVerificationToken token = tokenRepository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> new ResetTokenInvalidException("This verification link is invalid or has expired."));
 
+        // Step 8 idempotency-safety fix: GET /activate is a plain link an email
+        // client's link-scanner (Outlook Safe Links, a corporate mail gateway, a
+        // spam filter) may fetch on its own before the real recipient ever clicks
+        // it, consuming this single-use token first. Without this check the
+        // human's own click then fails with "invalid or expired" even though
+        // their email really was verified - by the scanner's request, not
+        // theirs. If this token is already used AND the account it belongs to
+        // is already verified, a repeat hit is treated as the same success
+        // rather than an error; any other invalid/expired token still fails
+        // exactly as before.
+        if (token.isUsed()) {
+            User alreadyVerifiedUser = userRepository.findById(token.getUserId()).orElse(null);
+            if (alreadyVerifiedUser != null && alreadyVerifiedUser.isEmailVerified()) {
+                return new ActivationResponse("Your email has been verified.");
+            }
+            throw new ResetTokenInvalidException("This verification link is invalid or has expired.");
+        }
+
         otpResetEngine.assertUsable(token, "This verification link is invalid or has expired.");
 
         User user = userRepository.findById(token.getUserId())

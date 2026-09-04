@@ -9,6 +9,7 @@ import com.internal.auth.common.reset.OtpResetEngine;
 import com.internal.auth.common.reset.OtpService;
 import com.internal.auth.common.reset.delivery.OtpDeliveryService;
 import com.internal.auth.config.auth.SelfIssuedAuthorizationServerContext;
+import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.config.LoginMfaProperties;
 import com.internal.auth.feature.identity.dto.LoginRequest;
 import com.internal.auth.feature.identity.dto.LoginResponse;
@@ -28,7 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -82,6 +82,12 @@ import static com.internal.auth.common.constant.AppConstant.LOGIN_MFA_OTP_COOLDO
  * (see User's class Javadoc, V8) and the login-MFA OTP lookup/cooldown
  * key (see LoginMfaOtp's class Javadoc, V9) respectively.
  *
+ * sendLoginOtp() sends via OtpDeliveryService#sendLoginOtp (its own
+ * accurate message text, branded with the calling app's display name via
+ * ClientApplicationService#getById) rather than reusing
+ * sendPasswordResetOtp, which previously texted "Your password reset
+ * code is..." for what is actually a login step-up code.
+ *
  * <p><b>Step 12F - token issuance:</b> mints a real self-issued bearer
  * token directly in-process (mintAccessToken()) once login() (no MFA) or
  * verifyLoginOtp() actually succeeds, using the same OAuth2TokenGenerator/
@@ -101,6 +107,15 @@ import static com.internal.auth.common.constant.AppConstant.LOGIN_MFA_OTP_COOLDO
  * this request path (see SelfIssuedAuthorizationServerContext's javadoc),
  * so a context is built directly from selfIssuerUri and the
  * authorizationServerSettings() bean instead of read off that holder.
+ *
+ * This-patch addition: the principal built here carries clientApplicationId
+ * in its details (Authentication#setDetails) so
+ * AuthorizationServerConfig#jwtTokenCustomizer can stamp it onto the
+ * minted token as a "client_application_id" claim
+ * (AuthenticationHelper#getCurrentClientApplicationId reads it back) -
+ * fixes MfaAdminServiceImpl's previously-unscoped username lookup for the
+ * self-service MFA path, which has no admin-supplied clientId to resolve
+ * it from the way the admin path now does.
  */
 @Service
 @RequiredArgsConstructor
@@ -130,6 +145,7 @@ public class LoginServiceImpl implements LoginService {
     private final OAuth2AuthorizationService authorizationService;
     private final OAuth2TokenGenerator<OAuth2Token> tokenGenerator;
     private final AuthorizationServerSettings authorizationServerSettings;
+    private final ClientApplicationService clientApplicationService;
 
     @Value("${app.self-issuer-uri}")
     private String selfIssuerUri;
@@ -215,9 +231,11 @@ public class LoginServiceImpl implements LoginService {
         otpResetEngine.populateNewOtp(otpEntity, phoneNumber, rawOtp, loginMfaProperties.getOtpExpirationMinutes(), loginMfaProperties.getMaxAttempts());
         loginMfaOtpRepository.save(otpEntity);
 
-        // Reused despite the method's password-reset-specific name - it's
-        // really just "send an OTP over SMS" (see OtpDeliveryService).
-        otpDeliveryService.sendPasswordResetOtp(phoneNumber, rawOtp);
+        // Own accurate message text (was: reused sendPasswordResetOtp,
+        // which texted "Your password reset code is..." for a login
+        // step-up code), branded per calling app.
+        String appName = clientApplicationService.getById(clientApplicationId).getName();
+        otpDeliveryService.sendLoginOtp(phoneNumber, rawOtp, appName);
 
         otpResetEngine.startCooldown(cooldownBucket, loginMfaProperties.getResendCooldownSeconds());
     }
@@ -243,7 +261,11 @@ public class LoginServiceImpl implements LoginService {
         Collection<GrantedAuthority> authorities = roles.stream()
                 .map(role -> (GrantedAuthority) new SimpleGrantedAuthority(role.getRoleName().toLowerCase(Locale.ROOT)))
                 .collect(Collectors.toSet());
-        Authentication userPrincipal = new UsernamePasswordAuthenticationToken(user.getUsername(), null, authorities);
+        UsernamePasswordAuthenticationToken userPrincipal = new UsernamePasswordAuthenticationToken(user.getUsername(), null, authorities);
+        // See class javadoc: read back by AuthorizationServerConfig's
+        // jwtTokenCustomizer to stamp a "client_application_id" claim onto
+        // the minted token.
+        userPrincipal.setDetails(clientApplicationId);
 
         AuthorizationServerContext authorizationServerContext =
                 new SelfIssuedAuthorizationServerContext(selfIssuerUri, authorizationServerSettings);

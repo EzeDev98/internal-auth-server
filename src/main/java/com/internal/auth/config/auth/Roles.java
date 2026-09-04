@@ -10,8 +10,6 @@ public final class Roles {
 
     public static final String HAS_SERVICE = "hasRole('service')";
 
-    public static final String HAS_USER_OR_SERVICE = "hasAnyRole('basic_access', 'service')";
-
     public static final String HAS_ADMIN_OR_SERVICE = "hasAnyRole('create-admin', 'service')";
 
     public static final String HAS_ADMIN_OR_USER = "hasAnyRole('create-admin', 'basic_access')";

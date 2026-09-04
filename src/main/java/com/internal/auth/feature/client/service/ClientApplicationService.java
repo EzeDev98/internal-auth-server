@@ -49,4 +49,48 @@ public interface ClientApplicationService {
      * checked here, just a lookup.
      */
     ClientApplication getEnabledClientByClientId(String clientId);
+
+    /**
+     * Resolves an app by its internal surrogate id (not the public
+     * clientId), for callers that already have a resolved
+     * clientApplicationId from an earlier authentication step in the same
+     * request and just need read-only details - currently used to get the
+     * app's display name for SMS branding (see OtpDeliveryService). Not a
+     * credential check. Throws BadRequestException for an unknown id -
+     * shouldn't happen in practice, since every caller only ever passes
+     * an id that was already resolved from a successful
+     * authenticateClientFromBasicAuthHeader call earlier in the request.
+     */
+    ClientApplication getById(Long id);
+
+    /**
+     * Regenerates the client secret for an existing, enabled client
+     * application (fixes "no client-secret rotation endpoint - you must
+     * create a new client application"), replacing the stored hash
+     * immediately - no grace period, the old secret stops working the
+     * moment this returns. The generated raw secret is returned exactly
+     * once, same as createClient: if this response is lost too, the
+     * recovery is calling this again, not registering a whole new
+     * client application. Throws BadRequestException for an unknown or
+     * disabled clientId, same as getEnabledClientByClientId (which this
+     * delegates the lookup to) - not a credential check, since the caller
+     * is already an authenticated admin.
+     */
+    CreateClientApplicationResponse rotateClientSecret(String clientId);
+    /**
+     * Admin bootstrap (AdminController): returns the reserved internal
+     * ClientApplication admin User rows are scoped under
+     * ("internal-auth-admin-console" - AppConstant#INTERNAL_ADMIN_CLIENT_ID),
+     * creating it on first use if it doesn't exist yet. No manual seeding or
+     * migration data required - this deliberately bypasses the
+     * @PreAuthorize(Roles.HAS_ADMIN) gate on
+     * ClientApplicationController#createClient by never going through that
+     * controller at all; the gate lives on that HTTP entry point, not on
+     * this service method, so calling this service directly is the intended
+     * way past the chicken-and-egg problem for the very first admin. The
+     * created row has no client secret (a public/no-secret client) since
+     * nothing ever authenticates against it via HTTP Basic.
+     */
+    ClientApplication getOrCreateInternalAdminClient();
+
 }

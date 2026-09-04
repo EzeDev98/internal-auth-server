@@ -10,6 +10,6 @@ import lombok.Setter;
 @AllArgsConstructor
 @NoArgsConstructor
 public class RolesRequest {
-    private String name;
+    private String roleName;
     private String description;
 }

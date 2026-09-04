@@ -6,11 +6,12 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Response body for POST ${app.title}/client-applications (Step 10D).
- * clientSecret carries the one and only time the raw secret is ever
- * available - only its BCrypt hash is persisted, so if this response is
- * lost, the only recovery is issuing a new secret (rotation isn't built
- * yet - out of scope per the Step 10D "create + verify only" decision).
+ * Response body for POST ${app.title}/client-applications (Step 10D) and
+ * POST ${app.title}/client-applications/{clientId}/rotate-secret (this
+ * patch). clientSecret carries the one and only time the raw secret is
+ * ever available - only its BCrypt hash is persisted, so if this response
+ * is lost, the recovery is calling rotate-secret again, not registering a
+ * whole new client application.
  */
 @Getter
 @Setter
