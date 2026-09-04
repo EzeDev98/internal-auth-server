@@ -33,11 +33,6 @@ public class UserPermissionGroup {
     @JoinColumn(name = "sub_permission_group_id")
     private SubPermissionGroup subPermissionGroup;
 
-    @Column(name = "scope_type")
-    private String scopeType;
-
-    @Column(name = "scope_value")
-    private String scopeValue;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
