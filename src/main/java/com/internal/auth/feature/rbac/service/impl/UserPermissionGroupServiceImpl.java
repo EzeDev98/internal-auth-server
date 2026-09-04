@@ -138,7 +138,7 @@ public class UserPermissionGroupServiceImpl implements UserPermissionGroupServic
             throw ex;
         } catch (Exception e) {
             log.error("Unexpected error while removing user '{}' from group '{}': {}", username, groupName, e.getMessage(), e);
-            throw PermissionException.keycloakServiceError("Failed to remove user from the specified group", e);
+            throw PermissionException.operationFailed("Failed to remove user from the specified group", e);
         }
     }
 
@@ -248,7 +248,7 @@ public class UserPermissionGroupServiceImpl implements UserPermissionGroupServic
     private List<Role> getRolesForPermissionGroup(PermissionGroup group) {
 
         if (group.getRolePermissionGroupMappings() == null) {
-            throw PermissionException.keycloakServiceError("No mapping found for permission group " + group.getGroupName());
+            throw PermissionException.operationFailed("No mapping found for permission group " + group.getGroupName());
         }
 
         return group.getRolePermissionGroupMappings().stream()

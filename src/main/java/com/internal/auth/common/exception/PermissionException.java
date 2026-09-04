@@ -29,8 +29,7 @@ import java.util.Map;
  * throw PermissionException.roleNotFound("BUYER");
  * throw PermissionException.groupNotFound("WealthMarket-Buyers");
  * throw PermissionException.emptyField("Username and role name are mandatory");
- * throw PermissionException.alreadyExistsInKeycloak("Role already exists in Keycloak");
- * throw PermissionException.keycloakServiceError("Unexpected error during role creation", cause);
+ * throw PermissionException.operationFailed("Unexpected error during role creation", cause);
  * throw PermissionException.rollbackFailed("Manual intervention required", cause);
  * throw PermissionException.of(PermissionErrorCode.USER_ROLE_PERSISTENCE_FAILED, "detail");
  * }</pre>
@@ -134,9 +133,6 @@ public class PermissionException extends RuntimeException {
         return new PermissionException(PermissionErrorCode.ALREADY_EXISTS, detail);
     }
 
-    public static PermissionException alreadyExistsInKeycloak(String detail) {
-        return new PermissionException(PermissionErrorCode.ALREADY_EXISTS_IN_KEYCLOAK, detail);
-    }
 
     public static PermissionException duplicateRoleAssignment(String detail) {
         return new PermissionException(PermissionErrorCode.DUPLICATE_ROLE_ASSIGNMENT, detail);
@@ -160,22 +156,16 @@ public class PermissionException extends RuntimeException {
         return new PermissionException(PermissionErrorCode.USER_NOT_ADDED_TO_GROUP, detail);
     }
 
-    // ── Keycloak / external integration ──────────────────────────────────────
+    // ── External integration ──────────────────────────────────────
 
-    public static PermissionException keycloakRoleCreationFailed(String detail) {
-        return new PermissionException(PermissionErrorCode.KEYCLOAK_ROLE_CREATION_FAILED, detail);
+
+
+    public static PermissionException operationFailed(String detail) {
+        return new PermissionException(PermissionErrorCode.PERMISSION_OPERATION_FAILED, detail);
     }
 
-    public static PermissionException keycloakGroupCreationFailed(String detail) {
-        return new PermissionException(PermissionErrorCode.KEYCLOAK_GROUP_CREATION_FAILED, detail);
-    }
-
-    public static PermissionException keycloakServiceError(String detail) {
-        return new PermissionException(PermissionErrorCode.KEYCLOAK_SERVICE_ERROR, detail);
-    }
-
-    public static PermissionException keycloakServiceError(String detail, Throwable cause) {
-        return new PermissionException(PermissionErrorCode.KEYCLOAK_SERVICE_ERROR, detail, cause);
+    public static PermissionException operationFailed(String detail, Throwable cause) {
+        return new PermissionException(PermissionErrorCode.PERMISSION_OPERATION_FAILED, detail, cause);
     }
 
     public static PermissionException roleAssignmentFailed(String detail) {

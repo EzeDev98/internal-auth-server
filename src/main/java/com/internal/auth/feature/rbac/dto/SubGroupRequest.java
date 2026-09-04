@@ -12,5 +12,5 @@ import lombok.Setter;
 public class SubGroupRequest {
     private String subgroupName;
     private String description;
-    private String keycloakParentGroupId;
+    private String parentGroupId;
 }

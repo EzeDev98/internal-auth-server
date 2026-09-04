@@ -11,7 +11,7 @@ import org.springframework.http.HttpStatus;
  *   <li>12000–12099  Resource not found (roles, groups, users)</li>
  *   <li>12100–12199  Conflict / duplicate</li>
  *   <li>12200–12299  Business rule violations / invalid input</li>
- *   <li>12300–12399  Keycloak / external integration errors</li>
+ *   <li>12300–12399  External integration errors</li>
  *   <li>12400–12499  Persistence / database errors</li>
  *   <li>12900–12999  System / infrastructure errors</li>
  * </ul>
@@ -29,7 +29,6 @@ public enum PermissionErrorCode {
 
     // ── Conflict / duplicate (12100–12199) ────────────────────────────────────
     ALREADY_EXISTS(12101, "Resource already exists", HttpStatus.CONFLICT),
-    ALREADY_EXISTS_IN_KEYCLOAK(12102, "Resource already exists in Keycloak", HttpStatus.CONFLICT),
     DUPLICATE_ROLE_ASSIGNMENT(12103, "Role is already assigned to this user", HttpStatus.CONFLICT),
 
     // ── Business rule violations / invalid input (12200–12299) ───────────────
@@ -38,10 +37,8 @@ public enum PermissionErrorCode {
     ROLE_NOT_ASSIGNED(12203, "Role has not been assigned", HttpStatus.BAD_REQUEST),
     USER_NOT_ADDED_TO_GROUP(12204, "User could not be added to the group", HttpStatus.BAD_REQUEST),
 
-    // ── Keycloak / external integration errors (12300–12399) ─────────────────
-    KEYCLOAK_ROLE_CREATION_FAILED(12301, "Role creation failed in Keycloak", HttpStatus.INTERNAL_SERVER_ERROR),
-    KEYCLOAK_GROUP_CREATION_FAILED(12302, "Group creation failed in Keycloak", HttpStatus.INTERNAL_SERVER_ERROR),
-    KEYCLOAK_SERVICE_ERROR(12303, "Keycloak service returned an error", HttpStatus.INTERNAL_SERVER_ERROR),
+    // ── External integration errors (12300–12399) ─────────────────
+    PERMISSION_OPERATION_FAILED(12303, "Permission operation failed", HttpStatus.INTERNAL_SERVER_ERROR),
     ROLE_ASSIGNMENT_FAILED(12304, "Role assignment operation failed", HttpStatus.INTERNAL_SERVER_ERROR),
     ROLE_ASSIGNMENT_VERIFICATION_FAILED(12305, "Could not verify role assignment", HttpStatus.INTERNAL_SERVER_ERROR),
 

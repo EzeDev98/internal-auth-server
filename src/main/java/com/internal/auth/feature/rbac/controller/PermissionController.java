@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("${app.title}")
-@Tag(name = "User Roles And Permissions API", description = "Comprehensive management of Keycloak roles, groups, and user permissions")
+@Tag(name = "User Roles And Permissions API", description = "Comprehensive management of roles, groups, and user permissions")
 public class PermissionController {
 
     private final PermissionManagementService permissionService;
@@ -65,7 +65,7 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
-    @Operation(summary = "Create a new role", description = "Creates a role in both Keycloak and the local database. Roles define permissions that can be assigned to users or groups.")
+    @Operation(summary = "Create a new role", description = "Creates a role in the local database. Roles define permissions that can be assigned to users or groups.")
     @PostMapping("/roles/create")
     public ResponseEntity<?> createRole(
             @Parameter(description = "Name of the role to create", required = true, example = "ROLE_ADMIN")
@@ -78,7 +78,7 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_ADMIN_OR_SERVICE)
-    @Operation(summary = "Create a parent group", description = "Creates a top-level group in Keycloak and the database. Parent groups can contain subgroups and users.")
+    @Operation(summary = "Create a parent group", description = "Creates a top-level group in the database. Parent groups can contain subgroups and users.")
     @PostMapping("/groups/create/super")
     public ResponseEntity<?> createSuperGroup(
             @Parameter(description = "Name of the parent group", required = true, example = "FOOD_SELLERS")
@@ -108,7 +108,7 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_SERVICE)
-    @Operation(summary = "Assign role to user automatically", description = "Grants a specific role to a user in Keycloak and records the assignment in the local database automatically. For automatic service-to-service usage. Restricted to the roles configured in app.service-role-assignment.allowed-roles.")
+    @Operation(summary = "Assign role to user automatically", description = "Grants a specific role to a user and records the assignment in the local database automatically. For automatic service-to-service usage. Restricted to the roles configured in app.service-role-assignment.allowed-roles.")
     @PostMapping("/service/roles/assign/user")
     public ResponseEntity<?> assignRoleToUserForServiceToService(
             @Parameter(description = "Username to assign role to", required = true, example = "Sarah")
@@ -124,7 +124,7 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
-    @Operation(summary = "Assign role to user", description = "Grants a specific role to a user in Keycloak and records the assignment in the local database.")
+    @Operation(summary = "Assign role to user", description = "Grants a specific role to a user and records the assignment in the local database.")
     @PostMapping("/roles/assign/user")
     public ResponseEntity<?> assignRoleToUser(
             @Parameter(description = "Username to assign role to", required = true, example = "Sarah")
@@ -137,7 +137,7 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
-    @Operation(summary = "Assign role to parent group", description = "Assigns a role to all members of a parent group in Keycloak. All users in the group inherit the role.")
+    @Operation(summary = "Assign role to parent group", description = "Assigns a role to all members of a parent group. All users in the group inherit the role.")
     @PostMapping("/roles/assign/super-group")
     public ResponseEntity<?> assignRoleToGroup(
             @Parameter(description = "Name of the parent group", required = true, example = "SELLER'S_GROUP")
@@ -150,7 +150,7 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
-    @Operation(summary = "Assign role to subgroup", description = "Assigns a role to a specific subgroup within a parent group hierarchy in Keycloak.")
+    @Operation(summary = "Assign role to subgroup", description = "Assigns a role to a specific subgroup within a parent group hierarchy.")
     @PostMapping("/roles/assign/sub-group")
     public ResponseEntity<?> assignRoleToSubGroup(
             @Parameter(description = "Name of the parent group", required = true, example = "SELLER'S_GROUP")
@@ -166,7 +166,7 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_ADMIN_OR_SERVICE)
-    @Operation(summary = "Add user to parent group", description = "Adds a user directly to a parent group in Keycloak, granting them all roles assigned to that group.")
+    @Operation(summary = "Add user to parent group", description = "Adds a user directly to a parent group, granting them all roles assigned to that group.")
     @PostMapping("/users/add/super-group")
     public ResponseEntity<?> addUsersToParentGroup(
             @Parameter(description = "Username to add", required = true, example = "Sarah")
@@ -179,7 +179,7 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_ADMIN_OR_SERVICE)
-    @Operation(summary = "Add user to subgroup", description = "Adds a user to a specific subgroup within a parent group hierarchy in Keycloak.")
+    @Operation(summary = "Add user to subgroup", description = "Adds a user to a specific subgroup within a parent group hierarchy.")
     @PostMapping("/users/add/sub-group")
     public ResponseEntity<?> addUsersToSubGroup(
             @Parameter(description = "Username to add", required = true, example = "Sarah")
@@ -211,7 +211,7 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
-    @Operation(summary = "Unassigns a role to a user", description = "Removes the role that that has been assigned to a user in Keycloak and in the local database in a single operation.")
+    @Operation(summary = "Unassigns a role to a user", description = "Removes the role that has been assigned to a user in the local database.")
     @PostMapping("/users/remove/role")
     public ResponseEntity<?> unassignRole(@RequestParam String username, @RequestParam String roleName) {
         BaseResponse response = permissionService.unassignRole(username, roleName);
@@ -219,7 +219,7 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
-    @Operation(summary = "Removes a user from a permission group", description = "Removes a user from a permission in Keycloak and in the local database in a single operation.")
+    @Operation(summary = "Removes a user from a permission group", description = "Removes a user from a permission in the local database.")
     @PostMapping("/users/remove/group")
     public ResponseEntity<?> removeUserFromGroup(@RequestParam String username, @RequestParam String groupName) {
         BaseResponse response = permissionService.removeUserFromGroup(username, groupName);
@@ -227,7 +227,7 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
-    @Operation(summary = "Delete a parent permission group", description = "Deletes a parent permission group in Keycloak and in the local database in a single operation.")
+    @Operation(summary = "Delete a parent permission group", description = "Deletes a parent permission group in the local database.")
     @DeleteMapping("/delete/group/parent")
     public ResponseEntity<?> deleteParentGroup(@RequestParam String groupName) {
         BaseResponse response = permissionService.deleteSuperGroup(groupName);

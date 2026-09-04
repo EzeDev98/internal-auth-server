@@ -121,7 +121,7 @@ public class UserRoleServiceImpl implements UserRoleService {
 
         } catch (Exception e) {
             log.error("Failed to unassign role '{}' from user '{}': {}", roleName, username, e.getMessage());
-            throw PermissionException.keycloakServiceError(String.format("Failed to unassign role '%s' from user '%s'", roleName, username), e);
+            throw PermissionException.operationFailed(String.format("Failed to unassign role '%s' from user '%s'", roleName, username), e);
         }
     }
 

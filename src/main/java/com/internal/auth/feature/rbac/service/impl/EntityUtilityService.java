@@ -186,7 +186,7 @@ public class EntityUtilityService {
                 .orElseThrow(() -> PermissionException.superGroupNotFound(" for the provided subgroup name " + subGroupName));
 
         if (!subPermissionGroup.getParentGroup().getId().equals(superGroup.getId())) {
-            throw PermissionException.keycloakServiceError("Sub group " + subGroupName + " is not a child of super group " + parentGroupName + ".");
+            throw PermissionException.operationFailed("Sub group " + subGroupName + " is not a child of super group " + parentGroupName + ".");
         }
 
         List<UserPermissionGroup> userGroups = userPermissionGroupRepository.findAllBySubPermissionGroup(subPermissionGroup);
@@ -206,7 +206,7 @@ public class EntityUtilityService {
                 .orElseThrow(() -> PermissionException.subGroupNotFound(" for the provided subgroup name " + subGroupName));
 
         if (!subPermissionGroup.getParentGroup().getId().equals(superGroup.getId())) {
-            throw PermissionException.keycloakServiceError("Sub group " + subGroupName + " is not a child of super group " + parentGroupName + ".");
+            throw PermissionException.operationFailed("Sub group " + subGroupName + " is not a child of super group " + parentGroupName + ".");
         }
 
         return subPermissionGroup;
