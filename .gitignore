@@ -34,3 +34,4 @@ Thumbs.db
 # on purpose: they're structural config with env-var placeholders, not
 # real secrets (Step 14E review confirmed this).
 application-local.properties
+patch_step*.py
