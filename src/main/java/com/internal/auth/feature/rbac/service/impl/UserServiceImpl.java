@@ -259,7 +259,7 @@ public class UserServiceImpl implements UserService {
     }
 
     private void addUserToGroup(String username, String groupName) {
-        BaseResponse addUserResponse = permissionService.addUserToParentGroup(username, groupName);
+        BaseResponse addUserResponse = permissionService.addUserToGroup(username, groupName);
         if (addUserResponse.getStatusCode() != HttpServletResponse.SC_CREATED) {
             throw PermissionException.userNotAddedToGroup(
                     "Failed to add user to permission group " + groupName);

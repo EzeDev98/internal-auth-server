@@ -257,7 +257,9 @@ public class LoginServiceImpl implements LoginService {
             throw new IllegalStateException("No RegisteredClient found for client application id " + clientApplicationId);
         }
 
-        List<Role> roles = userRolesRepository.findRolesByUsername(user.getUsername());
+        // Scoped by user_id, not username - see UserRolesRepository.findRolesByUserId javadoc
+        // (fixes cross-tenant privilege escalation: usernames are only unique per-tenant).
+        List<Role> roles = userRolesRepository.findRolesByUserId(user.getId());
         Collection<GrantedAuthority> authorities = roles.stream()
                 .map(role -> (GrantedAuthority) new SimpleGrantedAuthority(role.getRoleName().toLowerCase(Locale.ROOT)))
                 .collect(Collectors.toSet());

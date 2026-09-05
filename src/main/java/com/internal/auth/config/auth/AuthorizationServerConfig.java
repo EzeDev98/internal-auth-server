@@ -1,5 +1,7 @@
 package com.internal.auth.config.auth;
 
+import com.fasterxml.jackson.databind.Module;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.internal.auth.feature.signingkey.service.SigningKeyService;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
@@ -7,15 +9,19 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.jackson2.SecurityJackson2Modules;
 import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
-import org.springframework.security.oauth2.server.authorization.InMemoryOAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
+import org.springframework.security.oauth2.server.authorization.jackson2.OAuth2AuthorizationServerJackson2Module;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.authorization.token.DelegatingOAuth2TokenGenerator;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
@@ -27,6 +33,7 @@ import org.springframework.security.web.SecurityFilterChain;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -178,13 +185,40 @@ public class AuthorizationServerConfig {
      * application context for a bean of this type before falling back to
      * building its own), so client_credentials and local-login tokens now
      * share one authorization record store instead of two invisible ones.
-     * Plain in-memory for now, same tradeoff as the ephemeral signing-key
-     * fallback above - revisit alongside real secret/session persistence
-     * (Step 14E) before any real deployment.
+     *
+     * <p>Step 3 (production-readiness fix): was
+     * InMemoryOAuth2AuthorizationService - every minted token's
+     * authorization record lived only in this one JVM's heap, wiped on
+     * restart and not shared across instances/behind a load balancer. Now
+     * JdbcOAuth2AuthorizationService, backed by the oauth2_authorization
+     * table (V21 migration in prod; dev applies the equivalent table via
+     * spring.sql.init.* - see application-dev.properties). The custom
+     * ObjectMapper registration below is required, not optional - the
+     * default row mapper needs SecurityJackson2Modules (core Spring
+     * Security types) and OAuth2AuthorizationServerJackson2Module
+     * (this module's own types, including custom AuthorizationGrantType
+     * values like LoginServiceImpl's "local_login") registered before it
+     * can (de)serialize what's stored in the attributes/token-metadata
+     * columns - without them this compiles fine but throws at runtime the
+     * first time a real authorization round-trips through the database.
      */
     @Bean
-    public OAuth2AuthorizationService authorizationService() {
-        return new InMemoryOAuth2AuthorizationService();
+    public OAuth2AuthorizationService authorizationService(JdbcTemplate jdbcTemplate,
+                                                             RegisteredClientRepository registeredClientRepository) {
+        JdbcOAuth2AuthorizationService authorizationService =
+                new JdbcOAuth2AuthorizationService(jdbcTemplate, registeredClientRepository);
+
+        JdbcOAuth2AuthorizationService.OAuth2AuthorizationRowMapper rowMapper =
+                new JdbcOAuth2AuthorizationService.OAuth2AuthorizationRowMapper(registeredClientRepository);
+        ObjectMapper objectMapper = new ObjectMapper();
+        ClassLoader classLoader = JdbcOAuth2AuthorizationService.class.getClassLoader();
+        List<Module> securityModules = SecurityJackson2Modules.getModules(classLoader);
+        objectMapper.registerModules(securityModules);
+        objectMapper.registerModule(new OAuth2AuthorizationServerJackson2Module());
+        rowMapper.setObjectMapper(objectMapper);
+        authorizationService.setAuthorizationRowMapper(rowMapper);
+
+        return authorizationService;
     }
 
     /**

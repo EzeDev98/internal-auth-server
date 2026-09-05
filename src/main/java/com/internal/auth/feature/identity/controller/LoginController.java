@@ -54,8 +54,30 @@ public class LoginController {
             HttpServletRequest httpRequest) {
         rateLimiterService.checkRateLimit(AppConstant.LOGIN_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_LOGIN_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_RATE_LIMIT_DURATION_MINUTES));
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
+        checkAccountRateLimit(client.getId(), request.getUsername());
         LoginResponse response = loginService.login(request, client.getId());
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
+    }
+
+    /**
+     * Step 4 (account-aware rate limiting): the IP-keyed check above stops a
+     * single attacker hammering the endpoint from one address, but does
+     * nothing against a distributed credential-stuffing attack that spreads
+     * the same username's password guesses across many IPs - each IP stays
+     * under its own limit while the account itself gets hit continuously.
+     * Keyed by (client_application_id, username) rather than username
+     * alone, matching the multi-tenant redesign - usernames are only
+     * unique per-tenant, so two different tenants' accounts must not share
+     * a lockout bucket. A blank/missing username is left to loginService's
+     * own validation - nothing meaningful to key a per-account limit on yet.
+     */
+    private void checkAccountRateLimit(Long clientApplicationId, String username) {
+        if (username == null || username.isBlank()) {
+            return;
+        }
+        String key = AppConstant.LOGIN_ACCOUNT_RATE_LIMIT_KEY_PREFIX + clientApplicationId + ":" + username.trim();
+        rateLimiterService.checkRateLimit(key, AppConstant.MAX_LOGIN_ACCOUNT_REQUEST,
+                Duration.ofMinutes(AppConstant.LOGIN_ACCOUNT_RATE_LIMIT_DURATION_MINUTES));
     }
 
     @PostMapping("/login/verify-otp")

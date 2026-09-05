@@ -106,6 +106,10 @@ public class PermissionException extends RuntimeException {
         return new PermissionException(PermissionErrorCode.USER_NOT_FOUND, detail);
     }
 
+    public static PermissionException ambiguousUsername(String detail) {
+        return new PermissionException(PermissionErrorCode.AMBIGUOUS_USERNAME, detail);
+    }
+
     public static PermissionException notFound(String detail) {
         return new PermissionException(PermissionErrorCode.GROUP_NOT_FOUND, detail);
     }

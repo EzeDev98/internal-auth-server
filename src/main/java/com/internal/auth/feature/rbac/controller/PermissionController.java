@@ -133,8 +133,8 @@ public class PermissionController {
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Add user to parent group", description = "Adds a user directly to a parent group, granting them all roles assigned to that group.")
     @PostMapping("/groups/{groupName}/users")
-    public ResponseEntity<InternalAuthApiResponse<Object>> addUsersToParentGroup(@PathVariable String groupName, @RequestBody AddUserToGroupRequest request) {
-        BaseResponse response = permissionService.addUserToParentGroup(request.getUsername(), groupName);
+    public ResponseEntity<InternalAuthApiResponse<Object>> addUsersToGroup(@PathVariable String groupName, @RequestBody AddUserToGroupRequest request) {
+        BaseResponse response = permissionService.addUserToGroup(request.getUsername(), groupName);
         return ResponseEntity.status(response.getStatusCode())
                 .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
@@ -212,15 +212,6 @@ public class PermissionController {
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
-    @Operation(summary = "Add user to a specific permission group", description = "Adds a user to any permission group using the group name and the username as a parameter.")
-    @PostMapping("/permission-groups/{groupName}/users/{username}")
-    public ResponseEntity<InternalAuthApiResponse<Object>> addUserToAnyGroup(@PathVariable String groupName, @PathVariable String username) {
-        BaseResponse response = permissionService.addUserToSpecificPermissionGroup(username, groupName);
-        return ResponseEntity.status(response.getStatusCode())
-                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
-    }
-
-    @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Fetch all user permission groups", description = "Fetches all the permission groups a user belongs to from the local database using the user's username as a parameter. Callers without the admin role may only fetch their own.")
     @GetMapping("/users/{username}/permission-groups")
     public ResponseEntity<InternalAuthApiResponse<Object>> fetchUserPermissionGroups(@PathVariable String username) {
@@ -239,12 +230,4 @@ public class PermissionController {
                 .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
-    @PreAuthorize(Roles.HAS_ADMIN)
-    @Operation(summary = "Add users to a specific permission group", description = "Adds a list of users to any permission group using the group name and a list of usernames as a parameter.")
-    @PostMapping("/permission-groups/{groupName}/users")
-    public ResponseEntity<InternalAuthApiResponse<Object>> addUsersToAnyGroup(@PathVariable String groupName, @RequestBody AddUsersToGroupRequest request) {
-        BaseResponse response = permissionService.addUsersToAnyGroup(request.getUsernames(), groupName);
-        return ResponseEntity.status(response.getStatusCode())
-                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
-    }
 }

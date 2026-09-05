@@ -20,6 +20,16 @@ public interface UserRolesRepository extends JpaRepository<UserRole, Long> {
     List<Role> findRolesByUsername(String username);
 
     /**
+     * Tenant-safe alternative to {@link #findRolesByUsername(String)}: scoped
+     * by the numeric user_id primary key instead of the (per-tenant, not
+     * globally unique) username, so it can't match a same-named user in a
+     * different client_application_id. Use this wherever the caller already
+     * has a resolved, tenant-scoped User entity in hand.
+     */
+    @Query("SELECT DISTINCT userRole.role FROM UserRole userRole " + "WHERE userRole.user.id = :userId")
+    List<Role> findRolesByUserId(@Param("userId") Long userId);
+
+    /**
      * Admin bootstrap (AdminRegistrationServiceImpl): "does any user in the
      * whole system already hold this role" - deliberately not scoped by
      * client_application_id, consistent with RBAC being global (your

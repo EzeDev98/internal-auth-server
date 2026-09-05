@@ -22,8 +22,7 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
-import static com.internal.auth.common.constant.AppConstant.CLIENT_SECRET_BYTES;
-import static com.internal.auth.common.constant.AppConstant.SECURE_RANDOM;
+import static com.internal.auth.common.constant.AppConstant.*;
 
 /**
  * Step 10D. Admin-only client application registration - not the OAuth2
@@ -202,10 +201,11 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         }
         return value.trim();
     }
+
     @Override
     @Transactional
     public ClientApplication getOrCreateInternalAdminClient() {
-        String internalAdminClientId = com.internal.auth.common.constant.AppConstant.INTERNAL_ADMIN_CLIENT_ID;
+        String internalAdminClientId = INTERNAL_ADMIN_CLIENT_ID;
 
         Optional<ClientApplication> existing = clientApplicationRepository.findByClientId(internalAdminClientId);
         if (existing.isPresent()) {

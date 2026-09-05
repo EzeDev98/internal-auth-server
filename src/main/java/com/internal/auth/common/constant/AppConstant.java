@@ -102,6 +102,18 @@ public class AppConstant {
     public static final int MAX_LOGIN_REQUEST = 10;
 
     /**
+     * Step 4 (account-aware rate limiting): keyed by
+     * (client_application_id, username) instead of IP - stops a distributed
+     * brute-force/credential-stuffing attack against one specific account
+     * from many IPs, which LOGIN_RATE_LIMIT_* above (IP-only) does not
+     * catch. Tighter than the IP limit since this bucket is specific to one
+     * real account.
+     */
+    public static final String LOGIN_ACCOUNT_RATE_LIMIT_KEY_PREFIX = "ratelimit:login:account:";
+    public static final int LOGIN_ACCOUNT_RATE_LIMIT_DURATION_MINUTES = 15;
+    public static final int MAX_LOGIN_ACCOUNT_REQUEST = 5;
+
+    /**
      * Step 14C: rate limits login MFA OTP verification attempts by client
      * IP, mirroring LOGIN_RATE_LIMIT_* above.
      */

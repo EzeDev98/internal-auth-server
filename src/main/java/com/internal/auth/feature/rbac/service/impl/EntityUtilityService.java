@@ -32,22 +32,34 @@ public class EntityUtilityService {
         this.userRepository = userRepository;
     }
 
+    /**
+     * Step 2 (RBAC admin lookup fix): usernames stopped being globally unique
+     * once the multi-tenant redesign scoped uniqueness to
+     * (client_application_id, username) - see User's class javadoc. RBAC
+     * itself stays deliberately global (role/group management lives only in
+     * internal-auth-server), so this does NOT add client-scoping here - it
+     * just stops assuming findByUsername's single result is safe. 0 matches
+     * is "not found" as before, exactly 1 match behaves exactly as before,
+     * and 2+ matches (same username now present in more than one tenant)
+     * fails loudly with a clear 409 instead of Spring Data's opaque
+     * IncorrectResultSizeDataAccessException or silently acting on whichever
+     * row the query happens to return first.
+     */
     public User getUser(String username) {
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> PermissionException.userNotFound(username));
+        List<User> matches = userRepository.findAllByUsername(username);
+        if (matches.isEmpty()) {
+            throw PermissionException.userNotFound(username);
+        }
+        if (matches.size() > 1) {
+            throw PermissionException.ambiguousUsername(
+                    "Username '" + username + "' exists in more than one client application; "
+                            + "role/permission management cannot resolve it uniquely.");
+        }
+        return matches.get(0);
     }
-
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
-
 
     public List<UserRole> saveAllUserRoles(List<UserRole> userRoles) {
         return userRolesRepository.saveAll(userRoles);
-    }
-
-    public List<UserPermissionGroup> saveAllUserPermissionGroups(List<UserPermissionGroup> memberships) {
-        return userPermissionGroupRepository.saveAll(memberships);
     }
 
     public Role saveRole(Role role) {
@@ -129,14 +141,12 @@ public class EntityUtilityService {
 
     public UserRole getUserAndRole(User user, Role role) {
         return userRolesRepository.findByUserAndRole(user, role)
-                .orElseThrow(() -> PermissionException.roleNotFound(
-                        String.format("Role '%s' is not assigned to user '%s'", role.getRoleName(), user.getUsername())));
+                .orElseThrow(() -> PermissionException.roleNotFound(String.format("Role '%s' is not assigned to user '%s'", role.getRoleName(), user.getUsername())));
     }
 
     public UserPermissionGroup getUserAndGroup(User user, PermissionGroup permissionGroup) {
         return userPermissionGroupRepository.findByUserAndPermissionGroup(user, permissionGroup)
-                .orElseThrow(() -> PermissionException.groupNotFound(String.format(
-                        "User '%s' is not assigned to permission group '%s'", user.getUsername(), permissionGroup.getGroupName())));
+                .orElseThrow(() -> PermissionException.groupNotFound(String.format("User '%s' is not assigned to permission group '%s'", user.getUsername(), permissionGroup.getGroupName())));
     }
 
     public void deleteUserAndGroupMapping(UserPermissionGroup userPermissionGroup) {

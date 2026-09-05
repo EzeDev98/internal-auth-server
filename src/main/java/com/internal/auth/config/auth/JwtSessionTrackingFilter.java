@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -91,7 +92,7 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
             return;
         }
 
-        Optional<User> user = userRepository.findByUsername(username);
+        Optional<User> user = resolveUser(username);
         if (user.isEmpty()) {
             log.debug("No local User record for '{}' — skipping session tracking for this request", username);
             return;
@@ -99,6 +100,33 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
 
         sessionManagementService.createSession(user.get().getId(), user.get().getPhoneNumber(), rawToken);
         sessionStorage.putCache(TRACKED_CACHE, cacheKey, Boolean.TRUE, TRACKED_CACHE_TTL_SECONDS);
+    }
+
+    /**
+     * Step 3 (session-tracking lookup fix): scoped by client_application_id
+     * when the current token carries that claim (a self-issued local-login
+     * token - see AuthenticationHelper#getCurrentClientApplicationId and
+     * LoginServiceImpl#mintAccessToken). A Keycloak-issued token carries no
+     * such claim and predates the tenant concept entirely, so it can't be
+     * scoped that way - instead this falls back to findAllByUsername and
+     * refuses to guess when the username collides across more than one
+     * tenant, rather than risking Spring Data's opaque
+     * IncorrectResultSizeDataAccessException or an arbitrary match.
+     */
+    private Optional<User> resolveUser(String username) {
+        Long clientApplicationId = authenticationHelper.getCurrentClientApplicationId();
+        if (clientApplicationId != null) {
+            return userRepository.findByUsernameAndClientApplicationId(username, clientApplicationId);
+        }
+
+        List<User> matches = userRepository.findAllByUsername(username);
+        if (matches.size() > 1) {
+            log.warn("Skipping session tracking for '{}': username exists in more than one "
+                    + "client application and this token carries no client_application_id claim "
+                    + "to disambiguate.", username);
+            return Optional.empty();
+        }
+        return matches.stream().findFirst();
     }
 
     private String extractRawToken(HttpServletRequest request) {

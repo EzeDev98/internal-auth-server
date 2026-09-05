@@ -3,6 +3,7 @@ package com.internal.auth.feature.identity.repository;
 import com.internal.auth.feature.identity.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -26,6 +27,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
     Optional<User> findByPhoneNumber(String phoneNumber);
     Optional<User> findByEmail(String email);
+
+    /**
+     * Step 2 (RBAC admin lookup fix): unscoped by client_application_id like
+     * findByUsername above, but returns every match instead of assuming
+     * exactly one - lets a caller detect "this username exists in more than
+     * one tenant" explicitly (see EntityUtilityService#getUser) instead of
+     * an opaque IncorrectResultSizeDataAccessException or silently favouring
+     * whichever row the DB happens to return first.
+     */
+    List<User> findAllByUsername(String username);
 
     Optional<User> findByUsernameAndClientApplicationId(String username, Long clientApplicationId);
     Optional<User> findByPhoneNumberAndClientApplicationId(String phoneNumber, Long clientApplicationId);

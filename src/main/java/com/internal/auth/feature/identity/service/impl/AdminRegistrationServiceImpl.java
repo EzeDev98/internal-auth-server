@@ -11,6 +11,8 @@ import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.identity.service.AdminRegistrationService;
 import com.internal.auth.feature.identity.validation.RegistrationValidator;
+import com.internal.auth.feature.rbac.model.Role;
+import com.internal.auth.feature.rbac.repository.RolesRepository;
 import com.internal.auth.feature.rbac.repository.UserRolesRepository;
 import com.internal.auth.feature.rbac.service.UserService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -23,7 +25,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 import static com.internal.auth.common.constant.AppConstant.ADMIN_ROLE;
+import static com.internal.auth.common.constant.AppConstant.ADMIN_ROLE_DESCRIPTION;
 
 /**
  * Admin bootstrap registration - the equivalent of standing up Keycloak's
@@ -69,14 +74,23 @@ public class AdminRegistrationServiceImpl implements AdminRegistrationService {
     private final UserService userService;
     private final UserRolesRepository userRolesRepository;
     private final AuthenticationHelper authenticationHelper;
+    private final RolesRepository rolesRepository;
 
     @Override
     @Transactional
     public AdminRegisterResponse register(AdminRegisterRequest request, Long adminClientApplicationId) {
 
-        if (userRolesRepository.existsByRoleRoleName(ADMIN_ROLE) && !authenticationHelper.isAdmin()) {
-            throw new AccessDeniedException(
-                    "An admin already exists - further admin accounts must be created by an existing admin.");
+        if (!authenticationHelper.isAdmin()) {
+            // Step 5 (TOCTOU fix): lock the create-admin Role row for the rest
+            // of this transaction before checking "does an admin already
+            // exist" - closes the window where two concurrent unauthenticated
+            // calls could both observe "not yet" and both succeed as the
+            // first admin. See RolesRepository#findByRoleNameForUpdate.
+            ensureAdminRoleRowExists();
+            rolesRepository.findByRoleNameForUpdate(ADMIN_ROLE);
+            if (userRolesRepository.existsByRoleRoleName(ADMIN_ROLE)) {
+                throw new AccessDeniedException("An admin already exists - further admin accounts must be created by an existing admin.");
+            }
         }
 
         registrationValidator.validateUsername(request.getUsername());
@@ -131,5 +145,32 @@ public class AdminRegistrationServiceImpl implements AdminRegistrationService {
 
     private String normalize(String value) {
         return (value == null || value.isBlank()) ? null : value.trim();
+    }
+
+    /**
+     * Step 5 (admin bootstrap race fix): guarantees the create-admin Role
+     * row exists purely so findByRoleNameForUpdate always has a row to lock
+     * on, even before any admin has ever been created. Same lazy,
+     * race-safe get-or-create pattern as
+     * ClientApplicationService#getOrCreateInternalAdminClient - existence of
+     * this row carries no authorization meaning by itself, only whether a
+     * user currently holds it does.
+     */
+    private void ensureAdminRoleRowExists() {
+        if (rolesRepository.existsByRoleName(ADMIN_ROLE)) {
+            return;
+        }
+        Role role = new Role();
+        role.setRoleName(ADMIN_ROLE);
+        role.setDescription(ADMIN_ROLE_DESCRIPTION);
+        role.setCreatedAt(LocalDateTime.now());
+        try {
+            rolesRepository.save(role);
+        } catch (DataIntegrityViolationException e) {
+            // Lost a create-vs-create race (V20's unique constraint on
+            // role_name) - fine, the row exists now regardless of who
+            // created it.
+            log.debug("Admin role row creation lost a uniqueness race at save-time - role already exists");
+        }
     }
 }

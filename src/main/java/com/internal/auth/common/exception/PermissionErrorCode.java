@@ -26,6 +26,7 @@ public enum PermissionErrorCode {
     SUPER_GROUP_NOT_FOUND(12004, "Super-group not found", HttpStatus.NOT_FOUND),
     PERMISSION_GROUP_NOT_FOUND(12005, "Permission group not found", HttpStatus.NOT_FOUND),
     USER_NOT_FOUND(12006, "User not found", HttpStatus.NOT_FOUND),
+    AMBIGUOUS_USERNAME(12007, "Username exists in more than one client application; cannot resolve uniquely", HttpStatus.CONFLICT),
 
     // ── Conflict / duplicate (12100–12199) ────────────────────────────────────
     ALREADY_EXISTS(12101, "Resource already exists", HttpStatus.CONFLICT),

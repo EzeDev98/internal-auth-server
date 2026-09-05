@@ -238,7 +238,7 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
 
     @Override
     @Transactional
-    public BaseResponse addUserToParentGroup(String username, String groupName) {
+    public BaseResponse addUserToGroup(String username, String groupName) {
 
         if (StringUtils.isBlank(username) || StringUtils.isBlank(groupName)) {
             throw PermissionException.emptyField("Username and group name fields are mandatory");
@@ -320,64 +320,6 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
         }
     }
 
-    @Override
-    @Transactional
-    public BaseResponse addUserToSpecificPermissionGroup(String username, String groupName) {
-
-        if (StringUtils.isBlank(username) || StringUtils.isBlank(groupName)) {
-            throw PermissionException.emptyField("Username and group name are required");
-        }
-
-        username = username.toLowerCase().trim();
-        groupName = groupName.toLowerCase().trim();
-
-        try {
-            groupService.addUserToGroup(username, groupName);
-            return new BaseResponse(HttpServletResponse.SC_CREATED,
-                    "User successfully added to " + groupName + " permission group",
-                    username);
-        } catch (PermissionException ex) {
-            throw ex;
-        } catch (Exception e) {
-            throw PermissionException.internalError("Failed to add users to " + groupName + " group: " + e.getMessage());
-        }
-    }
-
-    @Override
-    @Transactional
-    public BaseResponse addUsersToAnyGroup(List<String> usernames, String groupName) {
-
-        if (CollectionUtils.isEmpty(usernames)) {
-            throw PermissionException.emptyField("Usernames cannot be null or empty");
-        }
-
-        if (StringUtils.isBlank(groupName)) {
-            throw PermissionException.emptyField("Group name is required");
-        }
-
-        List<String> normalizedUsernames = usernames.stream()
-                .filter(u -> !StringUtils.isBlank(u))
-                .map(u -> u.toLowerCase().trim())
-                .toList();
-
-        String normalizedGroupName = groupName.toLowerCase().trim();
-
-        try {
-            // Already a single local write with its own success/duplicate/failure
-            // breakdown per user (see UserPermissionGroupServiceImpl) — @Transactional
-            // rolls the whole batch back on a hard failure, so no manual rollback here.
-            BulkUserGroupAssignmentResponse groupAssignmentResponse =
-                    groupService.addBulkUsersToParentGroup(normalizedUsernames, normalizedGroupName);
-            return new BaseResponse(HttpServletResponse.SC_CREATED,
-                    "Users successfully added to " + normalizedGroupName + " permission group",
-                    groupAssignmentResponse);
-        } catch (PermissionException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw PermissionException.internalError("Unexpected error while adding users to " + normalizedGroupName + " group: " + ex.getMessage());
-        }
-    }
-
     // ══════════════════════════════════════════════════════════════════════════
     //  Role and group removal
     // ══════════════════════════════════════════════════════════════════════════
@@ -420,18 +362,13 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
         groupName = groupName.toLowerCase().trim();
 
         try {
-            RemoveUserResponse removeUserResponse =
-                    groupService.removeUserFromPermissionGroup(username, groupName);
-            return new BaseResponse(HttpServletResponse.SC_OK, removeUserResponse.getMessage(),
-                    Map.of("username", removeUserResponse.getUsername(),
-                           "roleName", removeUserResponse.getGroupName()));
+            RemoveUserResponse removeUserResponse = groupService.removeUserFromPermissionGroup(username, groupName);
+            return new BaseResponse(HttpServletResponse.SC_OK, removeUserResponse.getMessage(), Map.of("username", removeUserResponse.getUsername(), "roleName", removeUserResponse.getGroupName()));
         } catch (PermissionException ex) {
             throw ex;
         } catch (Exception e) {
-            log.error("Failed to remove user '{}' from group '{}': {}",
-                    username, groupName, e.getMessage());
-            throw PermissionException.internalError(
-                    "Database operation failed while removing user from group. Original error: " + e.getMessage());
+            log.error("Failed to remove user '{}' from group '{}': {}", username, groupName, e.getMessage());
+            throw PermissionException.internalError("Database operation failed while removing user from group. Original error: " + e.getMessage());
         }
     }
 
@@ -455,8 +392,7 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
         } catch (PermissionException e) {
             throw e;
         } catch (Exception ex) {
-            throw PermissionException.internalError(
-                    "Unexpected error deleting group: " + groupName + " — " + ex.getMessage());
+            throw PermissionException.internalError("Unexpected error deleting group: " + groupName + " — " + ex.getMessage());
         }
     }
 }

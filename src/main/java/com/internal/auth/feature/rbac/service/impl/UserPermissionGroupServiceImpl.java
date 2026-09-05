@@ -3,7 +3,6 @@ package com.internal.auth.feature.rbac.service.impl;
 import com.internal.auth.common.exception.PermissionException;
 import com.internal.auth.feature.rbac.model.PermissionGroup;
 import com.internal.auth.feature.rbac.model.Role;
-import com.internal.auth.feature.rbac.model.RolePermissionGroupMapping;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.rbac.model.UserPermissionGroup;
 import com.internal.auth.feature.rbac.response.*;
@@ -20,7 +19,6 @@ import org.springframework.util.CollectionUtils;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Component
 public class UserPermissionGroupServiceImpl implements UserPermissionGroupService {
@@ -35,78 +33,6 @@ public class UserPermissionGroupServiceImpl implements UserPermissionGroupServic
         this.mapper = mapper;
         this.roleService = roleService;
     }
-
-    @Override
-    public BulkUserGroupAssignmentResponse addBulkUsersToParentGroup(List<String> usernames, String groupName) {
-
-        if (CollectionUtils.isEmpty(usernames)) {
-            throw PermissionException.emptyRequest("Usernames are required");
-        }
-
-        if (StringUtils.isBlank(groupName)) {
-            throw PermissionException.emptyField("Group name is required");
-        }
-
-        PermissionGroup group = entityUtils.getPermissionGroup(groupName);
-        List<Role> groupRoles = getRolesForPermissionGroup(group);
-
-        List<UserPermissionGroup> toSave = new ArrayList<>();
-        List<UserPermissionGroupResponse> alreadyInGroup = new ArrayList<>();
-        List<String> failures = new ArrayList<>();
-
-        for (String username : usernames) {
-
-            if (StringUtils.isBlank(username)) {
-                failures.add("blank-username [blank field]");
-                log.warn("Skipping blank username entry");
-                continue;
-            }
-
-            try {
-                if (entityUtils.userPermissionGroupExists(username, groupName)) {
-                    log.info("User '{}' is already in group '{}'", username, groupName);
-                    alreadyInGroup.add(mapper.buildUserPermissionGroup(entityUtils.getUserPermissionGroup(username, groupName)));
-                    continue;
-                }
-
-                toSave.add(createUserPermissionGroup(username, groupName));
-
-            } catch (Exception ex) {
-                failures.add(username + " [" + ex.getMessage() + "]");
-                log.error("Failed to prepare group mapping for user '{}': {}", username, ex.getMessage());
-            }
-        }
-
-        List<UserPermissionGroup> savedMemberships = new ArrayList<>();
-        if (!toSave.isEmpty()) {
-            try {
-                savedMemberships = entityUtils.saveAllUserPermissionGroups(toSave);
-            } catch (DataAccessException ex) {
-                throw PermissionException.userGroupMappingFailed("Bulk group assignment failed at persistence layer: " + ex.getMessage());
-            }
-        }
-
-        if (!savedMemberships.isEmpty() && !groupRoles.isEmpty()) {
-
-            List<String> newUsernames = savedMemberships.stream()
-                    .map(m -> m.getUser().getUsername())
-                    .toList();
-
-            List<String> roleNames = groupRoles.stream()
-                    .map(Role::getRoleName)
-                    .toList();
-
-            BulkRoleAssignmentResponse roleAssignmentResult = roleService.bulkRoleAssignment(newUsernames, roleNames);
-            log.info("Role assignment for bulk group add — assigned: {}, duplicates: {}, failed: {}", roleAssignmentResult.getSuccessfullyAssigned(), roleAssignmentResult.getSkippedDuplicates(), roleAssignmentResult.getFailed());
-        }
-
-        List<UserPermissionGroupResponse> successfullyAdded = savedMemberships.stream()
-                .map(mapper::buildUserPermissionGroup)
-                .toList();
-
-        return new BulkUserGroupAssignmentResponse(usernames.size(), successfullyAdded.size(), alreadyInGroup.size(), failures.size(), successfullyAdded, alreadyInGroup, failures);
-    }
-
 
     @Override
     public RemoveUserResponse removeUserFromPermissionGroup(String username, String groupName) {
@@ -139,50 +65,6 @@ public class UserPermissionGroupServiceImpl implements UserPermissionGroupServic
         } catch (Exception e) {
             log.error("Unexpected error while removing user '{}' from group '{}': {}", username, groupName, e.getMessage(), e);
             throw PermissionException.operationFailed("Failed to remove user from the specified group", e);
-        }
-    }
-
-    @Override
-    public List<String> addExistingUsersIntoDefaultPermissionGroup(String groupName) {
-        if (groupName == null) {
-            throw PermissionException.emptyField("Group name field is mandatory");
-        }
-
-        PermissionGroup group = entityUtils.getPermissionGroup(groupName);
-        List<Role> groupRoles = getRolesForPermissionGroup(group);
-        List<User> users = entityUtils.getAllUsers();
-
-        // Returns every username that was already in the group or is now in it,
-        // so the caller (PermissionManagementServiceImpl) can report back who's
-        // covered without needing a second, separate lookup. Local DB is the
-        // only source of truth here, so a per-user failure is logged and skipped
-        // rather than aborting the whole batch.
-        List<String> processed = new ArrayList<>();
-        for (User user : users) {
-            try {
-                addUserToGroup(user.getUsername(), groupName, groupRoles);
-                processed.add(user.getUsername());
-            } catch (Exception e) {
-                log.warn("Failed to add user {} to group {}: {}", user.getUsername(), groupName, e.getMessage());
-            }
-        }
-        return processed;
-    }
-
-    @Override
-    public void addUserToNamedPermissionGroup(String username, String groupName) {
-
-        if (StringUtils.isBlank(username) || StringUtils.isBlank(groupName)) {
-            throw PermissionException.emptyField("Username and group name are required");
-        }
-
-        PermissionGroup group = entityUtils.getPermissionGroup(groupName);
-        List<Role> groupRoles = getRolesForPermissionGroup(group);
-
-        try {
-            addUserToGroup(username, groupName, groupRoles);
-        } catch (Exception e) {
-            log.warn("Failed to add user {} to group {}: {}", username, groupName, e.getMessage());
         }
     }
 
@@ -247,13 +129,13 @@ public class UserPermissionGroupServiceImpl implements UserPermissionGroupServic
 
     private List<Role> getRolesForPermissionGroup(PermissionGroup group) {
 
-        if (group.getRolePermissionGroupMappings() == null) {
+        List<Role> roles = entityUtils.getGroupRoles(group);
+
+        if (roles.isEmpty()) {
             throw PermissionException.operationFailed("No mapping found for permission group " + group.getGroupName());
         }
 
-        return group.getRolePermissionGroupMappings().stream()
-                .map(RolePermissionGroupMapping::getRole)
-                .collect(Collectors.toList());
+        return roles;
     }
 
     @Override
