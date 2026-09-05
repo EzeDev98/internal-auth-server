@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Tag;
 
 /**
  * Step 5C - locks in the numeric code and HTTP status for every
@@ -15,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * changes the status of one of these fails loudly here instead of silently
  * changing a documented API contract.
  */
+@Tag("security-boundary")
 class PermissionErrorCodeStatusTest {
 
     @ParameterizedTest

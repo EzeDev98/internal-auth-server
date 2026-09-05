@@ -211,7 +211,7 @@ public class PermissionController {
                 .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }
 
-    @PreAuthorize(Roles.HAS_ADMIN)
+    @PreAuthorize(Roles.HAS_ADMIN_OR_USER)
     @Operation(summary = "Fetch all user permission groups", description = "Fetches all the permission groups a user belongs to from the local database using the user's username as a parameter. Callers without the admin role may only fetch their own.")
     @GetMapping("/users/{username}/permission-groups")
     public ResponseEntity<InternalAuthApiResponse<Object>> fetchUserPermissionGroups(@PathVariable String username) {

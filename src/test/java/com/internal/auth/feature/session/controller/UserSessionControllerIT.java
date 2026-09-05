@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.junit.jupiter.api.Tag;
 
 /**
  * Step 8C. UserSessionController's own Javadoc always described
@@ -30,6 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * force-terminate another user's session, and a genuine admin caller must
  * still be able to.
  */
+@Tag("security-boundary")
 class UserSessionControllerIT extends IntegrationTestBase {
 
     @Autowired

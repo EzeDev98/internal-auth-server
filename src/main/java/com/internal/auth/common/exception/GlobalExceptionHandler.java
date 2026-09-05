@@ -3,6 +3,7 @@ package com.internal.auth.common.exception;
 import com.internal.auth.common.response.InternalAuthApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -123,6 +124,26 @@ public class GlobalExceptionHandler {
      * error (a bug, not a modeled business exception) and falls through to
      * {@link #handleUnexpected}.
      */
+    /**
+     * Step 19C: catches any DataAccessException that escapes uncaught from
+     * anywhere in the app - connection pool exhaustion,
+     * CannotCreateTransactionException when Postgres itself is unreachable,
+     * query timeouts, etc. Every DataAccessException this codebase
+     * "expects" (DataIntegrityViolationException for uniqueness conflicts,
+     * and the rest) is already caught and converted to a specific typed
+     * exception inside the relevant service method, so this handler only
+     * ever sees genuine infrastructure failures - a chaos test that kills
+     * the database mid-traffic is exactly what exercises this path.
+     * Without it, an outage previously surfaced as a misleading 500
+     * ("something is broken in your request") instead of a 503
+     * ("the service itself is temporarily down").
+     */
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<InternalAuthApiResponse<Void>> handleDataAccessException(DataAccessException ex) {
+        log.error("Database connectivity failure", ex);
+        return build(HttpStatus.SERVICE_UNAVAILABLE, "The service is temporarily unavailable. Please try again shortly.", null);
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<InternalAuthApiResponse<Void>> handleRuntimeException(RuntimeException ex) {
         ResponseStatus responseStatus = AnnotatedElementUtils.findMergedAnnotation(ex.getClass(), ResponseStatus.class);

@@ -222,17 +222,39 @@ public class EntityUtilityService {
         return subPermissionGroup;
     }
 
+    /**
+     * Step 14A fix: previously queried by bare username with no tenant
+     * scoping (findPermissionGroupsByUsername), so a username colliding
+     * across two client applications silently merged both users' group
+     * memberships into one list. Now resolves through getUser(username)
+     * first - the same fail-closed (409 AMBIGUOUS_USERNAME) guard every
+     * other RBAC admin lookup already goes through - then looks up by
+     * that single resolved user via the existing findAllByUser(User),
+     * never joining on username directly.
+     */
     public List<PermissionGroup> findUserPermissionGroups(String username) {
-        List<PermissionGroup> permissionGroups = userPermissionGroupRepository.findPermissionGroupsByUsername(username);
-        if (CollectionUtils.isEmpty(permissionGroups)) {
+        User user = getUser(username);
+        List<UserPermissionGroup> mappings = userPermissionGroupRepository.findAllByUser(user);
+        if (CollectionUtils.isEmpty(mappings)) {
             return Collections.emptyList();
         }
-        return permissionGroups;
+        return mappings.stream()
+                .map(UserPermissionGroup::getPermissionGroup)
+                .distinct()
+                .toList();
     }
 
+    /**
+     * Step 14A fix: same issue and same fix shape as
+     * findUserPermissionGroups above - findRolesByUsername had no tenant
+     * scoping either. Now resolves through getUser(username)'s
+     * fail-closed guard, then reuses findRolesByUserId (already the
+     * tenant-safe lookup LoginServiceImpl#mintAccessToken relies on for
+     * JWT role claims - see its own Javadoc).
+     */
     public List<Role> findUserRoles(String username) {
-
-        List<Role> userRoles = userRolesRepository.findRolesByUsername(username);
+        User user = getUser(username);
+        List<Role> userRoles = userRolesRepository.findRolesByUserId(user.getId());
         if (CollectionUtils.isEmpty(userRoles)) {
             return Collections.emptyList();
         }

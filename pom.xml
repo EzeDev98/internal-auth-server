@@ -192,6 +192,16 @@
 			<artifactId>spring-modulith-starter-jdbc</artifactId>
 			<version>2.1.1</version>
 		</dependency>
+		<!-- Step 17A: @ApplicationModuleTest, Scenario, and the
+		     PublishedEvents/Scenario JUnit parameter resolvers used by
+		     AuditEventListenerModuleTest. Pinned to the same version as
+		     spring-modulith-starter-jdbc above - no Modulith BOM in this pom. -->
+		<dependency>
+			<groupId>org.springframework.modulith</groupId>
+			<artifactId>spring-modulith-starter-test</artifactId>
+			<version>2.1.1</version>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
@@ -248,6 +258,27 @@
 						<goals>
 							<goal>report</goal>
 						</goals>
+					</execution>
+					<execution>
+						<id>jacoco-check</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<counter>LINE</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.65</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+						</configuration>
 					</execution>
 				</executions>
 			</plugin>

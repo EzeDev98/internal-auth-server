@@ -81,7 +81,7 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
         }
 
         String sid = extractSessionId(jwt);
-        String cacheKey = sid != null ? sid : username;
+        String cacheKey = resolveCacheKey(sid, username);
 
         if (sessionStorage.getCache(TRACKED_CACHE, cacheKey) != null) {
             return; // already tracked recently — skip the database round trip
@@ -127,6 +127,28 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
             return Optional.empty();
         }
         return matches.stream().findFirst();
+    }
+
+    /**
+     * Step 14A fix: this short-circuit cache previously fell straight back
+     * to the bare username whenever a token carried no "sid" claim - which
+     * is every self-issued local-login token (see class javadoc), so two
+     * tenants sharing a username shared one cache entry and whichever
+     * user's request landed second within TRACKED_CACHE_TTL_SECONDS had
+     * its own session tracking silently skipped, even though resolveUser()
+     * above already resolves the correct per-tenant User. Now prefixes the
+     * username with client_application_id when the token carries that
+     * claim (the same composite-key pattern LoginServiceImpl's login-MFA
+     * OTP cooldown key already uses), so same-username tenants never share
+     * a cache entry. A Keycloak-issued token carries no such claim and
+     * falls back to the prior username-only key, unchanged.
+     */
+    private String resolveCacheKey(String sid, String username) {
+        if (sid != null) {
+            return sid;
+        }
+        Long clientApplicationId = authenticationHelper.getCurrentClientApplicationId();
+        return clientApplicationId != null ? clientApplicationId + ":" + username : username;
     }
 
     private String extractRawToken(HttpServletRequest request) {

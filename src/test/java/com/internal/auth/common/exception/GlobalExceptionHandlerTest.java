@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -15,6 +16,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.Tag;
 
 /**
  * Step 5A/D - one test per {@code @ExceptionHandler} method on
@@ -22,6 +24,7 @@ import static org.mockito.Mockito.when;
  * handler method is called directly rather than through a Spring context -
  * this is a plain unit test, not a @WebMvcTest.
  */
+@Tag("security-boundary")
 class GlobalExceptionHandlerTest {
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
@@ -134,6 +137,17 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().getMessage())
                 .isEqualTo("An unexpected error occurred. Please try again later.")
                 .doesNotContain("some internal detail");
+    }
+
+    @Test
+    void dataAccessException_mapsTo503WithGenericMessage() {
+        ResponseEntity<InternalAuthApiResponse<Void>> response =
+                handler.handleDataAccessException(new DataAccessResourceFailureException("connection refused"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.getBody().getMessage())
+                .isEqualTo("The service is temporarily unavailable. Please try again shortly.")
+                .doesNotContain("connection refused");
     }
 
     @Test

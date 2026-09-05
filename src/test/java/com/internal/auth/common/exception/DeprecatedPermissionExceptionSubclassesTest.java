@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Tag;
 
 /**
  * Step 5B - these deprecated exception classes (kept only for source
@@ -19,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * nobody "fixes" a call site based on the misleading constructor signature
  * before these classes are actually removed.
  */
+@Tag("security-boundary")
 class DeprecatedPermissionExceptionSubclassesTest {
 
     @Test
