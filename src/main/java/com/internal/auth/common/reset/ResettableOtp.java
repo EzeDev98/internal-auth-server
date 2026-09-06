@@ -1,6 +1,5 @@
 package com.internal.auth.common.reset;
 
-import com.internal.auth.feature.passwordreset.enums.PasswordResetStatus;
 
 import java.time.LocalDateTime;
 
@@ -43,9 +42,9 @@ public interface ResettableOtp {
 
     void setMaxAttempts(int maxAttempts);
 
-    PasswordResetStatus getStatus();
+    ResetStatus getStatus();
 
-    void setStatus(PasswordResetStatus status);
+    void setStatus(ResetStatus status);
 
     LocalDateTime getVerifiedAt();
 

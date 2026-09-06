@@ -244,7 +244,27 @@
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
 			<plugin>
-				<!-- Step 1: runs src/test/java/**/*IT.java in `mvn verify`, separately
+		
+			<!-- Step 17A fix: spring.modulith.detection-strategy=explicitly-annotated
+			     needs to reach Spring Modulith's own ApplicationModules.of()/verify()
+			     bootstrap (used by @ApplicationModuleTest, e.g.
+			     AuditEventListenerModuleTest) - that bootstrap builds its own
+			     throwaway Environment for this one property, which is NOT
+			     profile-aware (never reads application-test.properties) and checks
+			     system properties before any file. A JVM system property here is
+			     the only way to set it for tests without touching main's
+			     application.properties or Boot's own config loading - dev/prod
+			     never see this, since they don't go through Surefire. -->
+			<groupId>org.apache.maven.plugins</groupId>
+			<artifactId>maven-surefire-plugin</artifactId>
+			<configuration>
+				<systemPropertyVariables>
+					<spring.modulith.detection-strategy>explicitly-annotated</spring.modulith.detection-strategy>
+				</systemPropertyVariables>
+			</configuration>
+		</plugin>
+				<plugin>
+             <!-- Step 1: runs src/test/java/**/*IT.java in `mvn verify`, separately
 				     from the *Test.java unit tests Surefire already runs on `mvn test` -->
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>

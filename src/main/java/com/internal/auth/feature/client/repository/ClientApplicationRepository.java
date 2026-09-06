@@ -11,6 +11,7 @@ import java.util.Optional;
  * from once client registration and OAuth2 Authorization Server
  * integration are actually built (Stage 3/4).
  */
+@org.springframework.modulith.NamedInterface
 public interface ClientApplicationRepository extends JpaRepository<ClientApplication, Long> {
     Optional<ClientApplication> findByClientId(String clientId);
 }

@@ -1,7 +1,7 @@
 package com.internal.auth.feature.identity.repository;
 
 import com.internal.auth.feature.identity.model.LoginMfaOtp;
-import com.internal.auth.feature.passwordreset.enums.PasswordResetStatus;
+import com.internal.auth.common.reset.ResetStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
@@ -15,6 +15,6 @@ import java.util.Optional;
  * Delete once that migration lands.
  */
 public interface LoginMfaOtpRepository extends JpaRepository<LoginMfaOtp, Long> {
-    Optional<LoginMfaOtp> findTopByPhoneNumberAndStatusOrderByCreatedAtDesc(String phoneNumber, PasswordResetStatus status);
-    Optional<LoginMfaOtp> findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(String phoneNumber, Long clientApplicationId, PasswordResetStatus status);
+    Optional<LoginMfaOtp> findTopByPhoneNumberAndStatusOrderByCreatedAtDesc(String phoneNumber, ResetStatus status);
+    Optional<LoginMfaOtp> findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(String phoneNumber, Long clientApplicationId, ResetStatus status);
 }

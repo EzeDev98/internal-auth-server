@@ -53,7 +53,6 @@ class MigrationTruncateInventoryTest {
 
         assertThat(migrationsContainingTruncate).containsExactlyInAnyOrder(
                 "V8__users_client_application_scoping.sql",
-                "V9__otp_client_application_scoping.sql",
-                "V12__sub_permission_group_parent_fk.sql");
+                "V9__otp_client_application_scoping.sql");
     }
 }

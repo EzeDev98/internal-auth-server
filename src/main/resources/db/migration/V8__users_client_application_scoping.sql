@@ -6,7 +6,7 @@
 -- two accounts may share a username/phone/email as long as they belong to
 -- different client_applications rows. ClientApplication already exists and
 -- is populated via Step 10D's admin endpoint
--- (POST ${app.title}/client-applications).
+-- (POST <app base path>/client-applications).
 --
 -- No existing user data is preserved (confirmed acceptable - still
 -- pre-production). TRUNCATE ... CASCADE also clears every table with a FK

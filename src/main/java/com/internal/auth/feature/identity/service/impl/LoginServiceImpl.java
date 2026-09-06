@@ -1,6 +1,6 @@
 package com.internal.auth.feature.identity.service.impl;
 
-import com.internal.auth.feature.audit.service.AuditService;
+import com.internal.auth.feature.audit.event.UserLoggedInEvent;
 import com.internal.auth.common.exception.AccountDisabledException;
 import com.internal.auth.common.exception.AccountNotVerifiedException;
 import com.internal.auth.common.exception.InvalidCredentialsException;
@@ -8,7 +8,7 @@ import com.internal.auth.common.exception.OtpInvalidException;
 import com.internal.auth.common.reset.OtpResetEngine;
 import com.internal.auth.common.reset.OtpService;
 import com.internal.auth.common.reset.delivery.OtpDeliveryService;
-import com.internal.auth.config.auth.SelfIssuedAuthorizationServerContext;
+import com.internal.auth.common.security.SelfIssuedAuthorizationServerContext;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.config.LoginMfaProperties;
 import com.internal.auth.feature.identity.dto.LoginRequest;
@@ -19,7 +19,7 @@ import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.LoginMfaOtpRepository;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.identity.service.LoginService;
-import com.internal.auth.feature.passwordreset.enums.PasswordResetStatus;
+import com.internal.auth.common.reset.ResetStatus;
 import com.internal.auth.feature.rbac.model.Role;
 import com.internal.auth.feature.rbac.repository.UserRolesRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +27,7 @@ import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -131,7 +132,7 @@ public class LoginServiceImpl implements LoginService {
     // (see class javadoc), so this is a label, not an enforced value.
     private static final AuthorizationGrantType LOCAL_LOGIN_GRANT_TYPE = new AuthorizationGrantType("local_login");
 
-    private final AuditService auditService;
+    private final ApplicationEventPublisher eventPublisher;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final LoginMfaOtpRepository loginMfaOtpRepository;
@@ -184,7 +185,7 @@ public class LoginServiceImpl implements LoginService {
         }
 
         log.info("User id {} logged in", user.getId());
-        auditService.recordUserLoggedIn(user, clientApplicationId);
+        eventPublisher.publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), clientApplicationId));
         String accessToken = mintAccessToken(user, clientApplicationId);
         return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false, accessToken);
     }
@@ -196,7 +197,7 @@ public class LoginServiceImpl implements LoginService {
             throw new OtpInvalidException("The verification code is invalid.");
         }
 
-        LoginMfaOtp otp = loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, PasswordResetStatus.ACTIVE)
+        LoginMfaOtp otp = loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, ResetStatus.ACTIVE)
                 .orElseThrow(() -> new OtpInvalidException("The verification code is invalid."));
 
         otpResetEngine.verify(otp, request.getOtp(), loginMfaOtpRepository::save);
@@ -205,7 +206,7 @@ public class LoginServiceImpl implements LoginService {
                 .orElseThrow(() -> new InvalidCredentialsException(INVALID_CREDENTIALS_MESSAGE));
 
         log.info("User id {} completed MFA login step-up", user.getId());
-        auditService.recordUserLoggedIn(user, clientApplicationId);
+        eventPublisher.publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), clientApplicationId));
         String accessToken = mintAccessToken(user, clientApplicationId);
         return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false, accessToken);
     }
@@ -220,7 +221,7 @@ public class LoginServiceImpl implements LoginService {
         otpResetEngine.rejectIfCoolingDown(cooldownBucket);
 
         otpResetEngine.invalidateExisting(
-                loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, PasswordResetStatus.ACTIVE),
+                loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, ResetStatus.ACTIVE),
                 loginMfaOtpRepository::save);
 
         String rawOtp = otpService.generateOtp(loginMfaProperties.getOtpLength());

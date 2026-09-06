@@ -5,7 +5,6 @@ import com.internal.auth.common.exception.OtpExpiredException;
 import com.internal.auth.common.exception.OtpInvalidException;
 import com.internal.auth.common.exception.OtpResendCooldownException;
 import com.internal.auth.common.exception.ResetTokenInvalidException;
-import com.internal.auth.feature.passwordreset.enums.PasswordResetStatus;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
@@ -84,7 +83,7 @@ public class OtpResetEngine {
      */
     public <T extends ResettableOtp> void invalidateExisting(Optional<T> existing, Consumer<T> save) {
         existing.ifPresent(otp -> {
-            otp.setStatus(PasswordResetStatus.INVALIDATED);
+            otp.setStatus(ResetStatus.INVALIDATED);
             otp.setInvalidatedAt(LocalDateTime.now());
             save.accept(otp);
         });
@@ -102,7 +101,7 @@ public class OtpResetEngine {
         otp.setExpiresAt(LocalDateTime.now().plusMinutes(expirationMinutes));
         otp.setAttemptCount(0);
         otp.setMaxAttempts(maxAttempts);
-        otp.setStatus(PasswordResetStatus.ACTIVE);
+        otp.setStatus(ResetStatus.ACTIVE);
         otp.setLastSentAt(LocalDateTime.now());
     }
 
@@ -116,14 +115,14 @@ public class OtpResetEngine {
      */
     public <T extends ResettableOtp> void verify(T otp, String rawOtp, Consumer<T> save) {
         if (LocalDateTime.now().isAfter(otp.getExpiresAt())) {
-            otp.setStatus(PasswordResetStatus.EXPIRED);
+            otp.setStatus(ResetStatus.EXPIRED);
             otp.setInvalidatedAt(LocalDateTime.now());
             save.accept(otp);
             throw new OtpExpiredException("This verification code has expired. Please request a new code.");
         }
 
         if (otp.getAttemptCount() >= otp.getMaxAttempts()) {
-            otp.setStatus(PasswordResetStatus.INVALIDATED);
+            otp.setStatus(ResetStatus.INVALIDATED);
             otp.setInvalidatedAt(LocalDateTime.now());
             save.accept(otp);
             throw new MaxAttemptsExceededException("Too many failed attempts. Please request a new verification code.");
@@ -134,7 +133,7 @@ public class OtpResetEngine {
             otp.setAttemptCount(otp.getAttemptCount() + 1);
             boolean nowExhausted = otp.getAttemptCount() >= otp.getMaxAttempts();
             if (nowExhausted) {
-                otp.setStatus(PasswordResetStatus.INVALIDATED);
+                otp.setStatus(ResetStatus.INVALIDATED);
                 otp.setInvalidatedAt(LocalDateTime.now());
             }
             save.accept(otp);
@@ -145,7 +144,7 @@ public class OtpResetEngine {
             throw new OtpInvalidException("The verification code is invalid.");
         }
 
-        otp.setStatus(PasswordResetStatus.VERIFIED);
+        otp.setStatus(ResetStatus.VERIFIED);
         otp.setVerifiedAt(LocalDateTime.now());
         save.accept(otp);
     }

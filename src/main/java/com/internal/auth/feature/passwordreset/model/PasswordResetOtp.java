@@ -1,7 +1,7 @@
 package com.internal.auth.feature.passwordreset.model;
 
 import com.internal.auth.common.reset.ResettableOtp;
-import com.internal.auth.feature.passwordreset.enums.PasswordResetStatus;
+import com.internal.auth.common.reset.ResetStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -61,7 +61,7 @@ public class PasswordResetOtp implements ResettableOtp {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private PasswordResetStatus status;
+    private ResetStatus status;
 
     @CreationTimestamp
     @Column(name = "created_at")

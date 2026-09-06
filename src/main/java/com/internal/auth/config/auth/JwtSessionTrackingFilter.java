@@ -1,6 +1,7 @@
 package com.internal.auth.config.auth;
 
 import com.internal.auth.config.redis.SessionStorage;
+import com.internal.auth.common.security.AuthenticationHelper;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.session.service.SessionManagementService;

@@ -40,6 +40,7 @@ import java.util.Set;
 @NoArgsConstructor
 @Entity
 @Table(name = "client_applications")
+@org.springframework.modulith.NamedInterface
 public class ClientApplication {
 
     @Id

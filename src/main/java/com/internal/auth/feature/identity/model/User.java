@@ -90,6 +90,7 @@ import java.time.LocalDateTime;
         @UniqueConstraint(name = "uk_users_client_phone_number", columnNames = {"client_application_id", "phone_number"}),
         @UniqueConstraint(name = "uk_users_client_email", columnNames = {"client_application_id", "email"})
 })
+@org.springframework.modulith.NamedInterface
 public class User {
 
     @Id

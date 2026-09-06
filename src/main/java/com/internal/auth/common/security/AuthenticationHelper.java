@@ -1,4 +1,4 @@
-package com.internal.auth.config.auth;
+package com.internal.auth.common.security;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -58,7 +58,7 @@ public class AuthenticationHelper {
 
     /**
      * True if the current request's authorities include the admin role
-     * ({@link Roles#HAS_ADMIN}'s underlying authority name). Matches
+     * ({@link com.internal.auth.config.auth.Roles#HAS_ADMIN}'s underlying authority name). Matches
      * WebSecurityConfig's {@code GrantedAuthorityDefaults("")} — authorities
      * are compared as literal, unprefixed strings, same as every
      * {@code hasRole(...)} check elsewhere in this app.

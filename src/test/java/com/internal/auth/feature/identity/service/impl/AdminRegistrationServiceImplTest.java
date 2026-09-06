@@ -6,7 +6,7 @@ import com.internal.auth.common.exception.PermissionException;
 import com.internal.auth.common.exception.UserAlreadyExistsException;
 import com.internal.auth.common.reset.ResetValidator;
 import com.internal.auth.common.response.BaseResponse;
-import com.internal.auth.config.auth.AuthenticationHelper;
+import com.internal.auth.common.security.AuthenticationHelper;
 import com.internal.auth.feature.identity.dto.AdminRegisterRequest;
 import com.internal.auth.feature.identity.dto.AdminRegisterResponse;
 import com.internal.auth.feature.identity.model.User;

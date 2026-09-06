@@ -17,7 +17,7 @@ import com.internal.auth.feature.identity.model.PhoneVerificationOtp;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.PhoneVerificationOtpRepository;
 import com.internal.auth.feature.identity.repository.UserRepository;
-import com.internal.auth.feature.passwordreset.enums.PasswordResetStatus;
+import com.internal.auth.common.reset.ResetStatus;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.redisson.api.RBucket;
@@ -107,7 +107,7 @@ class PhoneVerificationServiceImplTest {
     void sendVerificationOtp_success_invalidatesExistingGeneratesAndDeliversNewOtp() {
         User user = userWithPhone("+23480000000", false);
         when(phoneVerificationOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+23480000000", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.empty());
+                "+23480000000", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.empty());
         when(otpService.generateOtp(6)).thenReturn("135790");
         when(clientApplicationService.getById(CLIENT_APP_ID)).thenReturn(clientApplication("TestApp"));
 
@@ -127,7 +127,7 @@ class PhoneVerificationServiceImplTest {
     void sendVerificationOtp_currentBehavior_deliveryFailureIsSwallowedNotThrown() {
         User user = userWithPhone("+23480000000", false);
         when(phoneVerificationOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+23480000000", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.empty());
+                "+23480000000", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.empty());
         when(otpService.generateOtp(6)).thenReturn("135790");
         when(clientApplicationService.getById(CLIENT_APP_ID)).thenReturn(clientApplication("TestApp"));
         doThrow(new RuntimeException("provider outage"))
@@ -178,7 +178,7 @@ class PhoneVerificationServiceImplTest {
     void verify_noActiveOtpForPhoneAndTenant_throwsOtpInvalid() {
         VerifyOtpRequest request = new VerifyOtpRequest("+23480000000", "654321");
         when(phoneVerificationOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+23480000000", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.empty());
+                "+23480000000", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.verify(request, CLIENT_APP_ID))
                 .isInstanceOfSatisfying(OtpInvalidException.class,
@@ -191,7 +191,7 @@ class PhoneVerificationServiceImplTest {
         PhoneVerificationOtp otp = new PhoneVerificationOtp();
         otp.setUserId(1L);
         when(phoneVerificationOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+23480000000", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
+                "+23480000000", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
         doThrow(new OtpInvalidException("The verification code is invalid."))
                 .when(otpResetEngine).verify(eq(otp), eq("000000"), any());
 
@@ -206,7 +206,7 @@ class PhoneVerificationServiceImplTest {
         PhoneVerificationOtp otp = new PhoneVerificationOtp();
         otp.setUserId(99L);
         when(phoneVerificationOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+23480000000", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
+                "+23480000000", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
         when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.verify(request, CLIENT_APP_ID))
@@ -221,7 +221,7 @@ class PhoneVerificationServiceImplTest {
         otp.setUserId(1L);
         User user = userWithPhone("+23480000000", false);
         when(phoneVerificationOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+23480000000", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
+                "+23480000000", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         ActivationResponse response = service.verify(request, CLIENT_APP_ID);
@@ -317,7 +317,7 @@ class PhoneVerificationServiceImplTest {
         when(userRepository.findByPhoneNumberAndClientApplicationId("+23480000000", CLIENT_APP_ID))
                 .thenReturn(Optional.of(userWithPhone("+23480000000", false)));
         when(phoneVerificationOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+23480000000", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.empty());
+                "+23480000000", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.empty());
         when(otpService.generateOtp(6)).thenReturn("246810");
         when(clientApplicationService.getById(CLIENT_APP_ID)).thenReturn(clientApplication("TestApp"));
 

@@ -1,4 +1,5 @@
 package com.internal.auth.feature.audit.listener;
+import org.springframework.test.context.TestPropertySource;
 
 import com.internal.auth.feature.audit.enums.AuditAction;
 import com.internal.auth.feature.audit.event.UserLoggedInEvent;
@@ -36,10 +37,12 @@ import static org.mockito.Mockito.reset;
  *    {@code ApplicationModules.of(...).verify()} against the "audit"
  *    module (see feature/audit/package-info.java) before either test
  *    method runs, and restricts this test's component scan to just that
- *    module's own packages. If a future change makes
- *    AuditEventListener/AuditServiceImpl reach for something outside
- *    feature.audit without going through the AuditService named
- *    interface, this fails to even start.
+ *    module's own packages. If a future change makes AuditEventListener
+ *    reach for something outside feature.audit without going through the
+ *    {@code event} named interface (fix 3b of fix3modulithboundaries.md -
+ *    callers publish {@code UserLoggedInEvent} directly now; there is no
+ *    AuditService/AuditServiceImpl facade anymore), this fails to even
+ *    start.
  *
  * 2. The two @Test methods cover AuditEventListener's actual documented
  *    behavior: the happy path (an event gets persisted as an audit row),
@@ -57,6 +60,7 @@ import static org.mockito.Mockito.reset;
  * module needs it.
  */
 @ActiveProfiles("test")
+@TestPropertySource(properties = "spring.autoconfigure.exclude=org.redisson.spring.starter.RedissonAutoConfigurationV4")
 @ApplicationModuleTest
 class AuditEventListenerModuleTest {
 

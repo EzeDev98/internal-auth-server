@@ -19,7 +19,7 @@ import com.internal.auth.feature.passwordreset.config.PasswordResetProperties;
 import com.internal.auth.feature.passwordreset.dto.CompletePasswordResetRequest;
 import com.internal.auth.feature.passwordreset.dto.PasswordResetRequestDto;
 import com.internal.auth.feature.passwordreset.dto.PasswordResetResponse;
-import com.internal.auth.feature.passwordreset.enums.PasswordResetStatus;
+import com.internal.auth.common.reset.ResetStatus;
 import com.internal.auth.feature.passwordreset.model.PasswordResetOtp;
 import com.internal.auth.feature.passwordreset.model.PasswordResetToken;
 import com.internal.auth.feature.passwordreset.repository.PasswordResetOtpRepository;
@@ -138,7 +138,7 @@ class PasswordResetServiceImplTest {
         otp.setUserId(100L);
         otp.setClientApplicationId(CLIENT_APPLICATION_ID);
         otp.setPhoneNumber(PHONE_NUMBER);
-        otp.setStatus(PasswordResetStatus.ACTIVE);
+        otp.setStatus(ResetStatus.ACTIVE);
         return otp;
     }
 
@@ -209,7 +209,7 @@ class PasswordResetServiceImplTest {
         when(userRepository.findByPhoneNumberAndClientApplicationId(PHONE_NUMBER, CLIENT_APPLICATION_ID))
                 .thenReturn(Optional.of(user));
         when(passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                PHONE_NUMBER, CLIENT_APPLICATION_ID, PasswordResetStatus.ACTIVE))
+                PHONE_NUMBER, CLIENT_APPLICATION_ID, ResetStatus.ACTIVE))
                 .thenReturn(existingOtp);
         when(otpService.generateOtp(6)).thenReturn(RAW_OTP);
         when(clientApplicationService.getById(CLIENT_APPLICATION_ID)).thenReturn(clientApplication);
@@ -260,7 +260,7 @@ class PasswordResetServiceImplTest {
         when(userRepository.findByPhoneNumberAndClientApplicationId(PHONE_NUMBER, CLIENT_APPLICATION_ID))
                 .thenReturn(Optional.of(buildUser()));
         when(passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                PHONE_NUMBER, CLIENT_APPLICATION_ID, PasswordResetStatus.ACTIVE))
+                PHONE_NUMBER, CLIENT_APPLICATION_ID, ResetStatus.ACTIVE))
                 .thenReturn(Optional.empty());
         when(otpService.generateOtp(6)).thenReturn(RAW_OTP);
         when(clientApplicationService.getById(CLIENT_APPLICATION_ID)).thenReturn(new ClientApplication());
@@ -293,7 +293,7 @@ class PasswordResetServiceImplTest {
     void verifyOtp_validatesPhoneBeforeOtpFormat() {
         VerifyOtpRequest request = new VerifyOtpRequest(PHONE_NUMBER, "123456");
         when(passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                PHONE_NUMBER, CLIENT_APPLICATION_ID, PasswordResetStatus.ACTIVE))
+                PHONE_NUMBER, CLIENT_APPLICATION_ID, ResetStatus.ACTIVE))
                 .thenReturn(Optional.of(buildActiveOtp()));
         when(otpService.generateResetToken()).thenReturn(RAW_RESET_TOKEN);
 
@@ -309,7 +309,7 @@ class PasswordResetServiceImplTest {
     void verifyOtp_noActiveOtp_throwsOtpInvalidException() {
         VerifyOtpRequest request = new VerifyOtpRequest(PHONE_NUMBER, "123456");
         when(passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                PHONE_NUMBER, CLIENT_APPLICATION_ID, PasswordResetStatus.ACTIVE))
+                PHONE_NUMBER, CLIENT_APPLICATION_ID, ResetStatus.ACTIVE))
                 .thenReturn(Optional.empty());
 
         assertThrows(OtpInvalidException.class, () -> passwordResetService.verifyOtp(request, CLIENT_APPLICATION_ID));
@@ -324,7 +324,7 @@ class PasswordResetServiceImplTest {
         VerifyOtpRequest request = new VerifyOtpRequest(PHONE_NUMBER, "000000");
         PasswordResetOtp otpEntity = buildActiveOtp();
         when(passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                PHONE_NUMBER, CLIENT_APPLICATION_ID, PasswordResetStatus.ACTIVE))
+                PHONE_NUMBER, CLIENT_APPLICATION_ID, ResetStatus.ACTIVE))
                 .thenReturn(Optional.of(otpEntity));
         doThrow(new OtpInvalidException("The verification code is invalid."))
                 .when(otpResetEngine).verify(eq(otpEntity), eq("000000"), any());
@@ -341,7 +341,7 @@ class PasswordResetServiceImplTest {
         VerifyOtpRequest request = new VerifyOtpRequest(PHONE_NUMBER, "482913");
         PasswordResetOtp otpEntity = buildActiveOtp();
         when(passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                PHONE_NUMBER, CLIENT_APPLICATION_ID, PasswordResetStatus.ACTIVE))
+                PHONE_NUMBER, CLIENT_APPLICATION_ID, ResetStatus.ACTIVE))
                 .thenReturn(Optional.of(otpEntity));
         when(otpService.generateResetToken()).thenReturn(RAW_RESET_TOKEN);
 

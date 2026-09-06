@@ -1,6 +1,6 @@
 package com.internal.auth.feature.rbac.controller;
 
-import com.internal.auth.config.auth.AuthenticationHelper;
+import com.internal.auth.common.security.AuthenticationHelper;
 import com.internal.auth.config.auth.Roles;
 import com.internal.auth.feature.rbac.service.PermissionEntityService;
 import com.internal.auth.feature.rbac.service.PermissionManagementService;

@@ -1,6 +1,6 @@
 package com.internal.auth.feature.identity.controller;
 
-import com.internal.auth.config.auth.AuthenticationHelper;
+import com.internal.auth.common.security.AuthenticationHelper;
 import com.internal.auth.feature.identity.dto.SetMfaRequest;
 import com.internal.auth.feature.identity.service.MfaAdminService;
 import io.swagger.v3.oas.annotations.tags.Tag;

@@ -1,7 +1,7 @@
 package com.internal.auth.feature.identity.model;
 
 import com.internal.auth.common.reset.ResettableOtp;
-import com.internal.auth.feature.passwordreset.enums.PasswordResetStatus;
+import com.internal.auth.common.reset.ResetStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
  * directly on a successful verify() rather than needing an intermediate
  * ResettableToken phase.
  *
- * status uses PasswordResetStatus (ACTIVE/VERIFIED/EXPIRED/INVALIDATED)
+ * status uses ResetStatus (ACTIVE/VERIFIED/EXPIRED/INVALIDATED)
  * only because ResettableOtp's contract is typed to it - a generic OTP
  * lifecycle state, not something specific to password reset, despite the
  * enum's name.
@@ -65,7 +65,7 @@ public class LoginMfaOtp implements ResettableOtp {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private PasswordResetStatus status;
+    private ResetStatus status;
 
     @CreationTimestamp
     @Column(name = "created_at")

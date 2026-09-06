@@ -20,7 +20,7 @@
 
 DELETE FROM role_permission_group_mapping WHERE sub_permission_group_id IS NOT NULL;
 DELETE FROM user_permission_group WHERE sub_permission_group_id IS NOT NULL;
-TRUNCATE TABLE sub_permission_group;
+DELETE FROM sub_permission_group;
 
 ALTER TABLE sub_permission_group
     DROP COLUMN parent_group_id;

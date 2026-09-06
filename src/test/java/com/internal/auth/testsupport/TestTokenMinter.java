@@ -1,6 +1,6 @@
 package com.internal.auth.testsupport;
 
-import com.internal.auth.config.auth.SelfIssuedAuthorizationServerContext;
+import com.internal.auth.common.security.SelfIssuedAuthorizationServerContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.TestComponent;

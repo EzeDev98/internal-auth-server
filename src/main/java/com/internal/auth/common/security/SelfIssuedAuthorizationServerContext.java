@@ -1,4 +1,4 @@
-package com.internal.auth.config.auth;
+package com.internal.auth.common.security;
 
 import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContext;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;

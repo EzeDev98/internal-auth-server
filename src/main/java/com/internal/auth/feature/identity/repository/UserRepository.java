@@ -23,6 +23,7 @@ import java.util.Optional;
  * below yet - that's the next step, at which point these three should be
  * deleted rather than left as dead, dangerous code.
  */
+@org.springframework.modulith.NamedInterface
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
     Optional<User> findByPhoneNumber(String phoneNumber);

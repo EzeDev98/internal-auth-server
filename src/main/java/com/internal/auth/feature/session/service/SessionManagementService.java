@@ -20,6 +20,7 @@ import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
  * invalidateActiveSessionForUser(userId) instead of round-tripping
  * through an ambiguous username lookup they don't need.
  */
+@org.springframework.modulith.NamedInterface
 public interface SessionManagementService {
     void createSession(Long userId, String phoneNumber, String token);
     void invalidateSession(String token);

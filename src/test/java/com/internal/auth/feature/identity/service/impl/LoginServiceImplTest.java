@@ -8,7 +8,7 @@ import com.internal.auth.common.exception.OtpResendCooldownException;
 import com.internal.auth.common.reset.OtpResetEngine;
 import com.internal.auth.common.reset.OtpService;
 import com.internal.auth.common.reset.delivery.OtpDeliveryService;
-import com.internal.auth.feature.audit.service.AuditService;
+import com.internal.auth.feature.audit.event.UserLoggedInEvent;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.config.LoginMfaProperties;
@@ -19,7 +19,7 @@ import com.internal.auth.feature.identity.model.LoginMfaOtp;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.LoginMfaOtpRepository;
 import com.internal.auth.feature.identity.repository.UserRepository;
-import com.internal.auth.feature.passwordreset.enums.PasswordResetStatus;
+import com.internal.auth.common.reset.ResetStatus;
 import com.internal.auth.feature.rbac.model.Role;
 import com.internal.auth.feature.rbac.repository.UserRolesRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -67,7 +68,7 @@ class LoginServiceImplTest {
     private static final Long CLIENT_APP_ID = 7L;
     private static final String SELF_ISSUER_URI = "https://auth.example.com";
 
-    private final AuditService auditService = mock(AuditService.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
     private final LoginMfaOtpRepository loginMfaOtpRepository = mock(LoginMfaOtpRepository.class);
@@ -86,7 +87,7 @@ class LoginServiceImplTest {
     private final ClientApplicationService clientApplicationService = mock(ClientApplicationService.class);
 
     private final LoginServiceImpl service = new LoginServiceImpl(
-            auditService, userRepository, passwordEncoder, loginMfaOtpRepository, otpService,
+            eventPublisher, userRepository, passwordEncoder, loginMfaOtpRepository, otpService,
             otpDeliveryService, otpResetEngine, loginMfaProperties, redissonClient, userRolesRepository,
             registeredClientRepository, authorizationService, tokenGenerator, authorizationServerSettings,
             clientApplicationService);
@@ -289,7 +290,7 @@ class LoginServiceImplTest {
                 .isInstanceOfSatisfying(AccountDisabledException.class,
                         ex -> assertThat(ex.getMessage()).isEqualTo("This account has been disabled."));
 
-        verifyNoInteractions(auditService, tokenGenerator);
+        verifyNoInteractions(eventPublisher, tokenGenerator);
     }
 
     @Test
@@ -378,7 +379,7 @@ class LoginServiceImplTest {
         when(otpResetEngine.getCooldownBucket(redissonClient, "login-mfa:otp-cooldown:", CLIENT_APP_ID + ":+2348000000001"))
                 .thenReturn(bucket);
         when(loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+2348000000001", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.empty());
+                "+2348000000001", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.empty());
         when(otpService.generateOtp(6)).thenReturn("654321");
         when(clientApplicationService.getById(CLIENT_APP_ID)).thenReturn(clientApplication("TestApp"));
 
@@ -405,7 +406,7 @@ class LoginServiceImplTest {
         assertThat(otpCaptor.getValue().getClientApplicationId()).isEqualTo(CLIENT_APP_ID);
 
         // No token is minted, and login isn't recorded, until verifyLoginOtp() completes.
-        verifyNoInteractions(tokenGenerator, authorizationService, registeredClientRepository, auditService);
+        verifyNoInteractions(tokenGenerator, authorizationService, registeredClientRepository, eventPublisher);
     }
 
     @Test
@@ -453,7 +454,7 @@ class LoginServiceImplTest {
         assertThat(response.isMfaRequired()).isFalse();
         assertThat(response.getAccessToken()).isEqualTo("abc.def.ghi");
 
-        verify(auditService).recordUserLoggedIn(user, CLIENT_APP_ID);
+        verify(eventPublisher).publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), CLIENT_APP_ID));
 
         ArgumentCaptor<OAuth2TokenContext> contextCaptor = ArgumentCaptor.forClass(OAuth2TokenContext.class);
         verify(tokenGenerator).generate(contextCaptor.capture());
@@ -507,7 +508,7 @@ class LoginServiceImplTest {
                 .isInstanceOf(IllegalStateException.class);
 
         // The login was already recorded as successful before minting blew up.
-        verify(auditService).recordUserLoggedIn(user, CLIENT_APP_ID);
+        verify(eventPublisher).publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), CLIENT_APP_ID));
     }
 
     @Test
@@ -579,7 +580,7 @@ class LoginServiceImplTest {
     @Test
     void verifyLoginOtp_noActiveOtpForPhoneAndTenant_throwsOtpInvalidAndNeverVerifies() {
         when(loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+2348000000001", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.empty());
+                "+2348000000001", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.verifyLoginOtp(new VerifyLoginOtpRequest("+2348000000001", "123456"), CLIENT_APP_ID))
                 .isInstanceOfSatisfying(OtpInvalidException.class,
@@ -591,7 +592,7 @@ class LoginServiceImplTest {
     @Test
     void verifyLoginOtp_currentBehavior_lookupIsScopedByClientApplicationIdNeverUnscoped() {
         when(loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+2348000000001", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.empty());
+                "+2348000000001", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.verifyLoginOtp(new VerifyLoginOtpRequest("+2348000000001", "123456"), CLIENT_APP_ID))
                 .isInstanceOf(OtpInvalidException.class);
@@ -605,14 +606,14 @@ class LoginServiceImplTest {
         LoginMfaOtp otp = new LoginMfaOtp();
         otp.setUserId(1L);
         when(loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+2348000000001", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
+                "+2348000000001", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
         doThrow(new OtpInvalidException("The verification code is invalid."))
                 .when(otpResetEngine).verify(eq(otp), eq("000000"), any());
 
         assertThatThrownBy(() -> service.verifyLoginOtp(new VerifyLoginOtpRequest("+2348000000001", "000000"), CLIENT_APP_ID))
                 .isInstanceOf(OtpInvalidException.class);
 
-        verifyNoInteractions(userRepository, auditService, tokenGenerator);
+        verifyNoInteractions(userRepository, eventPublisher, tokenGenerator);
     }
 
     @Test
@@ -620,14 +621,14 @@ class LoginServiceImplTest {
         LoginMfaOtp otp = new LoginMfaOtp();
         otp.setUserId(99L);
         when(loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+2348000000001", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
+                "+2348000000001", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
         when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.verifyLoginOtp(new VerifyLoginOtpRequest("+2348000000001", "654321"), CLIENT_APP_ID))
                 .isInstanceOfSatisfying(InvalidCredentialsException.class,
                         ex -> assertThat(ex.getMessage()).isEqualTo("Username or password is incorrect"));
 
-        verifyNoInteractions(auditService, tokenGenerator);
+        verifyNoInteractions(eventPublisher, tokenGenerator);
     }
 
     @Test
@@ -636,7 +637,7 @@ class LoginServiceImplTest {
         LoginMfaOtp otp = new LoginMfaOtp();
         otp.setUserId(user.getId());
         when(loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+2348000000001", CLIENT_APP_ID, PasswordResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
+                "+2348000000001", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         stubSuccessfulMinting(user, new PlainToken("otp-verified-token", Instant.now(), Instant.now().plusSeconds(60)));
 
@@ -649,6 +650,6 @@ class LoginServiceImplTest {
         assertThat(response.isMfaRequired()).isFalse();
         assertThat(response.getAccessToken()).isEqualTo("otp-verified-token");
 
-        verify(auditService).recordUserLoggedIn(user, CLIENT_APP_ID);
+        verify(eventPublisher).publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), CLIENT_APP_ID));
     }
 }

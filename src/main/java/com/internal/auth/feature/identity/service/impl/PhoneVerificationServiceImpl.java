@@ -15,7 +15,7 @@ import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.PhoneVerificationOtpRepository;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.identity.service.PhoneVerificationService;
-import com.internal.auth.feature.passwordreset.enums.PasswordResetStatus;
+import com.internal.auth.common.reset.ResetStatus;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
@@ -67,7 +67,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
 
             otpResetEngine.invalidateExisting(
                     phoneVerificationOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                            phoneNumber, user.getClientApplicationId(), PasswordResetStatus.ACTIVE),
+                            phoneNumber, user.getClientApplicationId(), ResetStatus.ACTIVE),
                     phoneVerificationOtpRepository::save);
 
             String rawOtp = otpService.generateOtp(properties.getOtpLength());
@@ -96,7 +96,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
 
         String phoneNumber = request.getPhoneNumber();
         PhoneVerificationOtp otp = phoneVerificationOtpRepository
-                .findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, PasswordResetStatus.ACTIVE)
+                .findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, ResetStatus.ACTIVE)
                 .orElseThrow(() -> new OtpInvalidException("The verification code is invalid."));
 
         otpResetEngine.verify(otp, request.getOtp(), phoneVerificationOtpRepository::save);

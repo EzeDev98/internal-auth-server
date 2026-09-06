@@ -14,7 +14,7 @@ import com.internal.auth.feature.passwordreset.config.PasswordResetProperties;
 import com.internal.auth.feature.passwordreset.dto.CompletePasswordResetRequest;
 import com.internal.auth.feature.passwordreset.dto.PasswordResetRequestDto;
 import com.internal.auth.feature.passwordreset.dto.PasswordResetResponse;
-import com.internal.auth.feature.passwordreset.enums.PasswordResetStatus;
+import com.internal.auth.common.reset.ResetStatus;
 import com.internal.auth.feature.passwordreset.model.PasswordResetOtp;
 import com.internal.auth.feature.passwordreset.model.PasswordResetToken;
 import com.internal.auth.feature.passwordreset.repository.PasswordResetOtpRepository;
@@ -109,7 +109,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         if (userOptional.isPresent()) {
             User user = userOptional.get();
             otpResetEngine.invalidateExisting(
-                    passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, PasswordResetStatus.ACTIVE),
+                    passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, ResetStatus.ACTIVE),
                     passwordResetOtpRepository::save);
 
             String rawOtp = otpService.generateOtp(properties.getOtp().getLength());
@@ -142,7 +142,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         resetValidator.validateOtpFormat(request.getOtp(), properties.getOtp().getLength());
 
         String phoneNumber = request.getPhoneNumber();
-        PasswordResetOtp otpEntity = passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, PasswordResetStatus.ACTIVE)
+        PasswordResetOtp otpEntity = passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, ResetStatus.ACTIVE)
                 .orElseThrow(() -> new OtpInvalidException("The verification code is invalid."));
 
         otpResetEngine.verify(otpEntity, request.getOtp(), passwordResetOtpRepository::save);

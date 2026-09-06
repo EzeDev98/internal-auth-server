@@ -13,13 +13,19 @@
  * stay unmoduled ("free") code for now; giving them the same treatment is
  * a separate, larger effort.
  *
- * Only the {@code service} sub-package is exposed as a named interface
- * (see its own package-info.java) - that's AuditService, the intentional
- * facade documented on that interface itself. Everything else here
- * (repository, model, event, enums, listener) stays internal to the
- * module; nothing outside this package should ever construct an AuditLog,
- * publish a UserLoggedInEvent directly, or call AuditLogRepository - see
- * AuditService's Javadoc for why that split exists.
+ * Only the {@code event} sub-package is exposed as a named interface (see
+ * its own package-info.java, fix 3b of fix3modulithboundaries.md) - business
+ * services publish {@code UserLoggedInEvent} directly via the standard
+ * {@code ApplicationEventPublisher} bean. There used to be a {@code service}
+ * facade (AuditService) wrapping that publish call, but its
+ * recordUserLoggedIn(User, Long) method took feature.identity's User
+ * entity as a parameter, which made this module depend back on feature -
+ * a real cycle against ApplicationModules.verify(). Removed rather than
+ * fixed in place, since the facade added no behavior beyond the publish
+ * call it wrapped. Everything else here (repository, model, enums,
+ * listener) stays internal to the module; nothing outside this package
+ * should ever construct an AuditLog or call AuditLogRepository directly -
+ * see AuditEventListener's Javadoc for why it's the sole writer.
  */
 @org.springframework.modulith.ApplicationModule
 package com.internal.auth.feature.audit;

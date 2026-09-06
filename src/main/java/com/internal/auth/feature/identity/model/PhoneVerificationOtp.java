@@ -1,7 +1,7 @@
 package com.internal.auth.feature.identity.model;
 
 import com.internal.auth.common.reset.ResettableOtp;
-import com.internal.auth.feature.passwordreset.enums.PasswordResetStatus;
+import com.internal.auth.common.reset.ResetStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -58,7 +58,7 @@ public class PhoneVerificationOtp implements ResettableOtp {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private PasswordResetStatus status;
+    private ResetStatus status;
 
     @CreationTimestamp
     @Column(name = "created_at")
