@@ -29,7 +29,7 @@ import java.time.LocalDateTime;
  * clientApplicationId follows the same multi-tenant scoping convention as
  * every table added since Step 8/V8 - see User's class Javadoc.
  *
- * action stores {@code AuditAction.name()} as a plain string rather than a
+ * action stores {@code AuditAction#name()} as a plain string rather than a
  * DB-level enum type, so adding a new AuditAction value never requires a
  * migration.
  */
