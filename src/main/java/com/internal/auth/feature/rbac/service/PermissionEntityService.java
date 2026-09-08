@@ -12,6 +12,7 @@ public interface PermissionEntityService {
     SubGroupCreationResponse createSubGroup(String groupName, String description, String parentGroupName);
     BaseResponse getPermissionGroupUsersByGroupName(String groupName);
     void deleteSuperGroup(String groupName);
+    void deleteSubGroup(String parentGroupName, String subGroupName);
     BaseResponse getSubGroupByName(String parentGroupName, String subGroupName);
     BaseResponse getSubPermissionGroupUsersByGroupName(String superGroupName, String subGroupName);
     BaseResponse retrieveUserGroups(String username);

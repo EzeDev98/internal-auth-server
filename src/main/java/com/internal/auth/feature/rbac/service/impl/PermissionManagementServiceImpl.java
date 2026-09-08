@@ -395,4 +395,31 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
             throw PermissionException.internalError("Unexpected error deleting group: " + groupName + " — " + ex.getMessage());
         }
     }
+
+    /**
+     * Step 2D (React Admin Client plan v4): fixes "only parent-group delete
+     * exists today" - deleteSuperGroup above cascades and removes an entire
+     * parent group plus every subgroup under it; this deletes exactly one
+     * subgroup, leaving the parent and its other subgroups untouched.
+     */
+    @Override
+    @Transactional
+    public BaseResponse deleteSubGroup(String parentGroupName, String subGroupName) {
+
+        if (StringUtils.isBlank(parentGroupName) || StringUtils.isBlank(subGroupName)) {
+            throw PermissionException.emptyField("Parent group name and sub group name are required");
+        }
+
+        parentGroupName = parentGroupName.toLowerCase().trim();
+        subGroupName = subGroupName.toLowerCase().trim();
+
+        try {
+            permissionEntityService.deleteSubGroup(parentGroupName, subGroupName);
+            return new BaseResponse(HttpStatus.OK.value(), "Subgroup deleted successfully: " + subGroupName);
+        } catch (PermissionException e) {
+            throw e;
+        } catch (Exception ex) {
+            throw PermissionException.internalError("Unexpected error deleting subgroup: " + subGroupName + " — " + ex.getMessage());
+        }
+    }
 }

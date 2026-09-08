@@ -39,4 +39,13 @@ public interface UserRolesRepository extends JpaRepository<UserRole, Long> {
      */
     @Query("SELECT COUNT(userRole) > 0 FROM UserRole userRole " + "JOIN userRole.role role " + "WHERE role.roleName = :roleName")
     boolean existsByRoleRoleName(@Param("roleName") String roleName);
+
+    /**
+     * Step 2C (React Admin Client plan v4): backs the Role - Detail
+     * screen's "Users in role" tab (GET ${app.title}/roles/{id}). Scoped
+     * by the role's numeric id rather than roleName, consistent with
+     * findRolesByUserId's tenant-safety rationale above.
+     */
+    @Query("SELECT DISTINCT userRole.user FROM UserRole userRole WHERE userRole.role.id = :roleId")
+    List<User> findUsersByRoleId(@Param("roleId") Long roleId);
 }

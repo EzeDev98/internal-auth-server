@@ -181,6 +181,22 @@ public class EntityUtilityService {
         permissionGroupsRepository.delete(parentGroup);
     }
 
+    /**
+     * Step 2D (React Admin Client plan v4): fixes "only parent-group delete
+     * exists today" - unlike deleteSuperGroup above (which cascades and
+     * removes the whole parent plus every subgroup under it), this removes
+     * exactly one subgroup. Reuses getSubGroup's existing validation (both
+     * names exist, and subGroupName is actually a child of parentGroupName)
+     * rather than duplicating it.
+     */
+    public void deleteSubGroup(String parentGroupName, String subGroupName) {
+        SubPermissionGroup subGroup = getSubGroup(parentGroupName, subGroupName);
+
+        rolePermissionGroupMappingRepository.deleteAllBySubPermissionGroup(subGroup);
+        userPermissionGroupRepository.deleteAllBySubPermissionGroup(subGroup);
+        subPermissionGroupRepository.delete(subGroup);
+    }
+
     private void deleteAllSubGroups(PermissionGroup parentGroup) {
         rolePermissionGroupMappingRepository.deleteAllByParentGroup(parentGroup);
         userPermissionGroupRepository.deleteAllByParentGroup(parentGroup);

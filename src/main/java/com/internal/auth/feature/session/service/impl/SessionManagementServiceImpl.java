@@ -4,6 +4,8 @@ import com.internal.auth.common.crypto.TokenHasher;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
+import com.internal.auth.feature.session.dto.AdminSessionSummaryResponse;
+import com.internal.auth.feature.session.dto.PagedAdminSessionsResponse;
 import com.internal.auth.feature.session.model.UserSession;
 import com.internal.auth.feature.session.repository.UserSessionRepository;
 import com.internal.auth.feature.session.service.SessionManagementService;
@@ -11,9 +13,14 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.internal.auth.common.constant.AppConstant.*;
 
@@ -66,6 +73,20 @@ public class SessionManagementServiceImpl implements SessionManagementService {
     @Override
     @Transactional
     public void createSession(Long userId, String phoneNumber, String token) {
+        createSession(userId, phoneNumber, token, null, null);
+    }
+
+    /**
+     * Step 2E (React Admin Client plan v4): same as the three-arg overload
+     * above, plus the caller's IP/User-Agent, captured for the admin
+     * Sessions - List screen this backs. The three-arg overload delegates
+     * here with both null, so JwtSessionTrackingFilter is the only caller
+     * that needs to change - every other existing caller/test is
+     * unaffected.
+     */
+    @Override
+    @Transactional
+    public void createSession(Long userId, String phoneNumber, String token, String ipAddress, String userAgent) {
         userSessionRepository.findByUserIdAndIsActiveTrue(userId)
                 .ifPresent(existing -> closeSession(existing, REPLACED_BY_NEW_LOGIN));
 
@@ -73,6 +94,8 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         session.setUserId(userId);
         session.setPhoneNumber(phoneNumber);
         session.setTokenHash(tokenHasher.sha256Hex(token));
+        session.setIpAddress(ipAddress);
+        session.setUserAgent(userAgent);
         session.setActive(true);
         session.setCreatedAt(LocalDateTime.now());
 
@@ -152,6 +175,43 @@ public class SessionManagementServiceImpl implements SessionManagementService {
                     }
                     return true;
                 }).orElse(false);
+    }
+
+    private static final Long NO_MATCHING_USER_ID = -1L;
+
+    @Override
+    @Transactional
+    public PagedAdminSessionsResponse listSessions(String username, Long clientApplicationId, String ipAddress, String device, Boolean active, Pageable pageable) {
+        Long userId = null;
+        if (username != null) {
+            userId = userRepository.findByUsernameAndClientApplicationId(username, clientApplicationId)
+                    .map(User::getId)
+                    .orElse(NO_MATCHING_USER_ID);
+        }
+
+        String normalizedIp = (ipAddress == null || ipAddress.isBlank()) ? null : ipAddress.trim();
+        String normalizedDevice = (device == null || device.isBlank()) ? null : device.trim();
+
+        Page<UserSession> page = userSessionRepository.searchForAdmin(userId, active, normalizedIp, normalizedDevice, pageable);
+
+        List<Long> userIds = page.getContent().stream().map(UserSession::getUserId).distinct().toList();
+        Map<Long, String> usernamesById = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername));
+
+        List<AdminSessionSummaryResponse> content = page.getContent().stream()
+                .map(session -> new AdminSessionSummaryResponse(
+                        session.getId(),
+                        session.getUserId(),
+                        usernamesById.get(session.getUserId()),
+                        session.getIpAddress(),
+                        session.getUserAgent(),
+                        session.isActive(),
+                        session.getCreatedAt(),
+                        session.getEndedAt(),
+                        session.getEndReason()))
+                .toList();
+
+        return new PagedAdminSessionsResponse(content, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
     private void closeSession(UserSession session, String reason) {

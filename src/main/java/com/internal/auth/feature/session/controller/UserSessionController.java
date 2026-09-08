@@ -1,20 +1,25 @@
 package com.internal.auth.feature.session.controller;
 
 import com.internal.auth.common.response.InternalAuthApiResponse;
+import com.internal.auth.common.exception.BadRequestException;
 
 import com.internal.auth.config.auth.Roles;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
+import com.internal.auth.feature.session.dto.PagedAdminSessionsResponse;
 import com.internal.auth.feature.session.service.SessionManagementService;
 import com.internal.auth.common.constant.AppConstant;
 import com.internal.auth.common.util.RateLimiterService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -66,4 +71,23 @@ public class UserSessionController {
         InvalidatedSessionResponse response = sessionService.invalidateUserSessionByAdmin(username, client.getId());
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
+
+    @Operation(method = "GET", summary = "List sessions", description = "Paginated, filterable session directory. username (with clientId) filters by user; ipAddress and device match as a substring.")
+    @PreAuthorize(Roles.HAS_ADMIN)
+    @GetMapping("/admin/sessions")
+    public ResponseEntity<InternalAuthApiResponse<PagedAdminSessionsResponse>> listSessions(
+            @RequestParam(required = false) String username,
+            @RequestParam(required = false) String clientId,
+            @RequestParam(required = false) String ipAddress,
+            @RequestParam(required = false) String device,
+            @RequestParam(required = false) Boolean active,
+            @PageableDefault(size = 20, sort = "id") Pageable pageable) {
+        if (username != null && clientId == null) {
+            throw new BadRequestException("clientId is required when filtering by username");
+        }
+        Long clientApplicationId = clientId == null ? null : clientApplicationService.getEnabledClientByClientId(clientId).getId();
+        PagedAdminSessionsResponse response = sessionService.listSessions(username, clientApplicationId, ipAddress, device, active, pageable);
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response));
+    }
+
 }

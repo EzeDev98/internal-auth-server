@@ -3,8 +3,13 @@ package com.internal.auth.feature.client.service.impl;
 import com.internal.auth.common.exception.BadRequestException;
 import com.internal.auth.common.exception.ClientAlreadyExistsException;
 import com.internal.auth.common.exception.InvalidClientCredentialsException;
+import com.internal.auth.feature.client.dto.ClientApplicationDetailResponse;
+import com.internal.auth.feature.client.dto.ClientApplicationSummaryResponse;
 import com.internal.auth.feature.client.dto.CreateClientApplicationRequest;
 import com.internal.auth.feature.client.dto.CreateClientApplicationResponse;
+import com.internal.auth.feature.client.dto.PagedClientApplicationsResponse;
+import com.internal.auth.feature.client.dto.UpdateClientApplicationRequest;
+import com.internal.auth.feature.client.enums.ClientType;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.repository.ClientApplicationRepository;
 import com.internal.auth.feature.client.service.ClientApplicationService;
@@ -12,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -232,6 +240,77 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
             return clientApplicationRepository.findByClientId(internalAdminClientId)
                     .orElseThrow(() -> new BadRequestException("Failed to resolve internal admin client application after a create-vs-create race"));
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PagedClientApplicationsResponse listClients(Boolean enabled, ClientType type, Pageable pageable) {
+        Boolean publicOnly = type == null ? null : type == ClientType.PUBLIC;
+        Page<ClientApplication> page = clientApplicationRepository.searchForAdmin(enabled, publicOnly, pageable);
+        List<ClientApplicationSummaryResponse> content = page.getContent().stream()
+                .map(this::toSummary)
+                .toList();
+        return new PagedClientApplicationsResponse(content, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ClientApplicationDetailResponse getClientDetail(String clientId) {
+        ClientApplication client = clientApplicationRepository.findByClientId(clientId)
+                .orElseThrow(() -> new BadRequestException("Unknown client application"));
+        return toDetail(client);
+    }
+
+    @Override
+    @Transactional
+    public ClientApplicationDetailResponse updateClient(String clientId, UpdateClientApplicationRequest request) {
+        ClientApplication client = clientApplicationRepository.findByClientId(clientId)
+                .orElseThrow(() -> new BadRequestException("Unknown client application"));
+
+        if (request.getName() != null) {
+            client.setName(require(request.getName(), "name cannot be blank"));
+        }
+        if (request.getDescription() != null) {
+            client.setDescription(request.getDescription());
+        }
+        if (request.getRedirectUris() != null) {
+            client.setRedirectUris(new HashSet<>(request.getRedirectUris()));
+        }
+        if (request.getScopes() != null) {
+            client.setScopes(new HashSet<>(request.getScopes()));
+        }
+        if (request.getEnabled() != null) {
+            client.setEnabled(request.getEnabled());
+        }
+
+        ClientApplication saved = clientApplicationRepository.save(client);
+        log.info("Client application updated, id={}, clientId={}", saved.getId(), saved.getClientId());
+        return toDetail(saved);
+    }
+
+    private ClientApplicationSummaryResponse toSummary(ClientApplication client) {
+        return new ClientApplicationSummaryResponse(
+                client.getId(),
+                client.getClientId(),
+                client.getName(),
+                client.getClientSecretHash() == null ? ClientType.PUBLIC : ClientType.CONFIDENTIAL,
+                client.isEnabled(),
+                client.getCreatedAt());
+    }
+
+    private ClientApplicationDetailResponse toDetail(ClientApplication client) {
+        return new ClientApplicationDetailResponse(
+                client.getId(),
+                client.getClientId(),
+                client.getName(),
+                client.getDescription(),
+                client.getRedirectUris(),
+                client.getScopes(),
+                client.getGrantTypes(),
+                client.getClientSecretHash() == null ? ClientType.PUBLIC : ClientType.CONFIDENTIAL,
+                client.isEnabled(),
+                client.getCreatedAt(),
+                client.getUpdatedAt());
     }
 
 }

@@ -1,6 +1,8 @@
 package com.internal.auth.feature.session.service;
 
 import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
+import com.internal.auth.feature.session.dto.PagedAdminSessionsResponse;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Step 11B: invalidateUserSessionByAdmin takes username (resolved to
@@ -23,6 +25,15 @@ import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
 @org.springframework.modulith.NamedInterface
 public interface SessionManagementService {
     void createSession(Long userId, String phoneNumber, String token);
+
+    /**
+     * Step 2E (React Admin Client plan v4): same as the three-arg overload
+     * above, plus the caller's IP/User-Agent, captured for the admin
+     * Sessions - List screen this backs (see UserSession's class Javadoc
+     * on ipAddress/userAgent). The three-arg overload delegates here with
+     * both null.
+     */
+    void createSession(Long userId, String phoneNumber, String token, String ipAddress, String userAgent);
     void invalidateSession(String token);
 
     /**
@@ -34,6 +45,17 @@ public interface SessionManagementService {
     void invalidateActiveSessionForUser(Long userId);
 
     InvalidatedSessionResponse invalidateUserSessionByAdmin(String username, Long clientApplicationId);
+
+    /**
+     * Step 2E (React Admin Client plan v4): backs GET
+     * ${app.title}/admin/sessions. username is resolved against
+     * clientApplicationId the same way invalidateUserSessionByAdmin above
+     * does - pass both null to list across every user. ipAddress/device
+     * match as a case-insensitive substring; active filters on session
+     * status. A username that doesn't resolve to any user yields an empty
+     * page rather than an error.
+     */
+    PagedAdminSessionsResponse listSessions(String username, Long clientApplicationId, String ipAddress, String device, Boolean active, Pageable pageable);
     void updateSessionOnRefresh(Long userId, String newToken);
     boolean hasActiveSession(Long userId);
 }

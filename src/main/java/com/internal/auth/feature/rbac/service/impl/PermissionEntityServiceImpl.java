@@ -147,6 +147,17 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
     }
 
     @Override
+    public void deleteSubGroup(String parentGroupName, String subGroupName) {
+        try {
+            entityUtils.deleteSubGroup(parentGroupName, subGroupName);
+        } catch (PermissionException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw PermissionException.internalError("An unexpected error occurred during subgroup deletion");
+        }
+    }
+
+    @Override
     public BaseResponse getSubGroupByName(String parentGroupName, String subGroupName) {
 
         if (StringUtils.isBlank(parentGroupName) || StringUtils.isBlank(subGroupName)) {

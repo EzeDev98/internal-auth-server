@@ -60,4 +60,18 @@ public class UserSession {
     @Column(name = "end_reason", length = 50)
     private String endReason;
 
+    /**
+     * Step 2E (React Admin Client plan v4): the caller's IP and User-Agent
+     * at session-creation time (see JwtSessionTrackingFilter), captured
+     * for the admin Sessions - List screen's filters. Both nullable -
+     * informational-only, same status as phoneNumber above (see this
+     * class's Javadoc) - and absent on every session row created before
+     * this step.
+     */
+    @Column(name = "ip_address", length = 45)
+    private String ipAddress;
+
+    @Column(name = "user_agent", length = 500)
+    private String userAgent;
+
 }

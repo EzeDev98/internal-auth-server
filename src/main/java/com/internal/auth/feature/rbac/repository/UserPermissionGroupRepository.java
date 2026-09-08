@@ -27,6 +27,14 @@ public interface UserPermissionGroupRepository extends JpaRepository<UserPermiss
     @Query("DELETE FROM UserPermissionGroup upg WHERE upg.subPermissionGroup.parentGroup = :parentGroup")
     void deleteAllByParentGroup(@Param("parentGroup") PermissionGroup parentGroup);
 
+    /**
+     * Step 2D (React Admin Client plan v4): backs deleteSubGroup - removes
+     * only the UserPermissionGroup rows tied to one specific subgroup, as
+     * opposed to deleteAllByParentGroup above (every subgroup under a
+     * parent, used when the whole parent group is deleted).
+     */
+    void deleteAllBySubPermissionGroup(SubPermissionGroup subPermissionGroup);
+
     List<UserPermissionGroup> findAllByUser(User user);
 
     @Query("SELECT DISTINCT userPermissionGroup.permissionGroup FROM UserPermissionGroup userPermissionGroup " +

@@ -1,8 +1,13 @@
 package com.internal.auth.feature.client.service;
 
+import com.internal.auth.feature.client.dto.ClientApplicationDetailResponse;
 import com.internal.auth.feature.client.dto.CreateClientApplicationRequest;
 import com.internal.auth.feature.client.dto.CreateClientApplicationResponse;
+import com.internal.auth.feature.client.dto.PagedClientApplicationsResponse;
+import com.internal.auth.feature.client.dto.UpdateClientApplicationRequest;
+import com.internal.auth.feature.client.enums.ClientType;
 import com.internal.auth.feature.client.model.ClientApplication;
+import org.springframework.data.domain.Pageable;
 
 public interface ClientApplicationService {
 
@@ -92,5 +97,35 @@ public interface ClientApplicationService {
      * nothing ever authenticates against it via HTTP Basic.
      */
     ClientApplication getOrCreateInternalAdminClient();
+
+    /**
+     * Step 2B (React Admin Client plan v4): backs GET ${app.title}/client-applications.
+     * "type" filters on the same PUBLIC/CONFIDENTIAL distinction
+     * ClientApplication.clientSecretHash already encodes (null = PUBLIC,
+     * present = CONFIDENTIAL) rather than a stored column - this entity has
+     * no separate "type" field. Pass null for either filter to mean "don't
+     * filter on this".
+     */
+    PagedClientApplicationsResponse listClients(Boolean enabled, ClientType type, Pageable pageable);
+
+    /**
+     * Single client detail for GET ${app.title}/client-applications/{clientId}.
+     * Never includes the secret or its hash - only ever returned once, at
+     * creation/rotation time (see CreateClientApplicationResponse). Looks
+     * up regardless of enabled state - an admin must be able to view (and
+     * re-enable) a disabled client.
+     */
+    ClientApplicationDetailResponse getClientDetail(String clientId);
+
+    /**
+     * Admin edits for PATCH ${app.title}/client-applications/{clientId}:
+     * name, description, redirectUris, scopes, enabled. grantTypes and the
+     * secret are not editable here - grantTypes wasn't in the plan's Step
+     * 2B scope, and secret rotation already has its own dedicated endpoint
+     * (POST .../rotate-secret). Null fields on request are left unchanged;
+     * redirectUris/scopes are replaced wholesale when non-null (empty set
+     * clears them), not merged.
+     */
+    ClientApplicationDetailResponse updateClient(String clientId, UpdateClientApplicationRequest request);
 
 }

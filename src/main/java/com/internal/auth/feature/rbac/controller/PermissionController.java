@@ -2,8 +2,19 @@ package com.internal.auth.feature.rbac.controller;
 
 import com.internal.auth.common.security.AuthenticationHelper;
 import com.internal.auth.config.auth.Roles;
+import com.internal.auth.feature.rbac.response.RoleResponse;
+import com.internal.auth.feature.rbac.response.GroupCreationResponse;
+import com.internal.auth.feature.rbac.response.SubGroupCreationResponse;
+import com.internal.auth.feature.rbac.response.UserRoleResponse;
+import com.internal.auth.feature.rbac.response.RoleAndPermissionGroupMappingResponse;
+import com.internal.auth.feature.rbac.response.GroupSummaryResponse;
+import com.internal.auth.feature.rbac.response.SubGroupSummaryResponse;
+import com.internal.auth.feature.rbac.service.GroupQueryService;
+import com.internal.auth.feature.rbac.response.RoleDetailResponse;
+import com.internal.auth.feature.rbac.response.RoleSummaryResponse;
 import com.internal.auth.feature.rbac.service.PermissionEntityService;
 import com.internal.auth.feature.rbac.service.PermissionManagementService;
+import com.internal.auth.feature.rbac.service.RoleQueryService;
 import com.internal.auth.common.response.BaseResponse;
 import com.internal.auth.feature.rbac.dto.*;
 import com.internal.auth.common.response.InternalAuthApiResponse;
@@ -17,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -32,6 +44,10 @@ public class PermissionController {
 
     private final AuthenticationHelper authenticationHelper;
 
+    private final GroupQueryService groupQueryService;
+
+    private final RoleQueryService roleQueryService;
+
     /**
      * Stage 1 assessment, "Immediate Next Steps" #3 - the service-to-service
      * role-assignment endpoint below had no allow-list at all: any caller
@@ -46,10 +62,14 @@ public class PermissionController {
     public PermissionController(PermissionManagementService permissionService,
                                  PermissionEntityService permissionEntityService,
                                  AuthenticationHelper authenticationHelper,
+                                 GroupQueryService groupQueryService,
+                                 RoleQueryService roleQueryService,
                                  @Value("${app.service-role-assignment.allowed-roles:}") String serviceAssignableRolesRaw) {
         this.permissionService = permissionService;
         this.permissionEntityService = permissionEntityService;
         this.authenticationHelper = authenticationHelper;
+        this.groupQueryService = groupQueryService;
+        this.roleQueryService = roleQueryService;
         this.serviceAssignableRoles = parseAllowedRoles(serviceAssignableRolesRaw);
     }
 
@@ -64,31 +84,41 @@ public class PermissionController {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
+    /**
+     * Step 2F (React Admin Client plan v4), scoped to the create/assign
+     * endpoints only. permissionService.createRole still returns
+     * BaseResponse internally, unchanged - PermissionManagementService's
+     * interface and every test exercising it are untouched by this pass.
+     * PermissionEntityServiceImpl always sets this call's data to the
+     * RoleResponse it just built, so the cast below is safe, not a guess.
+     */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Create a new role", description = "Creates a role in the local database. Roles define permissions that can be assigned to users or groups.")
     @PostMapping("/roles")
-    public ResponseEntity<InternalAuthApiResponse<Object>> createRole(@RequestBody RolesRequest request) {
+    public ResponseEntity<InternalAuthApiResponse<RoleResponse>> createRole(@RequestBody RolesRequest request) {
         BaseResponse roleResponse = permissionService.createRole(request.getRoleName(), request.getDescription());
         return ResponseEntity.status(roleResponse.getStatusCode())
-                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), roleResponse.getData()));
+                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), (RoleResponse) roleResponse.getData()));
     }
 
+    /** Step 2F, same rationale as createRole above. */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Create a parent group", description = "Creates a top-level group in the database. Parent groups can contain subgroups and users.")
     @PostMapping("/groups")
-    public ResponseEntity<InternalAuthApiResponse<Object>> createSuperGroup(@RequestBody GroupRequest request) {
+    public ResponseEntity<InternalAuthApiResponse<GroupCreationResponse>> createSuperGroup(@RequestBody GroupRequest request) {
         BaseResponse groupResponse = permissionService.createSuperGroup(request.getGroupName(), request.getDescription());
         return ResponseEntity.status(groupResponse.getStatusCode())
-                .body(InternalAuthApiResponse.success(groupResponse.getDescription(), groupResponse.getData()));
+                .body(InternalAuthApiResponse.success(groupResponse.getDescription(), (GroupCreationResponse) groupResponse.getData()));
     }
 
+    /** Step 2F, same rationale as createRole above. */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Create a subgroup", description = "Creates a child group under a specified, already-existing parent group.")
     @PostMapping("/groups/{parentGroupName}/subgroups")
-    public ResponseEntity<InternalAuthApiResponse<Object>> createSubGroup(@PathVariable String parentGroupName, @RequestBody SubGroupRequest request) {
+    public ResponseEntity<InternalAuthApiResponse<SubGroupCreationResponse>> createSubGroup(@PathVariable String parentGroupName, @RequestBody SubGroupRequest request) {
         BaseResponse groupResponse = permissionService.createSubGroup(request.getGroupName(), request.getDescription(), parentGroupName);
         return ResponseEntity.status(groupResponse.getStatusCode())
-                .body(InternalAuthApiResponse.success(groupResponse.getDescription(), groupResponse.getData()));
+                .body(InternalAuthApiResponse.success(groupResponse.getDescription(), (SubGroupCreationResponse) groupResponse.getData()));
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
@@ -103,31 +133,38 @@ public class PermissionController {
                 .body(InternalAuthApiResponse.success(roleResponse.getDescription(), roleResponse.getData()));
     }
 
+    /** Step 2F, same rationale as createRole above. */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Assign role to user", description = "Grants a specific role to a user and records the assignment in the local database.")
     @PostMapping("/users/{username}/roles")
-    public ResponseEntity<InternalAuthApiResponse<Object>> assignRoleToUser(@PathVariable String username, @RequestBody AssignRoleRequest request) {
+    public ResponseEntity<InternalAuthApiResponse<UserRoleResponse>> assignRoleToUser(@PathVariable String username, @RequestBody AssignRoleRequest request) {
         BaseResponse roleResponse = permissionService.assignRoleToUser(username, request.getRoleName());
         return ResponseEntity.status(roleResponse.getStatusCode())
-                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), roleResponse.getData()));
+                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), (UserRoleResponse) roleResponse.getData()));
     }
 
+    /**
+     * Step 2F, same rationale as createRole above. Note the idempotent
+     * "already assigned" branch in PermissionManagementServiceImpl sets
+     * data to null - casting null is safe, so this stays typed either way.
+     */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Assign role to parent group", description = "Assigns a role to all members of a parent group. All users in the group inherit the role.")
     @PostMapping("/groups/{groupName}/roles")
-    public ResponseEntity<InternalAuthApiResponse<Object>> assignRoleToGroup(@PathVariable String groupName, @RequestBody AssignRoleToGroupRequest request) {
+    public ResponseEntity<InternalAuthApiResponse<RoleAndPermissionGroupMappingResponse>> assignRoleToGroup(@PathVariable String groupName, @RequestBody AssignRoleToGroupRequest request) {
         BaseResponse roleResponse = permissionService.assignRoleToGroup(groupName, request.getRoleName());
         return ResponseEntity.status(roleResponse.getStatusCode())
-                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), roleResponse.getData()));
+                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), (RoleAndPermissionGroupMappingResponse) roleResponse.getData()));
     }
 
+    /** Step 2F, same rationale as createRole above. */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Assign role to subgroup", description = "Assigns a role to a specific subgroup within a parent group hierarchy.")
     @PostMapping("/groups/{parentGroupName}/subgroups/{subGroupName}/roles")
-    public ResponseEntity<InternalAuthApiResponse<Object>> assignRoleToSubGroup(@PathVariable String parentGroupName, @PathVariable String subGroupName, @RequestBody AssignRoleToSubGroupRequest request) {
+    public ResponseEntity<InternalAuthApiResponse<RoleAndPermissionGroupMappingResponse>> assignRoleToSubGroup(@PathVariable String parentGroupName, @PathVariable String subGroupName, @RequestBody AssignRoleToSubGroupRequest request) {
         BaseResponse roleResponse = permissionService.assignRoleToSubGroup(parentGroupName, subGroupName, request.getRoleName());
         return ResponseEntity.status(roleResponse.getStatusCode())
-                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), roleResponse.getData()));
+                .body(InternalAuthApiResponse.success(roleResponse.getDescription(), (RoleAndPermissionGroupMappingResponse) roleResponse.getData()));
     }
 
     @PreAuthorize(Roles.HAS_ADMIN)
@@ -226,6 +263,81 @@ public class PermissionController {
     @GetMapping("/users/{username}/roles")
     public ResponseEntity<InternalAuthApiResponse<Object>> fetchUserRoles(@PathVariable String username) {
         BaseResponse response = permissionEntityService.retrieveUserRoles(username);
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
+    }
+
+    /**
+     * Step 2C (React Admin Client plan v4). Deliberately typed
+     * (InternalAuthApiResponse<List<RoleSummaryResponse>>) rather than the
+     * untyped Object/BaseResponse pattern the rest of this controller still
+     * uses - that cleanup is Step 2F's job for the existing endpoints above;
+     * this is new code, so it starts typed.
+     */
+    @PreAuthorize(Roles.HAS_ADMIN)
+    @Operation(summary = "List roles", description = "Lists every role in the local database.")
+    @GetMapping("/roles")
+    public ResponseEntity<InternalAuthApiResponse<List<RoleSummaryResponse>>> listRoles() {
+        List<RoleSummaryResponse> response = roleQueryService.listRoles();
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response));
+    }
+
+    /**
+     * Step 2C. permissions/permissionGroups/usersInRole are three distinct,
+     * separately-populated concepts - see RoleQueryServiceImpl's Javadoc
+     * for why the response carries all three instead of picking one.
+     */
+    @PreAuthorize(Roles.HAS_ADMIN)
+    @Operation(summary = "Get role detail", description = "Single role's detail: description, fine-grained permissions, associated permission groups, and the users directly assigned this role.")
+    @GetMapping("/roles/{id}")
+    public ResponseEntity<InternalAuthApiResponse<RoleDetailResponse>> getRole(@PathVariable Long id) {
+        RoleDetailResponse response = roleQueryService.getRoleDetail(id);
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response));
+    }
+
+
+    /**
+     * Step 2D (React Admin Client plan v4): fixes "no way to enumerate
+     * group names today" - the existing GET /groups/{groupName} requires
+     * already knowing the name. Deliberately typed, same rationale as
+     * Step 2C's listRoles/getRole above.
+     */
+    @PreAuthorize(Roles.HAS_ADMIN)
+    @Operation(summary = "List top-level groups", description = "Lists every top-level permission group in the local database.")
+    @GetMapping("/groups")
+    public ResponseEntity<InternalAuthApiResponse<List<GroupSummaryResponse>>> listGroups() {
+        List<GroupSummaryResponse> response = groupQueryService.listTopLevelGroups();
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response));
+    }
+
+    /**
+     * Step 2D. Same gap as above, one level down: the existing GET
+     * /groups/{parentGroupName}/subgroups/{subGroupName} requires already
+     * knowing the subgroup's name. Keyed by the parent's numeric id
+     * (rather than name, like every other group endpoint) because listing
+     * by id is what actually solves "I don't know the names yet" - once
+     * the frontend has this response, it has the names for every
+     * name-keyed endpoint.
+     */
+    @PreAuthorize(Roles.HAS_ADMIN)
+    @Operation(summary = "List subgroups", description = "Lists every subgroup under the given top-level group.")
+    @GetMapping("/groups/{id}/subgroups")
+    public ResponseEntity<InternalAuthApiResponse<List<SubGroupSummaryResponse>>> listSubgroups(@PathVariable Long id) {
+        List<SubGroupSummaryResponse> response = groupQueryService.listSubgroups(id);
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response));
+    }
+
+    /**
+     * Step 2D: fixes "only parent-group delete exists today" (DELETE
+     * /groups/{groupName} above removes an entire parent group and
+     * cascades to every subgroup under it) - this removes exactly one
+     * subgroup, leaving the parent and its other subgroups untouched.
+     */
+    @PreAuthorize(Roles.HAS_ADMIN)
+    @Operation(summary = "Delete a subgroup", description = "Deletes a single subgroup without affecting its parent group or sibling subgroups.")
+    @DeleteMapping("/groups/{parentGroupName}/subgroups/{subGroupName}")
+    public ResponseEntity<InternalAuthApiResponse<Object>> deleteSubGroup(@PathVariable String parentGroupName, @PathVariable String subGroupName) {
+        BaseResponse response = permissionService.deleteSubGroup(parentGroupName, subGroupName);
         return ResponseEntity.status(response.getStatusCode())
                 .body(InternalAuthApiResponse.success(response.getDescription(), response.getData()));
     }

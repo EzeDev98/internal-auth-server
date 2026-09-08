@@ -99,7 +99,7 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
             return;
         }
 
-        sessionManagementService.createSession(user.get().getId(), user.get().getPhoneNumber(), rawToken);
+        sessionManagementService.createSession(user.get().getId(), user.get().getPhoneNumber(), rawToken, request.getRemoteAddr(), request.getHeader("User-Agent"));
         sessionStorage.putCache(TRACKED_CACHE, cacheKey, Boolean.TRUE, TRACKED_CACHE_TTL_SECONDS);
     }
 

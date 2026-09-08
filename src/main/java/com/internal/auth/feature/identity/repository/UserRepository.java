@@ -1,7 +1,11 @@
 package com.internal.auth.feature.identity.repository;
 
 import com.internal.auth.feature.identity.model.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -42,4 +46,24 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsernameAndClientApplicationId(String username, Long clientApplicationId);
     Optional<User> findByPhoneNumberAndClientApplicationId(String phoneNumber, Long clientApplicationId);
     Optional<User> findByEmailAndClientApplicationId(String email, Long clientApplicationId);
+
+    /**
+     * Step 2A (React Admin Client plan v4): backs GET ${app.title}/users -
+     * the admin user directory's list/search. clientApplicationId is
+     * nullable on purpose (pass null to list across every tenant); enabled
+     * is nullable to mean "don't filter on this"; search is nullable/blank
+     * to mean "no text filter", otherwise matched case-insensitively as a
+     * substring against username, phoneNumber, and email.
+     */
+    @Query("SELECT u FROM User u WHERE " +
+            "(:clientApplicationId IS NULL OR u.clientApplicationId = :clientApplicationId) AND " +
+            "(:enabled IS NULL OR u.enabled = :enabled) AND " +
+            "(:search IS NULL OR " +
+            "LOWER(u.username) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<User> searchForAdmin(@Param("clientApplicationId") Long clientApplicationId,
+                               @Param("enabled") Boolean enabled,
+                               @Param("search") String search,
+                               Pageable pageable);
 }

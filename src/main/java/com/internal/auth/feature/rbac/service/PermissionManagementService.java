@@ -17,4 +17,5 @@ public interface PermissionManagementService {
     BaseResponse unassignRole(String username, String roleName);
     BaseResponse removeUserFromGroup(String username, String groupName);
     BaseResponse deleteSuperGroup(String groupName);
+    BaseResponse deleteSubGroup(String parentGroupName, String subGroupName);
 }

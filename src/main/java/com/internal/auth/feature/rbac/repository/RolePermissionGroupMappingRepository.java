@@ -3,6 +3,7 @@ package com.internal.auth.feature.rbac.repository;
 import com.internal.auth.feature.rbac.model.PermissionGroup;
 import com.internal.auth.feature.rbac.model.Role;
 import com.internal.auth.feature.rbac.model.RolePermissionGroupMapping;
+import com.internal.auth.feature.rbac.model.SubPermissionGroup;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -23,4 +24,23 @@ public interface RolePermissionGroupMappingRepository extends JpaRepository<Role
     @Modifying
     @Query("DELETE FROM RolePermissionGroupMapping m WHERE m.subPermissionGroup.parentGroup = :parentGroup")
     void deleteAllByParentGroup(@Param("parentGroup") PermissionGroup parentGroup);
+
+    /**
+     * Step 2D (React Admin Client plan v4): backs deleteSubGroup - removes
+     * only the RolePermissionGroupMapping rows tied to one specific
+     * subgroup, as opposed to deleteAllByParentGroup above (every subgroup
+     * under a parent, used when the whole parent group is deleted).
+     */
+    void deleteAllBySubPermissionGroup(SubPermissionGroup subPermissionGroup);
+
+    /**
+     * Step 2C (React Admin Client plan v4): backs the Role - Detail
+     * screen's "permission groups" list (GET ${app.title}/roles/{id}).
+     * Returns the raw mapping rows (not just the PermissionGroup) because
+     * a row can carry either a parent-group or a sub-group assignment -
+     * see GroupRoleServiceImpl's assignRoleToGroup/assignRoleToSubGroup,
+     * which only ever set one of the two fields, never both.
+     */
+    @Query("SELECT m FROM RolePermissionGroupMapping m WHERE m.role = :role")
+    List<RolePermissionGroupMapping> findByRole(@Param("role") Role role);
 }
