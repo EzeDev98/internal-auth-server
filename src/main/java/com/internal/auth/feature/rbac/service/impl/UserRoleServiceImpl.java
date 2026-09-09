@@ -96,7 +96,6 @@ public class UserRoleServiceImpl implements UserRoleService {
     }
 
 
-
     @Override
     public RemoveRoleResponse unassignRole(String username, String roleName) {
 
@@ -123,6 +122,15 @@ public class UserRoleServiceImpl implements UserRoleService {
             log.error("Failed to unassign role '{}' from user '{}': {}", roleName, username, e.getMessage());
             throw PermissionException.operationFailed(String.format("Failed to unassign role '%s' from user '%s'", roleName, username), e);
         }
+    }
+
+    @Override
+    public void removeAllRoleForUser(String username) {
+        if (StringUtils.isBlank(username)) {
+            throw PermissionException.emptyField("Username is required");
+        }
+
+
     }
 
     @Override

@@ -32,6 +32,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
     Optional<User> findByPhoneNumber(String phoneNumber);
     Optional<User> findByEmail(String email);
+    Optional<User> findByInternalAuthUserIdAndClientApplicationId(String internalAuthUserId, Long clientApplicationId);
 
     /**
      * Step 2 (RBAC admin lookup fix): unscoped by client_application_id like

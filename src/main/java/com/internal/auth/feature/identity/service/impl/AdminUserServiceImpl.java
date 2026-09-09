@@ -3,15 +3,16 @@ package com.internal.auth.feature.identity.service.impl;
 import com.internal.auth.common.exception.UserAlreadyExistsException;
 import com.internal.auth.common.exception.UserNotFoundException;
 import com.internal.auth.common.reset.ResetValidator;
-import com.internal.auth.feature.identity.dto.AdminCreateUserRequest;
-import com.internal.auth.feature.identity.dto.AdminUpdateUserRequest;
-import com.internal.auth.feature.identity.dto.PagedUsersResponse;
-import com.internal.auth.feature.identity.dto.UserProfileResponse;
-import com.internal.auth.feature.identity.dto.UserSummaryResponse;
+import com.internal.auth.feature.identity.dto.request.AdminCreateUserRequest;
+import com.internal.auth.feature.identity.dto.request.AdminUpdateUserRequest;
+import com.internal.auth.feature.identity.dto.response.PagedUsersResponse;
+import com.internal.auth.feature.identity.dto.response.UserProfileResponse;
+import com.internal.auth.feature.identity.dto.response.UserSummaryResponse;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.identity.service.AdminUserService;
 import com.internal.auth.feature.identity.validation.RegistrationValidator;
+import com.internal.auth.feature.rbac.service.impl.EntityUtilityService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Step 2A (React Admin Client plan v4). Reuses
@@ -39,6 +41,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final RegistrationValidator registrationValidator;
     private final ResetValidator resetValidator;
     private final PasswordEncoder passwordEncoder;
+    private final EntityUtilityService entityUtilityService;
 
     @Override
     @Transactional(readOnly = true)
@@ -106,6 +109,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         User user = new User();
         user.setClientApplicationId(clientApplicationId);
         user.setUsername(username);
+        user.setInternalAuthUserId("IA_" + UUID.randomUUID());
         user.setPhoneNumber(phoneNumber);
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
@@ -128,6 +132,15 @@ public class AdminUserServiceImpl implements AdminUserService {
         log.info("Admin-created user, id={}, clientApplicationId={}", saved.getId(), clientApplicationId);
 
         return toProfile(saved);
+    }
+
+    @Override
+    public void deleteUser(String internalAuthUserId, Long clientApplicationId) {
+        userRepository.findByInternalAuthUserIdAndClientApplicationId(internalAuthUserId, clientApplicationId).ifPresent(user -> {
+            entityUtilityService.deleteUserRoles(user);
+            entityUtilityService.deleteUserGroups(user);
+            userRepository.delete(user);
+        });
     }
 
     private String normalize(String value) {

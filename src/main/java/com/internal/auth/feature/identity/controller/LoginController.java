@@ -2,12 +2,13 @@ package com.internal.auth.feature.identity.controller;
 
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
-import com.internal.auth.feature.identity.dto.LoginRequest;
-import com.internal.auth.feature.identity.dto.LoginResponse;
-import com.internal.auth.feature.identity.dto.VerifyLoginOtpRequest;
-import com.internal.auth.feature.identity.service.LoginService;
 import com.internal.auth.common.constant.AppConstant;
 import com.internal.auth.common.util.RateLimiterService;
+import com.internal.auth.feature.identity.dto.request.LoginRequest;
+import com.internal.auth.feature.identity.dto.request.RefreshTokenRequest;
+import com.internal.auth.feature.identity.dto.request.VerifyLoginOtpRequest;
+import com.internal.auth.feature.identity.dto.response.LoginResponse;
+import com.internal.auth.feature.identity.service.UserLoginService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -43,7 +44,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class LoginController {
 
-    private final LoginService loginService;
+    private final UserLoginService loginService;
     private final ClientApplicationService clientApplicationService;
     private final RateLimiterService rateLimiterService;
 
@@ -88,6 +89,26 @@ public class LoginController {
         rateLimiterService.checkRateLimit(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_LOGIN_OTP_VERIFY_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_DURATION_MINUTES));
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
         LoginResponse response = loginService.verifyLoginOtp(request, client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
+    }
+
+    /**
+     * Step 15C - redeems a refresh token minted by a previous successful
+     * login for a new access token (and a new refresh token - rotation,
+     * see ClientApplicationRegisteredClientRepository's TokenSettings
+     * javadoc). Same HTTP Basic client-credential requirement as
+     * login()/verifyLoginOtp() above - the resolved client_application_id
+     * is what LoginServiceImpl#refreshToken checks the redeemed token
+     * actually belongs to, not just any authenticated client.
+     */
+    @PostMapping("/refresh-token")
+    public ResponseEntity<InternalAuthApiResponse<LoginResponse>> refreshToken(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
+            @RequestBody RefreshTokenRequest request,
+            HttpServletRequest httpRequest) {
+        rateLimiterService.checkRateLimit(AppConstant.REFRESH_TOKEN_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_REFRESH_TOKEN_REQUEST, Duration.ofMinutes(AppConstant.REFRESH_TOKEN_RATE_LIMIT_DURATION_MINUTES));
+        ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
+        LoginResponse response = loginService.refreshToken(request, client.getId());
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 }

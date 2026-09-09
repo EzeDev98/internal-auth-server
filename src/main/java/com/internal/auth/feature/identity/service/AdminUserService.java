@@ -1,9 +1,9 @@
 package com.internal.auth.feature.identity.service;
 
-import com.internal.auth.feature.identity.dto.AdminCreateUserRequest;
-import com.internal.auth.feature.identity.dto.AdminUpdateUserRequest;
-import com.internal.auth.feature.identity.dto.PagedUsersResponse;
-import com.internal.auth.feature.identity.dto.UserProfileResponse;
+import com.internal.auth.feature.identity.dto.request.AdminCreateUserRequest;
+import com.internal.auth.feature.identity.dto.request.AdminUpdateUserRequest;
+import com.internal.auth.feature.identity.dto.response.PagedUsersResponse;
+import com.internal.auth.feature.identity.dto.response.UserProfileResponse;
 import org.springframework.data.domain.Pageable;
 
 /**
@@ -34,4 +34,6 @@ public interface AdminUserService {
      * separate step via the existing role/group assignment endpoints.
      */
     UserProfileResponse createUser(Long clientApplicationId, AdminCreateUserRequest request);
+
+    void deleteUser(String internalAuthUserId, Long clientApplicationId);
 }

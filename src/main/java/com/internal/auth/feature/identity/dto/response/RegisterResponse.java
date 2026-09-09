@@ -1,4 +1,4 @@
-package com.internal.auth.feature.identity.dto;
+package com.internal.auth.feature.identity.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -16,7 +16,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RegisterResponse {
-    private Long userId;
+    private String userId;
     private String username;
     private String message;
 }

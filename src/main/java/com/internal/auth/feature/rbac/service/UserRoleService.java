@@ -10,5 +10,6 @@ public interface UserRoleService {
     void assignRoles(String username, List<String> roles);
     UserRoleResponse assignRole(String username, String role);
     RemoveRoleResponse unassignRole(String username, String roleName);
+    void removeAllRoleForUser(String username);
     BulkRoleAssignmentResponse bulkRoleAssignment(List<String> usernames, List<String> roles);
 }

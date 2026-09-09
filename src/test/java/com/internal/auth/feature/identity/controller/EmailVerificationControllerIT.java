@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.internal.auth.common.reset.OtpResetEngine;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.repository.ClientApplicationRepository;
-import com.internal.auth.feature.identity.dto.ResendActivationRequest;
+import com.internal.auth.feature.identity.dto.request.ResendActivationRequest;
 import com.internal.auth.feature.identity.model.EmailVerificationToken;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.EmailVerificationTokenRepository;

@@ -1,4 +1,4 @@
-package com.internal.auth.feature.identity.dto;
+package com.internal.auth.feature.identity.dto.request;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

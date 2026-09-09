@@ -5,7 +5,7 @@ import com.internal.auth.common.reset.OtpResetEngine;
 import com.internal.auth.common.reset.dto.VerifyOtpRequest;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.repository.ClientApplicationRepository;
-import com.internal.auth.feature.identity.dto.ResendPhoneVerificationRequest;
+import com.internal.auth.feature.identity.dto.request.ResendPhoneVerificationRequest;
 import com.internal.auth.feature.identity.model.PhoneVerificationOtp;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.PhoneVerificationOtpRepository;

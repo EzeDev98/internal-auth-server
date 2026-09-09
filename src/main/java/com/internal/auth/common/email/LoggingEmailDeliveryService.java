@@ -29,11 +29,11 @@ public class LoggingEmailDeliveryService implements EmailDeliveryService {
     private boolean logToConsole;
 
     @Override
-    public void sendVerificationEmail(String email, String verificationLink) {
+    public void sendVerificationEmail(String email, String verificationLink, String appName) {
         if (logToConsole) {
-            log.info("[DEV ONLY] Email verification link for {}: {}", email, verificationLink);
+            log.info("[DEV ONLY] Email verification link for {} (app={}): {}", email, appName, verificationLink);
         } else {
-            log.info("Email verification link generated for {} (delivery provider not configured)", email);
+            log.info("Email verification link generated for {} (app={}, delivery provider not configured)", email, appName);
         }
     }
 }

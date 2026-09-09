@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.DockerClient;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.repository.ClientApplicationRepository;
-import com.internal.auth.feature.identity.dto.LoginRequest;
+import com.internal.auth.feature.identity.dto.request.LoginRequest;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.testsupport.IntegrationTestBase;
 import com.internal.auth.testsupport.builder.ClientApplicationTestDataBuilder;

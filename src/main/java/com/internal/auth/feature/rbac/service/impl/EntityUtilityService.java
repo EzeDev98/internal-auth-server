@@ -144,6 +144,15 @@ public class EntityUtilityService {
                 .orElseThrow(() -> PermissionException.roleNotFound(String.format("Role '%s' is not assigned to user '%s'", role.getRoleName(), user.getUsername())));
     }
 
+
+    public void deleteUserRoles(User user) {
+        userRolesRepository.deleteAllByUser_Id(user.getId());
+    }
+
+    public void deleteUserGroups(User user) {
+        userPermissionGroupRepository.deleteAllByUser_Id(user.getId());
+    }
+
     public UserPermissionGroup getUserAndGroup(User user, PermissionGroup permissionGroup) {
         return userPermissionGroupRepository.findByUserAndPermissionGroup(user, permissionGroup)
                 .orElseThrow(() -> PermissionException.groupNotFound(String.format("User '%s' is not assigned to permission group '%s'", user.getUsername(), permissionGroup.getGroupName())));

@@ -12,9 +12,9 @@ import com.internal.auth.feature.audit.event.UserLoggedInEvent;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.config.LoginMfaProperties;
-import com.internal.auth.feature.identity.dto.LoginRequest;
-import com.internal.auth.feature.identity.dto.LoginResponse;
-import com.internal.auth.feature.identity.dto.VerifyLoginOtpRequest;
+import com.internal.auth.feature.identity.dto.request.LoginRequest;
+import com.internal.auth.feature.identity.dto.response.LoginResponse;
+import com.internal.auth.feature.identity.dto.request.VerifyLoginOtpRequest;
 import com.internal.auth.feature.identity.model.LoginMfaOtp;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.LoginMfaOtpRepository;
@@ -33,7 +33,6 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClaimAccessor;
-import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
@@ -86,7 +85,7 @@ class LoginServiceImplTest {
             AuthorizationServerSettings.builder().issuer(SELF_ISSUER_URI).build();
     private final ClientApplicationService clientApplicationService = mock(ClientApplicationService.class);
 
-    private final LoginServiceImpl service = new LoginServiceImpl(
+    private final UserLoginServiceImpl service = new UserLoginServiceImpl(
             eventPublisher, userRepository, passwordEncoder, loginMfaOtpRepository, otpService,
             otpDeliveryService, otpResetEngine, loginMfaProperties, redissonClient, userRolesRepository,
             registeredClientRepository, authorizationService, tokenGenerator, authorizationServerSettings,

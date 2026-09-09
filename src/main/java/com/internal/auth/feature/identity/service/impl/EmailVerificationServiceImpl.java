@@ -5,8 +5,9 @@ import com.internal.auth.common.email.EmailDeliveryService;
 import com.internal.auth.common.exception.ResetTokenInvalidException;
 import com.internal.auth.common.exception.UserNotFoundException;
 import com.internal.auth.common.reset.OtpResetEngine;
+import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.config.EmailVerificationProperties;
-import com.internal.auth.feature.identity.dto.ActivationResponse;
+import com.internal.auth.feature.identity.dto.response.ActivationResponse;
 import com.internal.auth.feature.identity.model.EmailVerificationToken;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.EmailVerificationTokenRepository;
@@ -59,6 +60,7 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     private final EmailDeliveryService emailDeliveryService;
     private final EmailVerificationProperties properties;
     private final RedissonClient redissonClient;
+    private final ClientApplicationService clientApplicationService;
 
     @Value("${base-url}")
     private String baseUrl;
@@ -78,7 +80,8 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
             tokenRepository.save(token);
 
             String link = baseUrl + "/api/v1/auth/activate?token=" + rawToken;
-            emailDeliveryService.sendVerificationEmail(user.getEmail(), link);
+            String appName = clientApplicationService.getById(user.getClientApplicationId()).getName();
+            emailDeliveryService.sendVerificationEmail(user.getEmail(), link, appName);
         } catch (Exception e) {
             // Delivery/provider failures must never block registration or
             // resend from otherwise succeeding - see class Javadoc.

@@ -82,6 +82,11 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), null);
     }
 
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ResponseEntity<InternalAuthApiResponse<Void>> handleInvalidRefreshTokenException(InvalidRefreshTokenException ex) {
+        return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), null);
+    }
+
     /**
      * Catches NoResourceFoundException - thrown for literally any request
      * whose path matches no controller mapping. Ground-truthed via javap

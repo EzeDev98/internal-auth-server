@@ -5,8 +5,8 @@ import com.internal.auth.common.exception.UserAlreadyExistsException;
 import com.internal.auth.common.reset.ResetValidator;
 import com.internal.auth.common.response.BaseResponse;
 import com.internal.auth.common.security.AuthenticationHelper;
-import com.internal.auth.feature.identity.dto.AdminRegisterRequest;
-import com.internal.auth.feature.identity.dto.AdminRegisterResponse;
+import com.internal.auth.feature.identity.dto.request.AdminRegisterRequest;
+import com.internal.auth.feature.identity.dto.response.AdminRegisterResponse;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.identity.service.AdminRegistrationService;
@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 import static com.internal.auth.common.constant.AppConstant.ADMIN_ROLE;
 import static com.internal.auth.common.constant.AppConstant.ADMIN_ROLE_DESCRIPTION;
@@ -117,6 +118,7 @@ public class AdminRegistrationServiceImpl implements AdminRegistrationService {
         User user = new User();
         user.setClientApplicationId(adminClientApplicationId);
         user.setUsername(username);
+        user.setInternalAuthUserId("IA_" + UUID.randomUUID());
         user.setPhoneNumber(phoneNumber);
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(request.getPassword()));

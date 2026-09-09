@@ -19,6 +19,8 @@ public interface UserRolesRepository extends JpaRepository<UserRole, Long> {
     @Query("SELECT DISTINCT userRole.role FROM UserRole userRole " + "WHERE userRole.user.username = :username")
     List<Role> findRolesByUsername(String username);
 
+    void deleteAllByUser_Id(Long userId);
+
     /**
      * Tenant-safe alternative to {@link #findRolesByUsername(String)}: scoped
      * by the numeric user_id primary key instead of the (per-tenant, not

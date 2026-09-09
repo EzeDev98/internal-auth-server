@@ -1,13 +1,14 @@
 package com.internal.auth.feature.identity.controller;
 
 import com.internal.auth.common.response.InternalAuthApiResponse;
+import com.internal.auth.common.security.AuthenticationHelper;
 import com.internal.auth.config.auth.Roles;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
-import com.internal.auth.feature.identity.dto.AdminCreateUserRequest;
-import com.internal.auth.feature.identity.dto.AdminUpdateUserRequest;
-import com.internal.auth.feature.identity.dto.PagedUsersResponse;
-import com.internal.auth.feature.identity.dto.UserProfileResponse;
+import com.internal.auth.feature.identity.dto.request.AdminCreateUserRequest;
+import com.internal.auth.feature.identity.dto.request.AdminUpdateUserRequest;
+import com.internal.auth.feature.identity.dto.response.PagedUsersResponse;
+import com.internal.auth.feature.identity.dto.response.UserProfileResponse;
 import com.internal.auth.feature.identity.service.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,14 +18,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * Step 2A (React Admin Client plan v4). Admin-only user directory:
@@ -54,6 +48,7 @@ public class AdminUserController {
 
     private final AdminUserService adminUserService;
     private final ClientApplicationService clientApplicationService;
+    private final AuthenticationHelper authenticationHelper;
 
     @Operation(method = "GET", summary = "List users", description = "Paginated, filterable user directory. search matches username, phone, or email.")
     @PreAuthorize(Roles.HAS_ADMIN)
@@ -85,6 +80,7 @@ public class AdminUserController {
         UserProfileResponse response = adminUserService.updateUser(username, client.getId(), request);
         return ResponseEntity.ok(InternalAuthApiResponse.success("User updated successfully.", response));
     }
+
     @Operation(method = "POST", summary = "Create user", description = "Admin-created account: password is admin-supplied, contact info is marked verified immediately, and no role/permission-group is assigned - use the existing role/group endpoints separately.")
     @PreAuthorize(Roles.HAS_ADMIN)
     @PostMapping("/users")
@@ -92,5 +88,14 @@ public class AdminUserController {
         ClientApplication client = clientApplicationService.getEnabledClientByClientId(clientId);
         UserProfileResponse response = adminUserService.createUser(client.getId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(InternalAuthApiResponse.success("User created successfully.", response));
+    }
+
+    @Operation(summary = "Delete user", description = "Deletes a locally registered user (and their role/permission-group assignments), scoped to the calling client application. Used by integrating apps to roll back a failed registration.")
+    @DeleteMapping("/users")
+    public ResponseEntity<InternalAuthApiResponse<Void>> deleteUser(@RequestParam String internalAuthUserId) {
+        String callerClientId = authenticationHelper.getCurrentServiceClientId();
+        ClientApplication client = clientApplicationService.getEnabledClientByClientId(callerClientId);
+        adminUserService.deleteUser(internalAuthUserId, client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success("User deleted", null));
     }
 }

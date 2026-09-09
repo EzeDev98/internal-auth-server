@@ -97,6 +97,9 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "internal_auth_user_id", nullable = false)
+    private String internalAuthUserId;
+
     /** FK to ClientApplication.id (see V8 migration). */
     @Column(name = "client_application_id", nullable = false)
     private Long clientApplicationId;

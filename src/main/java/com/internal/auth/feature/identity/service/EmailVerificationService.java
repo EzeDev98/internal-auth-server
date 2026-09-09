@@ -1,6 +1,6 @@
 package com.internal.auth.feature.identity.service;
 
-import com.internal.auth.feature.identity.dto.ActivationResponse;
+import com.internal.auth.feature.identity.dto.response.ActivationResponse;
 import com.internal.auth.feature.identity.model.User;
 
 public interface EmailVerificationService {

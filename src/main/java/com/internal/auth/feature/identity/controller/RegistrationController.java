@@ -2,9 +2,9 @@ package com.internal.auth.feature.identity.controller;
 
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
-import com.internal.auth.feature.identity.dto.RegisterRequest;
-import com.internal.auth.feature.identity.dto.RegisterResponse;
-import com.internal.auth.feature.identity.service.RegistrationService;
+import com.internal.auth.feature.identity.dto.request.RegisterRequest;
+import com.internal.auth.feature.identity.dto.response.RegisterResponse;
+import com.internal.auth.feature.identity.service.UserRegistrationService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -51,11 +51,11 @@ import com.internal.auth.common.response.InternalAuthApiResponse;
  */
 @RestController
 @RequestMapping("${app.title}/auth")
-@Tag(name = "Registration API", description = "Account creation (Stage 3/4 Step 10A)")
+@Tag(name = "Registration API", description = "Account creation")
 @RequiredArgsConstructor
 public class RegistrationController {
 
-    private final RegistrationService registrationService;
+    private final UserRegistrationService registrationService;
     private final ClientApplicationService clientApplicationService;
 
     @PostMapping("/register")

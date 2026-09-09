@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.internal.auth.common.crypto.TokenHasher;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.repository.ClientApplicationRepository;
-import com.internal.auth.feature.identity.dto.LoginRequest;
+import com.internal.auth.feature.identity.dto.request.LoginRequest;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.rbac.model.Role;

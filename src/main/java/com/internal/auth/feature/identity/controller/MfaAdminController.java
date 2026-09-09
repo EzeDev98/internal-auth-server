@@ -5,7 +5,7 @@ import com.internal.auth.common.response.InternalAuthApiResponse;
 import com.internal.auth.config.auth.Roles;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
-import com.internal.auth.feature.identity.dto.SetMfaRequest;
+import com.internal.auth.feature.identity.dto.request.SetMfaRequest;
 import com.internal.auth.feature.identity.service.MfaAdminService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

@@ -122,6 +122,19 @@ public class AppConstant {
     public static final int MAX_LOGIN_OTP_VERIFY_REQUEST = 10;
 
     /**
+     * Step 15C: rate limits refresh-token redemption by client IP,
+     * mirroring LOGIN_RATE_LIMIT_* above. Looser than the login limit -
+     * a legitimate client refreshes automatically on every access-token
+     * expiry (every ACCESS_TOKEN_TTL_MINUTES, see application.properties),
+     * not just once per human login - so this only needs to catch actual
+     * abuse (a stolen/guessed refresh token being hammered), not normal
+     * traffic volume.
+     */
+    public static final String REFRESH_TOKEN_RATE_LIMIT_KEY_PREFIX = "ratelimit:refresh-token:ip:";
+    public static final int REFRESH_TOKEN_RATE_LIMIT_DURATION_MINUTES = 15;
+    public static final int MAX_REFRESH_TOKEN_REQUEST = 30;
+
+    /**
      * Step 14C: rate limits the admin-only session-invalidate endpoint by
      * caller IP. Already @PreAuthorize-gated to admins, so this is
      * abuse-prevention rather than brute-force defense, hence the more

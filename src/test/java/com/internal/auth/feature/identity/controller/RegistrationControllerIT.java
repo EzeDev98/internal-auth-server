@@ -3,7 +3,7 @@ package com.internal.auth.feature.identity.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.repository.ClientApplicationRepository;
-import com.internal.auth.feature.identity.dto.RegisterRequest;
+import com.internal.auth.feature.identity.dto.request.RegisterRequest;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.testsupport.IntegrationTestBase;

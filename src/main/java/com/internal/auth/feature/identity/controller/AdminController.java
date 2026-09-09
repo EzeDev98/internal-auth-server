@@ -6,13 +6,13 @@ import com.internal.auth.common.constant.AppConstant;
 import com.internal.auth.common.util.RateLimiterService;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
-import com.internal.auth.feature.identity.dto.AdminRegisterRequest;
-import com.internal.auth.feature.identity.dto.AdminRegisterResponse;
-import com.internal.auth.feature.identity.dto.LoginRequest;
-import com.internal.auth.feature.identity.dto.LoginResponse;
-import com.internal.auth.feature.identity.dto.VerifyLoginOtpRequest;
+import com.internal.auth.feature.identity.dto.request.AdminRegisterRequest;
+import com.internal.auth.feature.identity.dto.response.AdminRegisterResponse;
+import com.internal.auth.feature.identity.dto.request.LoginRequest;
+import com.internal.auth.feature.identity.dto.response.LoginResponse;
+import com.internal.auth.feature.identity.dto.request.VerifyLoginOtpRequest;
 import com.internal.auth.feature.identity.service.AdminRegistrationService;
-import com.internal.auth.feature.identity.service.LoginService;
+import com.internal.auth.feature.identity.service.UserLoginService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -68,7 +68,7 @@ import java.time.Duration;
 public class AdminController {
 
     private final AdminRegistrationService adminRegistrationService;
-    private final LoginService loginService;
+    private final UserLoginService loginService;
     private final ClientApplicationService clientApplicationService;
     private final RateLimiterService rateLimiterService;
 

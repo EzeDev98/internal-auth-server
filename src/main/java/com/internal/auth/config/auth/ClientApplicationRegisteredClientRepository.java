@@ -5,6 +5,7 @@ import com.internal.auth.feature.client.repository.ClientApplicationRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
@@ -13,6 +14,7 @@ import org.springframework.security.oauth2.server.authorization.settings.ClientS
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -54,11 +56,18 @@ import java.util.stream.Collectors;
  * explicit instead of silently no-op-ing or writing a row Spring's own
  * client-registration flow would expect to own end-to-end.
  *
- * <p>Not yet handled (out of scope for 12A, tracked for a later step):
- * ClientSettings/TokenSettings are left at Spring's defaults (no PKCE
- * requirement, no consent requirement, default token TTLs) - irrelevant
- * for client_credentials today, but will need real values once an
- * authorization_code-based app shows up.
+ * <p>Step 15A: TokenSettings now sets explicit access/refresh TTLs and
+ * disables refresh token reuse (rotation) - see toRegisteredClient() below.
+ * ClientSettings (PKCE/consent requirements) is still left at Spring's
+ * defaults, since nothing here is authorization_code-based yet.
+ *
+ * <p>Note this TTL/rotation config applies uniformly to every
+ * ClientApplication row regardless of which grant types it uses - there's
+ * no per-client override today. A row without "refresh_token" in its own
+ * grantTypes still gets a RegisteredClient with these TokenSettings; it
+ * just never has a caller that requests a refresh-typed token, since grant
+ * enforcement for LoginServiceImpl's in-process minting path is done by
+ * that service itself, not by this repository or Spring's filter chain.
  */
 @Component
 @RequiredArgsConstructor
@@ -67,6 +76,15 @@ public class ClientApplicationRegisteredClientRepository implements RegisteredCl
     private static final Logger log = LoggerFactory.getLogger(ClientApplicationRegisteredClientRepository.class);
 
     private final ClientApplicationRepository clientApplicationRepository;
+
+    // Field-injected (not constructor, to avoid depending on Lombok copying
+    // @Value onto the generated constructor param) - same pattern
+    // WebSecurityConfig already uses for its own @Value fields.
+    @Value("${app.authorization-server.access-token-ttl-minutes}")
+    private long accessTokenTtlMinutes;
+
+    @Value("${app.authorization-server.refresh-token-ttl-days}")
+    private long refreshTokenTtlDays;
 
     @Override
     public void save(RegisteredClient registeredClient) {
@@ -111,7 +129,15 @@ public class ClientApplicationRegisteredClientRepository implements RegisteredCl
                 .redirectUris(uris -> uris.addAll(client.getRedirectUris()))
                 .scopes(scopes -> scopes.addAll(client.getScopes()))
                 .clientSettings(ClientSettings.builder().build())
-                .tokenSettings(TokenSettings.builder().build())
+                .tokenSettings(TokenSettings.builder()
+                        .accessTokenTimeToLive(Duration.ofMinutes(accessTokenTtlMinutes))
+                        .refreshTokenTimeToLive(Duration.ofDays(refreshTokenTtlDays))
+                        // Rotation, not reuse: each refresh call is expected to mint
+                        // a fresh refresh token and invalidate the one just spent,
+                        // rather than letting the same refresh token be replayed
+                        // indefinitely until its TTL expires.
+                        .reuseRefreshTokens(false)
+                        .build())
                 .build();
     }
 

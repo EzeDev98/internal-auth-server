@@ -11,17 +11,20 @@ import com.internal.auth.common.reset.delivery.OtpDeliveryService;
 import com.internal.auth.common.security.SelfIssuedAuthorizationServerContext;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.config.LoginMfaProperties;
-import com.internal.auth.feature.identity.dto.LoginRequest;
-import com.internal.auth.feature.identity.dto.LoginResponse;
-import com.internal.auth.feature.identity.dto.VerifyLoginOtpRequest;
+import com.internal.auth.common.exception.InvalidRefreshTokenException;
+import com.internal.auth.feature.identity.dto.request.LoginRequest;
+import com.internal.auth.feature.identity.dto.request.RefreshTokenRequest;
+import com.internal.auth.feature.identity.dto.request.VerifyLoginOtpRequest;
+import com.internal.auth.feature.identity.dto.response.LoginResponse;
 import com.internal.auth.feature.identity.model.LoginMfaOtp;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.LoginMfaOtpRepository;
 import com.internal.auth.feature.identity.repository.UserRepository;
-import com.internal.auth.feature.identity.service.LoginService;
 import com.internal.auth.common.reset.ResetStatus;
+import com.internal.auth.feature.identity.service.UserLoginService;
 import com.internal.auth.feature.rbac.model.Role;
 import com.internal.auth.feature.rbac.repository.UserRolesRepository;
+import com.internal.auth.feature.session.service.SessionManagementService;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
@@ -36,6 +39,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClaimAccessor;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
@@ -45,10 +49,10 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
 import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContext;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.authorization.token.DefaultOAuth2TokenContext;
-import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -120,10 +124,11 @@ import static com.internal.auth.common.constant.AppConstant.LOGIN_MFA_OTP_COOLDO
  */
 @Service
 @RequiredArgsConstructor
-public class LoginServiceImpl implements LoginService {
+public class UserLoginServiceImpl implements UserLoginService {
 
-    private static final Logger log = LoggerFactory.getLogger(LoginServiceImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(UserLoginServiceImpl.class);
     private static final String INVALID_CREDENTIALS_MESSAGE = "Username or password is incorrect";
+    private static final String INVALID_REFRESH_TOKEN_MESSAGE = "Refresh token is invalid or expired";
 
     // Step 12F: a dedicated grant-type marker for tokens minted this way,
     // purely for audit/introspection on the persisted OAuth2Authorization
@@ -147,6 +152,7 @@ public class LoginServiceImpl implements LoginService {
     private final OAuth2TokenGenerator<OAuth2Token> tokenGenerator;
     private final AuthorizationServerSettings authorizationServerSettings;
     private final ClientApplicationService clientApplicationService;
+    private final SessionManagementService sessionManagementService;
 
     @Value("${app.self-issuer-uri}")
     private String selfIssuerUri;
@@ -181,13 +187,14 @@ public class LoginServiceImpl implements LoginService {
 
         if (user.isMfaEnabled()) {
             sendLoginOtp(user, clientApplicationId);
-            return new LoginResponse(null, user.getUsername(), "A verification code has been sent to your registered phone number.", true, null);
+            return new LoginResponse(null, user.getUsername(), "A verification code has been sent to your registered phone number.", true, null, null, null, null);
         }
 
         log.info("User id {} logged in", user.getId());
         eventPublisher.publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), clientApplicationId));
-        String accessToken = mintAccessToken(user, clientApplicationId);
-        return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false, accessToken);
+        MintedTokens tokens = mintTokens(user, clientApplicationId);
+        return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false,
+                tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn(), tokens.refreshExpiresIn());
     }
 
     @Override
@@ -207,8 +214,77 @@ public class LoginServiceImpl implements LoginService {
 
         log.info("User id {} completed MFA login step-up", user.getId());
         eventPublisher.publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), clientApplicationId));
-        String accessToken = mintAccessToken(user, clientApplicationId);
-        return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false, accessToken);
+        MintedTokens tokens = mintTokens(user, clientApplicationId);
+        return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false,
+                tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn(), tokens.refreshExpiresIn());
+    }
+
+    /**
+     * Step 15C - redeems a refresh token minted by mintTokens() for a new
+     * access token (and a new refresh token, per rotation - see
+     * ClientApplicationRegisteredClientRepository's TokenSettings
+     * javadoc). Every failure path below throws the exact same
+     * InvalidRefreshTokenException/message regardless of which specific
+     * thing was wrong (missing, unknown, wrong-client, expired,
+     * disabled account) - same enumeration-resistance reasoning as
+     * login()'s INVALID_CREDENTIALS_MESSAGE.
+     */
+    @Override
+    public LoginResponse refreshToken(RefreshTokenRequest request, Long clientApplicationId) {
+        String rawRefreshToken = request.getRefreshToken() == null ? null : request.getRefreshToken().trim();
+        if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
+            throw new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN_MESSAGE);
+        }
+
+        OAuth2Authorization authorization = authorizationService.findByToken(rawRefreshToken, OAuth2TokenType.REFRESH_TOKEN);
+        if (authorization == null) {
+            throw new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN_MESSAGE);
+        }
+
+        // A refresh token minted for one ClientApplication must never be
+        // redeemable by another, even though the raw token value itself
+        // carries no visible client identity - this is the check that
+        // enforces that boundary.
+        if (!authorization.getRegisteredClientId().equals(String.valueOf(clientApplicationId))) {
+            throw new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN_MESSAGE);
+        }
+
+        OAuth2Authorization.Token<OAuth2RefreshToken> refreshTokenRecord = authorization.getRefreshToken();
+        if (refreshTokenRecord == null || !refreshTokenRecord.isActive()) {
+            throw new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN_MESSAGE);
+        }
+
+        User user = userRepository.findByUsernameAndClientApplicationId(authorization.getPrincipalName(), clientApplicationId)
+                .orElseThrow(() -> new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN_MESSAGE));
+
+        if (!user.isEnabled()) {
+            // Deliberately distinct from INVALID_REFRESH_TOKEN_MESSAGE, same
+            // as login()'s equivalent check - the refresh token itself was
+            // genuinely valid, so there's no enumeration risk in saying why
+            // the request still can't proceed.
+            throw new AccountDisabledException("This account has been disabled.");
+        }
+
+        // Rotation (TokenSettings.reuseRefreshTokens(false)): the spent
+        // refresh token must stop working the instant a new one is issued,
+        // not remain valid until its own TTL expires. Removing the whole
+        // authorization row - rather than only marking it invalidated - is
+        // simplest given mintTokens() always creates a brand-new
+        // OAuth2Authorization rather than mutating this one in place.
+        authorizationService.remove(authorization);
+
+        log.info("User id {} refreshed their access token", user.getId());
+        MintedTokens tokens = mintTokens(user, clientApplicationId);
+
+        // Keeps the UserSession row's tokenHash pointing at the token that
+        // is now actually in use, so a later logout (SessionManagementService
+        // #invalidateSession, keyed by token hash) still finds it - without
+        // this, the session row would keep pointing at the now-defunct
+        // pre-refresh access token forever.
+        sessionManagementService.updateSessionOnRefresh(user.getId(), tokens.accessToken());
+
+        return new LoginResponse(user.getId(), user.getUsername(), "Token refreshed.", false,
+                tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn(), tokens.refreshExpiresIn());
     }
 
     private void sendLoginOtp(User user, Long clientApplicationId) {
@@ -242,14 +318,32 @@ public class LoginServiceImpl implements LoginService {
     }
 
     /**
-     * Step 12F - mints and persists a real self-issued access token for a
-     * user whose login just actually succeeded. See the class javadoc for
-     * why this happens in-process instead of via /oauth2/token, and
-     * SelfIssuedAuthorizationServerContext's javadoc for why the
-     * authorization-server context is built directly here rather than read
-     * off AuthorizationServerContextHolder.
+     * Step 12F/15B - mints and persists a real self-issued access token
+     * (and, when the calling client is configured for it, a refresh
+     * token) for a user whose login just actually succeeded. See the
+     * class javadoc for why this happens in-process instead of via
+     * /oauth2/token, and SelfIssuedAuthorizationServerContext's javadoc
+     * for why the authorization-server context is built directly here
+     * rather than read off AuthorizationServerContextHolder.
+     *
+     * <p>Step 15B: whether a refresh token is minted is gated on
+     * {@code registeredClient.getAuthorizationGrantTypes().contains(
+     * AuthorizationGrantType.REFRESH_TOKEN)} - i.e. whether the calling
+     * ClientApplication's own {@code grantTypes} column includes
+     * "refresh_token" (see ClientApplicationRegisteredClientRepository).
+     * This mirrors the same check Spring's own
+     * OAuth2AuthorizationCodeAuthenticationProvider makes before
+     * requesting a refresh token, even though OAuth2RefreshTokenGenerator
+     * itself doesn't enforce it (it only refuses public
+     * authorization_code clients). Enforcing it here means refresh tokens
+     * are opt-in per client rather than minted for every client the
+     * moment this generator exists - a client with only
+     * "client_credentials" (today's default when grantTypes is empty -
+     * see that repository's javadoc) gets accessToken/expiresIn only,
+     * with refreshToken/refreshExpiresIn coming back null, until an admin
+     * explicitly adds "refresh_token" to its grantTypes.
      */
-    private String mintAccessToken(User user, Long clientApplicationId) {
+    private MintedTokens mintTokens(User user, Long clientApplicationId) {
         RegisteredClient registeredClient = registeredClientRepository.findById(String.valueOf(clientApplicationId));
         if (registeredClient == null) {
             // Shouldn't happen - LoginController already authenticated this
@@ -273,17 +367,15 @@ public class LoginServiceImpl implements LoginService {
         AuthorizationServerContext authorizationServerContext =
                 new SelfIssuedAuthorizationServerContext(selfIssuerUri, authorizationServerSettings);
 
-        OAuth2TokenContext tokenContext = DefaultOAuth2TokenContext.builder()
+        DefaultOAuth2TokenContext.Builder tokenContextBuilder = DefaultOAuth2TokenContext.builder()
                 .registeredClient(registeredClient)
                 .principal(userPrincipal)
                 .authorizationServerContext(authorizationServerContext)
                 .authorizedScopes(Set.of())
-                .tokenType(OAuth2TokenType.ACCESS_TOKEN)
                 .authorizationGrantType(LOCAL_LOGIN_GRANT_TYPE)
-                .authorizationGrant(userPrincipal)
-                .build();
+                .authorizationGrant(userPrincipal);
 
-        OAuth2Token generatedAccessToken = tokenGenerator.generate(tokenContext);
+        OAuth2Token generatedAccessToken = tokenGenerator.generate(tokenContextBuilder.tokenType(OAuth2TokenType.ACCESS_TOKEN).build());
         if (generatedAccessToken == null) {
             throw new IllegalStateException("The token generator failed to generate a self-issued access token for user id " + user.getId());
         }
@@ -306,23 +398,53 @@ public class LoginServiceImpl implements LoginService {
             authorizationBuilder.accessToken(accessToken);
         }
 
+        OAuth2RefreshToken refreshToken = null;
+        if (registeredClient.getAuthorizationGrantTypes().contains(AuthorizationGrantType.REFRESH_TOKEN)) {
+            OAuth2Token generatedRefreshToken = tokenGenerator.generate(tokenContextBuilder.tokenType(OAuth2TokenType.REFRESH_TOKEN).build());
+            if (generatedRefreshToken instanceof OAuth2RefreshToken rt) {
+                refreshToken = rt;
+                authorizationBuilder.refreshToken(refreshToken);
+            } else {
+                // Shouldn't happen given the grant-type check above, but a
+                // silently-missing refresh token would be a confusing bug
+                // to chase later - fail loudly instead.
+                log.warn("Client id {} is configured for refresh_token but the token generator did not return one for user id {}", registeredClient.getClientId(), user.getId());
+            }
+        }
+
         authorizationService.save(authorizationBuilder.build());
 
-        return accessToken.getTokenValue();
+        Long expiresIn = accessToken.getExpiresAt() == null ? null
+                : Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds();
+        Long refreshExpiresIn = refreshToken == null || refreshToken.getExpiresAt() == null ? null
+                : Duration.between(refreshToken.getIssuedAt(), refreshToken.getExpiresAt()).getSeconds();
+
+        return new MintedTokens(
+                accessToken.getTokenValue(),
+                refreshToken == null ? null : refreshToken.getTokenValue(),
+                expiresIn,
+                refreshExpiresIn);
     }
 
-    private String describeUnverifiedContactMethods(User user) {
-        boolean emailProblem = user.getEmail() != null && !user.getEmail().isBlank() && !user.isEmailVerified();
-        boolean phoneProblem = user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank() && !user.isPhoneVerified();
+    /** Step 15B - small carrier so mintTokens can return both minted tokens plus their TTLs in seconds without a 4-arg tuple at every call site. */
+    private record MintedTokens(String accessToken, String refreshToken, Long expiresIn, Long refreshExpiresIn) {}
 
-        if (emailProblem && phoneProblem) {
-            return "Please verify your email and phone number before logging in.";
-        }
-        if (emailProblem) {
-            return "Please verify your email before logging in.";
-        }
-        if (phoneProblem) {
-            return "Please verify your phone number before logging in.";
+    /**
+     * Blocks login only when the user has verified none of the contact
+     * methods they supplied at registration - not when any one of several
+     * is still unverified. Verifying either email or phone is sufficient;
+     * a user who verified their email is never forced to also verify a
+     * phone number they also happened to register with, and vice versa.
+     */
+    private String describeUnverifiedContactMethods(User user) {
+        boolean hasEmail = user.getEmail() != null && !user.getEmail().isBlank();
+        boolean hasPhone = user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank();
+
+        boolean emailVerified = hasEmail && user.isEmailVerified();
+        boolean phoneVerified = hasPhone && user.isPhoneVerified();
+
+        if ((hasEmail || hasPhone) && !emailVerified && !phoneVerified) {
+            return "Please verify your email or phone number before logging in.";
         }
         return null;
     }

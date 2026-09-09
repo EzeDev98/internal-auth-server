@@ -150,6 +150,7 @@ public class WebSecurityConfig {
                                 appTitle + "/auth/register",
                                 appTitle + "/auth/login",
                                 appTitle + "/auth/login/verify-otp",
+                                appTitle + "/auth/refresh-token",
                                 appTitle + "/auth/activate",
                                 appTitle + "/auth/resend-activation",
                                 appTitle + "/auth/verify-phone",
@@ -204,8 +205,6 @@ public class WebSecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         configuration.setAllowedOriginPatterns(List.of(
-                "https://*.thewessmarket.com",
-                "https://*.thewealthmarket.com",
                 "http://localhost:*"
         ));
 

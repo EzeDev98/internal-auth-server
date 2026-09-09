@@ -1,9 +1,9 @@
 package com.internal.auth.feature.identity.service;
 
-import com.internal.auth.feature.identity.dto.RegisterRequest;
-import com.internal.auth.feature.identity.dto.RegisterResponse;
+import com.internal.auth.feature.identity.dto.request.RegisterRequest;
+import com.internal.auth.feature.identity.dto.response.RegisterResponse;
 
-public interface RegistrationService {
+public interface UserRegistrationService {
     /**
      * @param clientApplicationId the calling app's resolved
      *   client_application_id (see RegistrationController - resolved from

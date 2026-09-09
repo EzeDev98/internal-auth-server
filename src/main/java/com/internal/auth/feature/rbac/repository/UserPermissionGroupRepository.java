@@ -37,6 +37,8 @@ public interface UserPermissionGroupRepository extends JpaRepository<UserPermiss
 
     List<UserPermissionGroup> findAllByUser(User user);
 
+    void deleteAllByUser_Id(Long userId);
+
     @Query("SELECT DISTINCT userPermissionGroup.permissionGroup FROM UserPermissionGroup userPermissionGroup " +
             "WHERE userPermissionGroup.user.username = :username")
     List<PermissionGroup> findPermissionGroupsByUsername(String username);

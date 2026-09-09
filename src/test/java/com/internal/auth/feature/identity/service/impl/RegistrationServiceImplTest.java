@@ -4,8 +4,8 @@ import com.internal.auth.common.exception.BadRequestException;
 import com.internal.auth.common.exception.UserAlreadyExistsException;
 import com.internal.auth.common.reset.ResetValidator;
 import com.internal.auth.common.response.BaseResponse;
-import com.internal.auth.feature.identity.dto.RegisterRequest;
-import com.internal.auth.feature.identity.dto.RegisterResponse;
+import com.internal.auth.feature.identity.dto.request.RegisterRequest;
+import com.internal.auth.feature.identity.dto.response.RegisterResponse;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.identity.service.EmailVerificationService;
@@ -44,7 +44,7 @@ class RegistrationServiceImplTest {
     private final PhoneVerificationService phoneVerificationService = mock(PhoneVerificationService.class);
     private final UserService userService = mock(UserService.class);
 
-    private final RegistrationServiceImpl service = new RegistrationServiceImpl(
+    private final UserRegistrationServiceImpl service = new UserRegistrationServiceImpl(
             userRepository, registrationValidator, resetValidator, passwordEncoder,
             emailVerificationService, phoneVerificationService, userService);
 

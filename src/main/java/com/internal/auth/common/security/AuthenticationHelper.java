@@ -37,6 +37,23 @@ public class AuthenticationHelper {
     }
 
     /**
+     * Returns the subject claim of the current request's JWT for a
+     * client_credentials token — Spring Authorization Server stamps this
+     * as the calling client's own clientId. Unlike client_application_id
+     * (absent on service tokens), this is always present and is the only
+     * trustworthy source of "which app is calling" for a service-role
+     * caller — never take clientId from a request param on a destructive
+     * or scoped endpoint.
+     */
+    public String getCurrentServiceClientId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication != null && authentication.getPrincipal() instanceof Jwt jwt)) {
+            return null;
+        }
+        return jwt.getSubject();
+    }
+
+    /**
      * Returns the "client_application_id" claim of the current request's
      * JWT - stamped by AuthorizationServerConfig#jwtTokenCustomizer onto
      * every self-issued access token minted for a local user

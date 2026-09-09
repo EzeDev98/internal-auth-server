@@ -3,13 +3,13 @@ package com.internal.auth.feature.identity.service.impl;
 import com.internal.auth.common.exception.UserAlreadyExistsException;
 import com.internal.auth.common.reset.ResetValidator;
 import com.internal.auth.common.response.BaseResponse;
-import com.internal.auth.feature.identity.dto.RegisterRequest;
-import com.internal.auth.feature.identity.dto.RegisterResponse;
+import com.internal.auth.feature.identity.dto.request.RegisterRequest;
+import com.internal.auth.feature.identity.dto.response.RegisterResponse;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.identity.service.EmailVerificationService;
 import com.internal.auth.feature.identity.service.PhoneVerificationService;
-import com.internal.auth.feature.identity.service.RegistrationService;
+import com.internal.auth.feature.identity.service.UserRegistrationService;
 import com.internal.auth.feature.identity.validation.RegistrationValidator;
 import com.internal.auth.feature.rbac.service.UserService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,6 +20,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
 
 /**
  * Step 10A/10B/10C - the first Stage 3/4 (Authentication) work, and the
@@ -61,9 +63,9 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-public class RegistrationServiceImpl implements RegistrationService {
+public class UserRegistrationServiceImpl implements UserRegistrationService {
 
-    private static final Logger log = LoggerFactory.getLogger(RegistrationServiceImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(UserRegistrationServiceImpl.class);
 
     private final UserRepository userRepository;
     private final RegistrationValidator registrationValidator;
@@ -105,16 +107,17 @@ public class RegistrationServiceImpl implements RegistrationService {
         user.setUsername(username);
         user.setPhoneNumber(phoneNumber);
         user.setEmail(email);
+        user.setInternalAuthUserId("IA_" + UUID.randomUUID());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         // enabled defaults to true, emailVerified/phoneVerified default to
         // false on the entity itself - left untouched here deliberately.
 
-        User saved;
+        User savedUser;
         try {
             // IDENTITY generation (see User's @GeneratedValue) means save()
             // issues the INSERT immediately rather than deferring it to a
             // later flush, so a unique-constraint race is caught right here.
-            saved = userRepository.save(user);
+            savedUser = userRepository.save(user);
         } catch (DataIntegrityViolationException e) {
             log.warn("Registration lost a uniqueness race at save-time (username={})", username);
             throw new UserAlreadyExistsException("Unable to create account with the provided details");
@@ -123,27 +126,25 @@ public class RegistrationServiceImpl implements RegistrationService {
         // Step 10C: soft-fail by design - sendVerificationEmail already
         // swallows its own delivery/provider exceptions internally, so a
         // failure here never rolls back the account that was just created.
-        emailVerificationService.sendVerificationEmail(saved);
+        emailVerificationService.sendVerificationEmail(savedUser);
 
         // Self-service phone verification fix: same soft-fail contract as
         // email above - sendVerificationOtp swallows its own delivery
         // failures internally.
-        phoneVerificationService.sendVerificationOtp(saved);
+        phoneVerificationService.sendVerificationOtp(savedUser);
 
         // Default-role gap fix: enroll the new user into the default
         // permission group/role. addUserToDefaultPermissionGroup never
         // throws - it always returns a BaseResponse - so this is
         // soft-fail/log-only, same contract as the two sends above.
-        BaseResponse roleAssignment = userService.addUserToDefaultPermissionGroup(saved.getUsername());
+        BaseResponse roleAssignment = userService.addUserToDefaultPermissionGroup(savedUser.getUsername());
         if (roleAssignment.getStatusCode() != HttpServletResponse.SC_CREATED) {
-            log.warn("Default role assignment did not complete cleanly for user id {} (status={}, message={})",
-                    saved.getId(), roleAssignment.getStatusCode(), roleAssignment.getDescription());
+            log.warn("Default role assignment did not complete cleanly for user id {} (status={}, message={})", savedUser.getId(), roleAssignment.getStatusCode(), roleAssignment.getDescription());
         }
 
-        log.info("New user registered, id={}", saved.getId());
+        log.info("New user registered, id={}", savedUser.getId());
 
-        return new RegisterResponse(saved.getId(), saved.getUsername(),
-                "Account created successfully.");
+        return new RegisterResponse(savedUser.getInternalAuthUserId(), savedUser.getUsername(), "Account created successfully.");
     }
 
     private String normalize(String value) {

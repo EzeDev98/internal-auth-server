@@ -2,9 +2,9 @@ package com.internal.auth.feature.identity.controller;
 
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
-import com.internal.auth.feature.identity.dto.ActivationRequest;
-import com.internal.auth.feature.identity.dto.ActivationResponse;
-import com.internal.auth.feature.identity.dto.ResendActivationRequest;
+import com.internal.auth.feature.identity.dto.request.ActivationRequest;
+import com.internal.auth.feature.identity.dto.response.ActivationResponse;
+import com.internal.auth.feature.identity.dto.request.ResendActivationRequest;
 import com.internal.auth.feature.identity.service.EmailVerificationService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

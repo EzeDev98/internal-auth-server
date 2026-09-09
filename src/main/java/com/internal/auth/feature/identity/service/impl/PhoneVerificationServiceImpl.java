@@ -9,7 +9,7 @@ import com.internal.auth.common.reset.delivery.OtpDeliveryService;
 import com.internal.auth.common.reset.dto.VerifyOtpRequest;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.config.PhoneVerificationProperties;
-import com.internal.auth.feature.identity.dto.ActivationResponse;
+import com.internal.auth.feature.identity.dto.response.ActivationResponse;
 import com.internal.auth.feature.identity.model.PhoneVerificationOtp;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.PhoneVerificationOtpRepository;

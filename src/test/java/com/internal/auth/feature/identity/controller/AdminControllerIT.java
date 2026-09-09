@@ -2,8 +2,8 @@ package com.internal.auth.feature.identity.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.internal.auth.common.constant.AppConstant;
-import com.internal.auth.feature.identity.dto.AdminRegisterRequest;
-import com.internal.auth.feature.identity.dto.LoginRequest;
+import com.internal.auth.feature.identity.dto.request.AdminRegisterRequest;
+import com.internal.auth.feature.identity.dto.request.LoginRequest;
 import com.internal.auth.testsupport.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

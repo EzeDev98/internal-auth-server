@@ -27,6 +27,7 @@ import org.springframework.security.oauth2.server.authorization.token.Delegating
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 import org.springframework.security.oauth2.server.authorization.token.JwtGenerator;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2AccessTokenGenerator;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2RefreshTokenGenerator;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.security.web.SecurityFilterChain;
@@ -204,7 +205,7 @@ public class AuthorizationServerConfig {
      */
     @Bean
     public OAuth2AuthorizationService authorizationService(JdbcTemplate jdbcTemplate,
-                                                             RegisteredClientRepository registeredClientRepository) {
+                                                           RegisteredClientRepository registeredClientRepository) {
         JdbcOAuth2AuthorizationService authorizationService =
                 new JdbcOAuth2AuthorizationService(jdbcTemplate, registeredClientRepository);
 
@@ -228,10 +229,19 @@ public class AuthorizationServerConfig {
      * token generator, which is what makes jwtTokenCustomizer() below apply
      * uniformly to every self-issued token instead of only the ones minted
      * through the filter chain. Hand-assembled (JwtGenerator +
-     * OAuth2AccessTokenGenerator, no refresh token generator - nothing
-     * requests refresh tokens yet) instead of relying on
-     * OAuth2AuthorizationServerConfigurer's own default composition, since
-     * that default isn't a retrievable bean either.
+     * OAuth2AccessTokenGenerator + OAuth2RefreshTokenGenerator) instead of
+     * relying on OAuth2AuthorizationServerConfigurer's own default
+     * composition, since that default isn't a retrievable bean either.
+     *
+     * Step 15A addition: OAuth2RefreshTokenGenerator added to the
+     * delegation chain so refresh tokens can now be minted alongside
+     * access tokens (LoginServiceImpl.mintAccessToken persists both on the
+     * same OAuth2Authorization record). DelegatingOAuth2TokenGenerator
+     * dispatches to whichever delegate's supports() matches the requested
+     * OAuth2TokenType, so adding this generator here doesn't change
+     * behavior for any caller that only ever asks for an access token
+     * (client_credentials still gets exactly what it got before) - it only
+     * enables callers that explicitly request a REFRESH_TOKEN-typed token.
      */
     @Bean
     public OAuth2TokenGenerator<OAuth2Token> tokenGenerator(
@@ -241,7 +251,8 @@ public class AuthorizationServerConfig {
         JwtGenerator jwtGenerator = new JwtGenerator(jwtEncoder);
         jwtGenerator.setJwtCustomizer(jwtTokenCustomizer);
         OAuth2AccessTokenGenerator accessTokenGenerator = new OAuth2AccessTokenGenerator();
-        return new DelegatingOAuth2TokenGenerator(jwtGenerator, accessTokenGenerator);
+        OAuth2RefreshTokenGenerator refreshTokenGenerator = new OAuth2RefreshTokenGenerator();
+        return new DelegatingOAuth2TokenGenerator(jwtGenerator, accessTokenGenerator, refreshTokenGenerator);
     }
 
     /**
