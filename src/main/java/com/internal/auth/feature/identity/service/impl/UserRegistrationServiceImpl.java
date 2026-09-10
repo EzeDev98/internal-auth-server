@@ -14,6 +14,7 @@ import com.internal.auth.feature.identity.validation.RegistrationValidator;
 import com.internal.auth.feature.rbac.service.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -62,10 +63,9 @@ import java.util.UUID;
  * Javadoc and the V8 migration).
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class UserRegistrationServiceImpl implements UserRegistrationService {
-
-    private static final Logger log = LoggerFactory.getLogger(UserRegistrationServiceImpl.class);
 
     private final UserRepository userRepository;
     private final RegistrationValidator registrationValidator;

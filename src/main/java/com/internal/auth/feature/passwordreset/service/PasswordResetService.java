@@ -3,9 +3,9 @@ package com.internal.auth.feature.passwordreset.service;
 
 import com.internal.auth.common.reset.dto.VerifyOtpRequest;
 import com.internal.auth.common.reset.dto.VerifyOtpResponse;
-import com.internal.auth.feature.passwordreset.dto.CompletePasswordResetRequest;
-import com.internal.auth.feature.passwordreset.dto.PasswordResetRequestDto;
-import com.internal.auth.feature.passwordreset.dto.PasswordResetResponse;
+import com.internal.auth.feature.passwordreset.dto.request.CompletePasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.request.PasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.response.PasswordResetResponse;
 
 public interface PasswordResetService {
 
@@ -21,7 +21,7 @@ public interface PasswordResetService {
      *   lookup, and the resend-cooldown bucket, since phoneNumber alone
      *   can now belong to accounts in different apps.
      */
-    PasswordResetResponse requestOtp(PasswordResetRequestDto request, Long clientApplicationId);
+    PasswordResetResponse requestOtp(PasswordResetRequest request, Long clientApplicationId);
 
     /**
      * Verifies a submitted OTP and, on success, issues a short-lived,

@@ -31,7 +31,7 @@ public class AppConstant {
 
     public static final String PASSWORD_RESET_COOLDOWN_KEY_PREFIX = "password-reset:otp-cooldown:";
 
-    public static final String GENERIC_REQUEST_MESSAGE = "If an account is associated with this phone number, a verification code has been sent.";
+    public static final String GENERIC_REQUEST_MESSAGE = "A verification code has been sent.";
 
     public static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 

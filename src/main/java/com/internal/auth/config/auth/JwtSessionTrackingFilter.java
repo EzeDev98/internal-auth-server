@@ -1,5 +1,6 @@
 package com.internal.auth.config.auth;
 
+import com.internal.auth.common.crypto.TokenHasher;
 import com.internal.auth.config.redis.SessionStorage;
 import com.internal.auth.common.security.AuthenticationHelper;
 import com.internal.auth.feature.identity.model.User;
@@ -55,6 +56,7 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
     private final SessionStorage sessionStorage;
     private final AuthenticationHelper authenticationHelper;
     private final UserRepository userRepository;
+    private final TokenHasher tokenHasher;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -82,15 +84,14 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
         }
 
         String sid = extractSessionId(jwt);
-        String cacheKey = resolveCacheKey(sid, username);
-
-        if (sessionStorage.getCache(TRACKED_CACHE, cacheKey) != null) {
-            return; // already tracked recently — skip the database round trip
-        }
-
         String rawToken = extractRawToken(request);
         if (rawToken == null) {
             return;
+        }
+        String cacheKey = resolveCacheKey(sid, username, rawToken);
+
+        if (sessionStorage.getCache(TRACKED_CACHE, cacheKey) != null) {
+            return; // already tracked recently — skip the database round trip
         }
 
         Optional<User> user = resolveUser(username);
@@ -144,12 +145,13 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
      * a cache entry. A Keycloak-issued token carries no such claim and
      * falls back to the prior username-only key, unchanged.
      */
-    private String resolveCacheKey(String sid, String username) {
+    private String resolveCacheKey(String sid, String username, String rawToken) {
         if (sid != null) {
             return sid;
         }
         Long clientApplicationId = authenticationHelper.getCurrentClientApplicationId();
-        return clientApplicationId != null ? clientApplicationId + ":" + username : username;
+        String base = clientApplicationId != null ? clientApplicationId + ":" + username : username;
+        return base + ":" + tokenHasher.sha256Hex(rawToken);
     }
 
     private String extractRawToken(HttpServletRequest request) {

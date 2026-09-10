@@ -6,8 +6,8 @@ import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.repository.ClientApplicationRepository;
 import com.internal.auth.feature.identity.dto.request.LoginRequest;
 import com.internal.auth.feature.identity.dto.request.VerifyLoginOtpRequest;
-import com.internal.auth.feature.passwordreset.dto.CompletePasswordResetRequest;
-import com.internal.auth.feature.passwordreset.dto.PasswordResetRequestDto;
+import com.internal.auth.feature.passwordreset.dto.request.CompletePasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.request.PasswordResetRequest;
 import com.internal.auth.testsupport.IntegrationTestBase;
 import com.internal.auth.testsupport.builder.ClientApplicationTestDataBuilder;
 import org.junit.jupiter.api.Test;
@@ -105,7 +105,7 @@ class AdminAndResetChannelRateLimitIT extends IntegrationTestBase {
         return mockMvc.perform(post("/api/v1/password-reset/request")
                 .header("Authorization", basicAuthHeader(client.getClientId(), secret))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new PasswordResetRequestDto(phone))));
+                .content(objectMapper.writeValueAsString(new PasswordResetRequest(phone))));
     }
 
     private ResultActions verifyResetOtp(ClientApplication client, String secret, String phone) throws Exception {

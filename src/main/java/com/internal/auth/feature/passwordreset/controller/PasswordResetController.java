@@ -7,9 +7,9 @@ import com.internal.auth.common.reset.dto.VerifyOtpResponse;
 import com.internal.auth.common.util.RateLimiterService;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
-import com.internal.auth.feature.passwordreset.dto.CompletePasswordResetRequest;
-import com.internal.auth.feature.passwordreset.dto.PasswordResetRequestDto;
-import com.internal.auth.feature.passwordreset.dto.PasswordResetResponse;
+import com.internal.auth.feature.passwordreset.dto.request.CompletePasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.request.PasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.response.PasswordResetResponse;
 import com.internal.auth.feature.passwordreset.service.PasswordResetService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -72,7 +72,7 @@ public class PasswordResetController {
     @PostMapping("/request")
     public ResponseEntity<InternalAuthApiResponse<PasswordResetResponse>> requestOtp(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
-            @RequestBody PasswordResetRequestDto request) {
+            @RequestBody PasswordResetRequest request) {
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
         rateLimiterService.checkRateLimit("ratelimit:password-reset-otp:phone:" + client.getId() + ":" + request.getPhoneNumber(), MAX_RESET_PASSWORD_REQUEST, Duration.ofHours(RESET_PASSWORD_RATE_LIMIT_DURATION));
         PasswordResetResponse response = passwordResetService.requestOtp(request, client.getId());

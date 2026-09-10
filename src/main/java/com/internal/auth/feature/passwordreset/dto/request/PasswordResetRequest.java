@@ -1,4 +1,4 @@
-package com.internal.auth.feature.passwordreset.dto;
+package com.internal.auth.feature.passwordreset.dto.request;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -9,6 +9,6 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class PasswordResetRequestDto {
+public class PasswordResetRequest {
     private String phoneNumber;
 }

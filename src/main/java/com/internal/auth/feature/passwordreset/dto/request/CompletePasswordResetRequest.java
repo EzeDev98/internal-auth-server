@@ -1,4 +1,4 @@
-package com.internal.auth.feature.passwordreset.dto;
+package com.internal.auth.feature.passwordreset.dto.request;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

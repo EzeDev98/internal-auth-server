@@ -34,6 +34,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     Optional<User> findByInternalAuthUserIdAndClientApplicationId(String internalAuthUserId, Long clientApplicationId);
 
+    // internalAuthUserId is globally unique (generated once at
+    // registration, never reused), unlike username/phone/email - so this
+    // bare lookup is safe without a clientApplicationId qualifier. Backs
+    // jwtTokenCustomizer, which only has the JWT's own principal name to
+    // key off (see AuthorizationServerConfig's javadoc on that bean).
+    Optional<User> findByInternalAuthUserId(String internalAuthUserId);
+
     /**
      * Step 2 (RBAC admin lookup fix): unscoped by client_application_id like
      * findByUsername above, but returns every match instead of assuming

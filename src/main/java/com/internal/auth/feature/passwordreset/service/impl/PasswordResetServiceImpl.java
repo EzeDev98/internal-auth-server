@@ -11,9 +11,9 @@ import com.internal.auth.common.reset.dto.VerifyOtpRequest;
 import com.internal.auth.common.reset.dto.VerifyOtpResponse;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.passwordreset.config.PasswordResetProperties;
-import com.internal.auth.feature.passwordreset.dto.CompletePasswordResetRequest;
-import com.internal.auth.feature.passwordreset.dto.PasswordResetRequestDto;
-import com.internal.auth.feature.passwordreset.dto.PasswordResetResponse;
+import com.internal.auth.feature.passwordreset.dto.request.CompletePasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.request.PasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.response.PasswordResetResponse;
 import com.internal.auth.common.reset.ResetStatus;
 import com.internal.auth.feature.passwordreset.model.PasswordResetOtp;
 import com.internal.auth.feature.passwordreset.model.PasswordResetToken;
@@ -90,7 +90,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     @Override
     @Transactional
-    public PasswordResetResponse requestOtp(PasswordResetRequestDto request, Long clientApplicationId) {
+    public PasswordResetResponse requestOtp(PasswordResetRequest request, Long clientApplicationId) {
         resetValidator.validatePhoneNumberFoResetOperations(request.getPhoneNumber());
         String phoneNumber = request.getPhoneNumber();
 
@@ -132,7 +132,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         otpResetEngine.startCooldown(cooldownBucket, properties.getOtp().getResendCooldownSeconds());
 
-        return new PasswordResetResponse(GENERIC_REQUEST_MESSAGE, 200);
+        return new PasswordResetResponse(GENERIC_REQUEST_MESSAGE, 200, null);
     }
 
     @Override
@@ -188,6 +188,6 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         sessionManagementService.invalidateActiveSessionForUser(user.getId());
 
         log.info("Password reset completed successfully for user id {}", user.getId());
-        return new PasswordResetResponse("Password reset successful. Please log in with your new password.", 200);
+        return new PasswordResetResponse("Password reset successful. Please log in with your new password.", 200, user.getPhoneNumber());
     }
 }

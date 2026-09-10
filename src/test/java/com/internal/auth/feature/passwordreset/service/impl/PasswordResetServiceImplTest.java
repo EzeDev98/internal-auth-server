@@ -16,9 +16,9 @@ import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.passwordreset.config.PasswordResetProperties;
-import com.internal.auth.feature.passwordreset.dto.CompletePasswordResetRequest;
-import com.internal.auth.feature.passwordreset.dto.PasswordResetRequestDto;
-import com.internal.auth.feature.passwordreset.dto.PasswordResetResponse;
+import com.internal.auth.feature.passwordreset.dto.request.CompletePasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.request.PasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.response.PasswordResetResponse;
 import com.internal.auth.common.reset.ResetStatus;
 import com.internal.auth.feature.passwordreset.model.PasswordResetOtp;
 import com.internal.auth.feature.passwordreset.model.PasswordResetToken;
@@ -159,7 +159,7 @@ class PasswordResetServiceImplTest {
     @Test
     @DisplayName("requestOtp: invalid phone number throws and never reaches the cooldown check")
     void requestOtp_invalidPhoneNumber_throwsAndSkipsCooldownCheck() {
-        PasswordResetRequestDto request = new PasswordResetRequestDto("not-a-phone");
+        PasswordResetRequest request = new PasswordResetRequest("not-a-phone");
         doThrow(new BadRequestException("Please enter a valid phone number"))
                 .when(resetValidator).validatePhoneNumberFoResetOperations("not-a-phone");
 
@@ -171,7 +171,7 @@ class PasswordResetServiceImplTest {
     @Test
     @DisplayName("requestOtp: cooling down throws and never reaches the user lookup")
     void requestOtp_coolingDown_throwsAndSkipsUserLookup() {
-        PasswordResetRequestDto request = new PasswordResetRequestDto(PHONE_NUMBER);
+        PasswordResetRequest request = new PasswordResetRequest(PHONE_NUMBER);
         doThrow(new OtpResendCooldownException("Please wait before requesting another code.", 30L))
                 .when(otpResetEngine).rejectIfCoolingDown(cooldownBucket);
 
@@ -184,7 +184,7 @@ class PasswordResetServiceImplTest {
     @Test
     @DisplayName("requestOtp: composes the cooldown key as clientApplicationId:phoneNumber, unscoped by trim")
     void requestOtp_composesMultiTenantCooldownKey() {
-        PasswordResetRequestDto request = new PasswordResetRequestDto(PHONE_NUMBER);
+        PasswordResetRequest request = new PasswordResetRequest(PHONE_NUMBER);
         when(userRepository.findByPhoneNumberAndClientApplicationId(PHONE_NUMBER, CLIENT_APPLICATION_ID))
                 .thenReturn(Optional.empty());
 
@@ -200,7 +200,7 @@ class PasswordResetServiceImplTest {
     @Test
     @DisplayName("requestOtp: registered phone number invalidates the prior OTP, issues and sends a new one, and returns the generic response")
     void requestOtp_registeredPhoneNumber_issuesOtpAndReturnsGenericResponse() {
-        PasswordResetRequestDto request = new PasswordResetRequestDto(PHONE_NUMBER);
+        PasswordResetRequest request = new PasswordResetRequest(PHONE_NUMBER);
         User user = buildUser();
         Optional<PasswordResetOtp> existingOtp = Optional.of(buildActiveOtp());
         ClientApplication clientApplication = new ClientApplication();
@@ -234,7 +234,7 @@ class PasswordResetServiceImplTest {
     @Test
     @DisplayName("requestOtp: unregistered phone number still starts the cooldown and returns the same generic response, without issuing an OTP")
     void requestOtp_unregisteredPhoneNumber_returnsGenericResponseWithoutIssuingOtp() {
-        PasswordResetRequestDto request = new PasswordResetRequestDto(PHONE_NUMBER);
+        PasswordResetRequest request = new PasswordResetRequest(PHONE_NUMBER);
         when(userRepository.findByPhoneNumberAndClientApplicationId(PHONE_NUMBER, CLIENT_APPLICATION_ID))
                 .thenReturn(Optional.empty());
 
@@ -256,7 +256,7 @@ class PasswordResetServiceImplTest {
     @Test
     @DisplayName("requestOtp: never falls back to the unscoped repository lookup")
     void requestOtp_neverUsesUnscopedRepositoryLookup() {
-        PasswordResetRequestDto request = new PasswordResetRequestDto(PHONE_NUMBER);
+        PasswordResetRequest request = new PasswordResetRequest(PHONE_NUMBER);
         when(userRepository.findByPhoneNumberAndClientApplicationId(PHONE_NUMBER, CLIENT_APPLICATION_ID))
                 .thenReturn(Optional.of(buildUser()));
         when(passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(

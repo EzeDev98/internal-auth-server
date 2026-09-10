@@ -193,6 +193,9 @@ public class UserLoginServiceImpl implements UserLoginService {
         log.info("User id {} logged in", user.getId());
         eventPublisher.publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), clientApplicationId));
         MintedTokens tokens = mintTokens(user, clientApplicationId);
+
+        sessionManagementService.createSession(user.getId(), user.getPhoneNumber(), tokens.accessToken());
+
         return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false,
                 tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn(), tokens.refreshExpiresIn());
     }

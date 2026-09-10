@@ -1,6 +1,7 @@
 package com.internal.auth.config.auth;
 
 import com.fasterxml.jackson.databind.Module;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.internal.auth.feature.signingkey.service.SigningKeyService;
 import com.nimbusds.jose.jwk.source.JWKSource;
@@ -203,18 +204,42 @@ public class AuthorizationServerConfig {
      * columns - without them this compiles fine but throws at runtime the
      * first time a real authorization round-trips through the database.
      */
+    /**
+     * client_application_id is baked into the access-token claims as a boxed
+     * Long in jwtTokenCustomizer() below, and that same claims map
+     * round-trips through this bean's ObjectMapper whenever an authorization
+     * row is written and read back. java.lang.Long isn't on
+     * SecurityJackson2Modules' allowlist, so any findByToken()/findById()
+     * call against a row containing that claim throws "The class with
+     * java.lang.Long ... is not in the allowlist" - which is exactly the 500
+     * LogoutServiceImpl.logout() was surfacing. This mixin tells Jackson to
+     * (de)serialize Long as a plain number instead of routing it through the
+     * allowlist-checked polymorphic type resolver; it must be applied to
+     * both the row mapper (reads) and the parameters mapper (writes) below
+     * so the two stay symmetric.
+     */
+    @JsonTypeInfo(use = JsonTypeInfo.Id.NONE)
+    private static class LongMixin {
+    }
+
     @Bean
     public OAuth2AuthorizationService authorizationService(JdbcTemplate jdbcTemplate, RegisteredClientRepository registeredClientRepository) {
         JdbcOAuth2AuthorizationService authorizationService = new JdbcOAuth2AuthorizationService(jdbcTemplate, registeredClientRepository);
 
-        JdbcOAuth2AuthorizationService.OAuth2AuthorizationRowMapper rowMapper = new JdbcOAuth2AuthorizationService.OAuth2AuthorizationRowMapper(registeredClientRepository);
         ObjectMapper objectMapper = new ObjectMapper();
         ClassLoader classLoader = JdbcOAuth2AuthorizationService.class.getClassLoader();
         List<Module> securityModules = SecurityJackson2Modules.getModules(classLoader);
         objectMapper.registerModules(securityModules);
         objectMapper.registerModule(new OAuth2AuthorizationServerJackson2Module());
+        objectMapper.addMixIn(Long.class, LongMixin.class);
+
+        JdbcOAuth2AuthorizationService.OAuth2AuthorizationRowMapper rowMapper = new JdbcOAuth2AuthorizationService.OAuth2AuthorizationRowMapper(registeredClientRepository);
         rowMapper.setObjectMapper(objectMapper);
         authorizationService.setAuthorizationRowMapper(rowMapper);
+
+        JdbcOAuth2AuthorizationService.OAuth2AuthorizationParametersMapper parametersMapper = new JdbcOAuth2AuthorizationService.OAuth2AuthorizationParametersMapper();
+        parametersMapper.setObjectMapper(objectMapper);
+        authorizationService.setAuthorizationParametersMapper(parametersMapper);
 
         return authorizationService;
     }
@@ -287,7 +312,9 @@ public class AuthorizationServerConfig {
      * details is unset and this correctly adds no claim there.
      */
     @Bean
-    public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer(SigningKeyService signingKeyService) {
+    public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer(
+            SigningKeyService signingKeyService,
+            com.internal.auth.feature.identity.repository.UserRepository userRepository) {
         return context -> {
             context.getJwsHeader().keyId(signingKeyService.getCurrentKid());
             if (OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())) {
@@ -299,11 +326,19 @@ public class AuthorizationServerConfig {
                     context.getClaims().claim("roles", roles);
                 }
 
-                Object details = context.getPrincipal().getDetails();
-                if (details instanceof Long clientApplicationId) {
-                    context.getClaims().claim("client_application_id", clientApplicationId);
-                }
+                userRepository.findByInternalAuthUserId(context.getPrincipal().getName())
+                        .ifPresent(user -> {
+                            context.getClaims().claim("client_application_id", user.getClientApplicationId());
+                            context.getClaims().claim("username", user.getUsername());
+                            if (user.getEmail() != null) {
+                                context.getClaims().claim("email", user.getEmail());
+                            }
+                            if (user.getPhoneNumber() != null) {
+                                context.getClaims().claim("phone_number", user.getPhoneNumber());
+                            }
+                        });
             }
         };
     }
+
 }

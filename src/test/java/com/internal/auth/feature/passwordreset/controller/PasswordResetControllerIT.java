@@ -8,8 +8,8 @@ import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.repository.ClientApplicationRepository;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
-import com.internal.auth.feature.passwordreset.dto.CompletePasswordResetRequest;
-import com.internal.auth.feature.passwordreset.dto.PasswordResetRequestDto;
+import com.internal.auth.feature.passwordreset.dto.request.CompletePasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.request.PasswordResetRequest;
 import com.internal.auth.feature.passwordreset.model.PasswordResetOtp;
 import com.internal.auth.feature.passwordreset.repository.PasswordResetOtpRepository;
 import com.internal.auth.testsupport.IntegrationTestBase;
@@ -75,7 +75,7 @@ class PasswordResetControllerIT extends IntegrationTestBase {
                 .withClientApplicationId(client.getId())
                 .withPhoneNumber("+23480000801")
                 .build());
-        PasswordResetRequestDto request = new PasswordResetRequestDto("+23480000801");
+        PasswordResetRequest request = new PasswordResetRequest("+23480000801");
 
         mockMvc.perform(post("/api/v1/password-reset/request")
                         .header("Authorization", basicAuthHeader(client.getClientId(), "correct-secret"))
@@ -87,7 +87,7 @@ class PasswordResetControllerIT extends IntegrationTestBase {
 
     @Test
     void requestOtp_withNoClientCredentials_isUnauthorized() throws Exception {
-        PasswordResetRequestDto request = new PasswordResetRequestDto("+23480000802");
+        PasswordResetRequest request = new PasswordResetRequest("+23480000802");
 
         mockMvc.perform(post("/api/v1/password-reset/request")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -98,7 +98,7 @@ class PasswordResetControllerIT extends IntegrationTestBase {
     @Test
     void requestOtp_withWrongClientSecret_isUnauthorized() throws Exception {
         ClientApplication client = persistClientWithSecret("correct-secret");
-        PasswordResetRequestDto request = new PasswordResetRequestDto("+23480000803");
+        PasswordResetRequest request = new PasswordResetRequest("+23480000803");
 
         mockMvc.perform(post("/api/v1/password-reset/request")
                         .header("Authorization", basicAuthHeader(client.getClientId(), "wrong-secret"))
