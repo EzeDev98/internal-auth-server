@@ -254,7 +254,7 @@ public class UserLoginServiceImpl implements UserLoginService {
             throw new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN_MESSAGE);
         }
 
-        User user = userRepository.findByUsernameAndClientApplicationId(authorization.getPrincipalName(), clientApplicationId)
+        User user = userRepository.findByInternalAuthUserIdAndClientApplicationId(authorization.getPrincipalName(), clientApplicationId)
                 .orElseThrow(() -> new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN_MESSAGE));
 
         if (!user.isEnabled()) {
@@ -358,7 +358,7 @@ public class UserLoginServiceImpl implements UserLoginService {
         Collection<GrantedAuthority> authorities = roles.stream()
                 .map(role -> (GrantedAuthority) new SimpleGrantedAuthority(role.getRoleName().toLowerCase(Locale.ROOT)))
                 .collect(Collectors.toSet());
-        UsernamePasswordAuthenticationToken userPrincipal = new UsernamePasswordAuthenticationToken(user.getUsername(), null, authorities);
+        UsernamePasswordAuthenticationToken userPrincipal = new UsernamePasswordAuthenticationToken(user.getInternalAuthUserId(), null, authorities);
         // See class javadoc: read back by AuthorizationServerConfig's
         // jwtTokenCustomizer to stamp a "client_application_id" claim onto
         // the minted token.
@@ -387,7 +387,7 @@ public class UserLoginServiceImpl implements UserLoginService {
                 generatedAccessToken.getExpiresAt());
 
         OAuth2Authorization.Builder authorizationBuilder = OAuth2Authorization.withRegisteredClient(registeredClient)
-                .principalName(user.getUsername())
+                .principalName(user.getInternalAuthUserId())
                 .authorizationGrantType(LOCAL_LOGIN_GRANT_TYPE)
                 .authorizedScopes(Set.of());
 

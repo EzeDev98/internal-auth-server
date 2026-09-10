@@ -1,6 +1,7 @@
 package com.internal.auth.feature.identity.controller;
 
 import com.internal.auth.common.reset.dto.VerifyOtpRequest;
+import com.internal.auth.common.response.InternalAuthApiResponse;
 import com.internal.auth.common.util.RateLimiterService;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
@@ -48,7 +49,7 @@ public class PhoneVerificationController {
     private final RateLimiterService rateLimiterService;
 
     @PostMapping("/verify-phone")
-    public ResponseEntity<ActivationResponse> verifyPhone(
+    public ResponseEntity<InternalAuthApiResponse<ActivationResponse>> verifyPhone(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
             @RequestBody VerifyOtpRequest request) {
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
@@ -59,14 +60,16 @@ public class PhoneVerificationController {
                 PHONE_VERIFICATION_VERIFY_RATE_LIMIT_KEY_PREFIX + client.getId() + ":" + request.getPhoneNumber(),
                 MAX_PHONE_VERIFICATION_VERIFY_REQUEST,
                 Duration.ofHours(PHONE_VERIFICATION_VERIFY_RATE_LIMIT_DURATION_HOURS));
-        return ResponseEntity.ok(phoneVerificationService.verify(request, client.getId()));
+        ActivationResponse response = phoneVerificationService.verify(request, client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 
     @PostMapping("/resend-phone-verification")
-    public ResponseEntity<ActivationResponse> resendPhoneVerification(
+    public ResponseEntity<InternalAuthApiResponse<ActivationResponse>> resendPhoneVerification(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
             @RequestBody ResendPhoneVerificationRequest request) {
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
-        return ResponseEntity.ok(phoneVerificationService.resendVerification(request.getPhoneNumber(), client.getId()));
+        ActivationResponse response = phoneVerificationService.resendVerification(request.getPhoneNumber(), client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 }
