@@ -36,6 +36,7 @@ class LoggingEmailDeliveryServiceTest {
 
     private static final String EMAIL = "user@example.com";
     private static final String VERIFICATION_LINK = "https://app.example.com/activate?token=super-secret-raw-token";
+    private static final String APP_NAME = "SyncPoint";
 
     private LoggingEmailDeliveryService service;
     private ListAppender<ILoggingEvent> logAppender;
@@ -76,7 +77,7 @@ class LoggingEmailDeliveryServiceTest {
         // un-set boolean field defaults to false in plain Java exactly
         // like matchIfMissing does when the property itself is absent,
         // so this genuinely exercises "the default", not just "false".
-        service.sendVerificationEmail(EMAIL, VERIFICATION_LINK);
+        service.sendVerificationEmail(EMAIL, VERIFICATION_LINK, APP_NAME);
 
         assertThat(logAppender.list).hasSize(1);
         ILoggingEvent event = logAppender.list.get(0);
@@ -86,14 +87,14 @@ class LoggingEmailDeliveryServiceTest {
                 .contains(EMAIL)
                 .doesNotContain(VERIFICATION_LINK)
                 .doesNotContain("[DEV ONLY]")
-                .isEqualTo("Email verification link generated for " + EMAIL + " (delivery provider not configured)");
+                .isEqualTo("Email verification link generated for " + EMAIL + " (app=" + APP_NAME + ", delivery provider not configured)");
     }
 
     @Test
     void sendVerificationEmail_logsTheRawLink_onlyWhenLogToConsoleIsExplicitlyEnabled() {
         ReflectionTestUtils.setField(service, "logToConsole", true);
 
-        service.sendVerificationEmail(EMAIL, VERIFICATION_LINK);
+        service.sendVerificationEmail(EMAIL, VERIFICATION_LINK, APP_NAME);
 
         assertThat(logAppender.list).hasSize(1);
         ILoggingEvent event = logAppender.list.get(0);
@@ -102,6 +103,7 @@ class LoggingEmailDeliveryServiceTest {
         assertThat(event.getFormattedMessage())
                 .contains("[DEV ONLY]")
                 .contains(EMAIL)
-                .contains(VERIFICATION_LINK);
+                .contains(VERIFICATION_LINK)
+                .contains(APP_NAME);
     }
 }

@@ -1,6 +1,5 @@
 package com.internal.auth.feature.identity.service.impl;
 
-import com.internal.auth.common.exception.BadRequestException;
 import com.internal.auth.common.exception.OtpInvalidException;
 import com.internal.auth.common.exception.UserNotFoundException;
 import com.internal.auth.common.reset.OtpResetEngine;
@@ -45,7 +44,8 @@ import static com.internal.auth.common.constant.AppConstant.PHONE_VERIFICATION_C
 public class PhoneVerificationServiceImpl implements PhoneVerificationService {
 
     private static final Logger log = LoggerFactory.getLogger(PhoneVerificationServiceImpl.class);
-    private static final String GENERIC_RESEND_MESSAGE = "A verification code has been sent.";
+    private static final String GENERIC_RESEND_MESSAGE =
+            "If this phone number is registered and not yet verified, a verification code has been sent.";
 
     private final UserRepository userRepository;
     private final PhoneVerificationOtpRepository phoneVerificationOtpRepository;
@@ -115,20 +115,24 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
     @Override
     @Transactional
     public ActivationResponse resendVerification(String phoneNumber, Long clientApplicationId) {
+        // User-enumeration protection: an unregistered phone number, an
+        // already-verified user, and a genuinely-sent OTP must all produce
+        // the exact same response - mirrors PasswordResetServiceImpl's
+        // "silently no-op for an unregistered phone number" approach.
         if (phoneNumber == null || phoneNumber.isBlank() || clientApplicationId == null) {
-            throw new BadRequestException("Phone number and clientApplicationId are required");
+            return new ActivationResponse(GENERIC_RESEND_MESSAGE);
         }
 
         String cooldownKey = clientApplicationId + ":" + phoneNumber;
         RBucket<String> cooldownBucket = otpResetEngine.getCooldownBucket(redissonClient, PHONE_VERIFICATION_COOLDOWN_KEY_PREFIX, cooldownKey);
         otpResetEngine.rejectIfCoolingDown(cooldownBucket);
 
-        User user = userRepository.findByPhoneNumberAndClientApplicationId(phoneNumber.trim(), clientApplicationId)
-                .orElseThrow(() -> new UserNotFoundException("No user found for the provided phone number " + phoneNumber));
+        userRepository.findByPhoneNumberAndClientApplicationId(phoneNumber.trim(), clientApplicationId)
+                // sendVerificationOtp() already no-ops for an already-verified
+                // user, so this is safe to call unconditionally here.
+                .ifPresent(this::sendVerificationOtp);
 
-        sendVerificationOtp(user);
-
-        log.info("Otp successfully re-sent to phone number " + phoneNumber);
+        log.info("Phone verification resend requested for a phone number");
 
         otpResetEngine.startCooldown(cooldownBucket, properties.getResendCooldownSeconds());
 

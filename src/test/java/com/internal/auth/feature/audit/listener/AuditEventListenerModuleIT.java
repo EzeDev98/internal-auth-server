@@ -62,7 +62,7 @@ import static org.mockito.Mockito.reset;
 @ActiveProfiles("test")
 @TestPropertySource(properties = "spring.autoconfigure.exclude=org.redisson.spring.starter.RedissonAutoConfigurationV4")
 @ApplicationModuleTest
-class AuditEventListenerModuleTest {
+class AuditEventListenerModuleIT {
 
     private static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))

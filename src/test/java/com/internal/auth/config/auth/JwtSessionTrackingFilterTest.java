@@ -5,6 +5,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.internal.auth.config.redis.SessionStorage;
+import com.internal.auth.common.crypto.TokenHasher;
 import com.internal.auth.common.security.AuthenticationHelper;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
@@ -54,9 +55,10 @@ class JwtSessionTrackingFilterTest {
     private final SessionStorage sessionStorage = mock(SessionStorage.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final AuthenticationHelper authenticationHelper = new AuthenticationHelper();
+    private final TokenHasher tokenHasher = mock(TokenHasher.class);
 
     private final JwtSessionTrackingFilter filter =
-            new JwtSessionTrackingFilter(sessionManagementService, sessionStorage, authenticationHelper, userRepository);
+            new JwtSessionTrackingFilter(sessionManagementService, sessionStorage, authenticationHelper, userRepository, tokenHasher);
 
     private final HttpServletRequest request = mock(HttpServletRequest.class);
     private final HttpServletResponse response = mock(HttpServletResponse.class);
@@ -109,7 +111,7 @@ class JwtSessionTrackingFilterTest {
 
         filter.doFilterInternal(request, response, filterChain);
 
-        verify(sessionManagementService).createSession(42L, "08010000001", "raw-token-value");
+        verify(sessionManagementService).createSession(42L, "08010000001", "raw-token-value", null, null);
         verify(userRepository, never()).findAllByUsername(any());
         verify(sessionStorage).putCache(eq("JWT_SESSION_TRACKED"), any(), eq(Boolean.TRUE), eq(300L));
     }
@@ -125,7 +127,7 @@ class JwtSessionTrackingFilterTest {
 
         filter.doFilterInternal(request, response, filterChain);
 
-        verify(sessionManagementService).createSession(eq(7L), any(), eq("raw-token-value"));
+        verify(sessionManagementService).createSession(eq(7L), any(), eq("raw-token-value"), any(), any());
     }
 
     @Test

@@ -6,6 +6,7 @@ import com.internal.auth.feature.session.dto.LogoutResponse;
 import com.internal.auth.feature.session.model.UserSession;
 import com.internal.auth.feature.session.repository.UserSessionRepository;
 import com.internal.auth.feature.session.service.SessionManagementService;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 
@@ -26,9 +27,10 @@ class LogoutServiceImplTest {
     private final UserSessionRepository userSessionRepository = mock(UserSessionRepository.class);
     private final SessionManagementService sessionManagementService = mock(SessionManagementService.class);
     private final TokenHasher tokenHasher = mock(TokenHasher.class);
+    private final OAuth2AuthorizationService authorizationService = mock(OAuth2AuthorizationService.class);
 
     private final LogoutServiceImpl service =
-            new LogoutServiceImpl(userSessionRepository, sessionManagementService, tokenHasher);
+            new LogoutServiceImpl(userSessionRepository, sessionManagementService, tokenHasher, authorizationService);
 
     @Test
     void logout_nullToken_throwsBadRequestBeforeTouchingSessionLookup() {

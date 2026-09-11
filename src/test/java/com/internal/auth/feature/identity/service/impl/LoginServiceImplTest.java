@@ -19,6 +19,7 @@ import com.internal.auth.feature.identity.model.LoginMfaOtp;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.LoginMfaOtpRepository;
 import com.internal.auth.feature.identity.repository.UserRepository;
+import com.internal.auth.feature.session.service.SessionManagementService;
 import com.internal.auth.common.reset.ResetStatus;
 import com.internal.auth.feature.rbac.model.Role;
 import com.internal.auth.feature.rbac.repository.UserRolesRepository;
@@ -84,12 +85,13 @@ class LoginServiceImplTest {
     private final AuthorizationServerSettings authorizationServerSettings =
             AuthorizationServerSettings.builder().issuer(SELF_ISSUER_URI).build();
     private final ClientApplicationService clientApplicationService = mock(ClientApplicationService.class);
+    private final SessionManagementService sessionManagementService = mock(SessionManagementService.class);
 
     private final UserLoginServiceImpl service = new UserLoginServiceImpl(
             eventPublisher, userRepository, passwordEncoder, loginMfaOtpRepository, otpService,
             otpDeliveryService, otpResetEngine, loginMfaProperties, redissonClient, userRolesRepository,
             registeredClientRepository, authorizationService, tokenGenerator, authorizationServerSettings,
-            clientApplicationService);
+            clientApplicationService, sessionManagementService);
 
     @BeforeEach
     void wireSelfIssuerUri() {

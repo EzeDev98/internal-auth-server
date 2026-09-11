@@ -361,7 +361,7 @@ public class UserLoginServiceImpl implements UserLoginService {
         Collection<GrantedAuthority> authorities = roles.stream()
                 .map(role -> (GrantedAuthority) new SimpleGrantedAuthority(role.getRoleName().toLowerCase(Locale.ROOT)))
                 .collect(Collectors.toSet());
-        UsernamePasswordAuthenticationToken userPrincipal = new UsernamePasswordAuthenticationToken(user.getInternalAuthUserId(), null, authorities);
+        UsernamePasswordAuthenticationToken userPrincipal = new UsernamePasswordAuthenticationToken(user.getUsername(), null, authorities);
         // See class javadoc: read back by AuthorizationServerConfig's
         // jwtTokenCustomizer to stamp a "client_application_id" claim onto
         // the minted token.
@@ -390,7 +390,7 @@ public class UserLoginServiceImpl implements UserLoginService {
                 generatedAccessToken.getExpiresAt());
 
         OAuth2Authorization.Builder authorizationBuilder = OAuth2Authorization.withRegisteredClient(registeredClient)
-                .principalName(user.getInternalAuthUserId())
+                .principalName(user.getUsername())
                 .authorizationGrantType(LOCAL_LOGIN_GRANT_TYPE)
                 .authorizedScopes(Set.of());
 
@@ -443,11 +443,17 @@ public class UserLoginServiceImpl implements UserLoginService {
         boolean hasEmail = user.getEmail() != null && !user.getEmail().isBlank();
         boolean hasPhone = user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank();
 
-        boolean emailVerified = hasEmail && user.isEmailVerified();
-        boolean phoneVerified = hasPhone && user.isPhoneVerified();
+        boolean emailUnverified = hasEmail && !user.isEmailVerified();
+        boolean phoneUnverified = hasPhone && !user.isPhoneVerified();
 
-        if ((hasEmail || hasPhone) && !emailVerified && !phoneVerified) {
-            return "Please verify your email or phone number before logging in.";
+        if (emailUnverified && phoneUnverified) {
+            return "Please verify your email and phone number before logging in.";
+        }
+        if (emailUnverified) {
+            return "Please verify your email before logging in.";
+        }
+        if (phoneUnverified) {
+            return "Please verify your phone number before logging in.";
         }
         return null;
     }
