@@ -3,6 +3,7 @@ package com.internal.auth.config.auth;
 import com.fasterxml.jackson.databind.Module;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.signingkey.service.SigningKeyService;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
@@ -312,9 +313,7 @@ public class AuthorizationServerConfig {
      * details is unset and this correctly adds no claim there.
      */
     @Bean
-    public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer(
-            SigningKeyService signingKeyService,
-            com.internal.auth.feature.identity.repository.UserRepository userRepository) {
+    public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer(SigningKeyService signingKeyService, UserRepository userRepository) {
         return context -> {
             context.getJwsHeader().keyId(signingKeyService.getCurrentKid());
             if (OAuth2TokenType.ACCESS_TOKEN.equals(context.getTokenType())) {

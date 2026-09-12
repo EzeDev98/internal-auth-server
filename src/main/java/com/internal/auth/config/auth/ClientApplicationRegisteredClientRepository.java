@@ -61,13 +61,20 @@ import java.util.stream.Collectors;
  * ClientSettings (PKCE/consent requirements) is still left at Spring's
  * defaults, since nothing here is authorization_code-based yet.
  *
- * <p>Note this TTL/rotation config applies uniformly to every
- * ClientApplication row regardless of which grant types it uses - there's
- * no per-client override today. A row without "refresh_token" in its own
- * grantTypes still gets a RegisteredClient with these TokenSettings; it
- * just never has a caller that requests a refresh-typed token, since grant
- * enforcement for LoginServiceImpl's in-process minting path is done by
- * that service itself, not by this repository or Spring's filter chain.
+ * <p>Refresh token TTL now supports a per-client override (Part B):
+ * {@code refreshTokenTimeToLive} above uses
+ * {@code ClientApplication.refreshTokenTtlDays} when a row has one set,
+ * falling back to the global {@code refreshTokenTtlDays} default
+ * otherwise - see resolveRefreshTokenTtlDays(). {@code reuseRefreshTokens}
+ * stays fixed at {@code false} here regardless: that flag is only read by
+ * Spring's own /oauth2/token grant machinery, which this app's custom
+ * login/refresh endpoints don't use - UserLoginServiceImpl reads
+ * {@code ClientApplication.refreshTokenRotationEnabled} directly instead.
+ * A row without "refresh_token" in its own grantTypes still gets a
+ * RegisteredClient with these TokenSettings; it just never has a caller
+ * that requests a refresh-typed token, since grant enforcement for
+ * LoginServiceImpl's in-process minting path is done by that service
+ * itself, not by this repository or Spring's filter chain.
  */
 @Component
 @RequiredArgsConstructor
@@ -131,14 +138,29 @@ public class ClientApplicationRegisteredClientRepository implements RegisteredCl
                 .clientSettings(ClientSettings.builder().build())
                 .tokenSettings(TokenSettings.builder()
                         .accessTokenTimeToLive(Duration.ofMinutes(accessTokenTtlMinutes))
-                        .refreshTokenTimeToLive(Duration.ofDays(refreshTokenTtlDays))
+                        .refreshTokenTimeToLive(Duration.ofDays(resolveRefreshTokenTtlDays(client)))
                         // Rotation, not reuse: each refresh call is expected to mint
                         // a fresh refresh token and invalidate the one just spent,
                         // rather than letting the same refresh token be replayed
-                        // indefinitely until its TTL expires.
+                        // indefinitely until its TTL expires. This flag is only read
+                        // by Spring's own /oauth2/token grant machinery though, which
+                        // this app's custom login/refresh endpoints don't go through -
+                        // UserLoginServiceImpl reads refreshTokenRotationEnabled
+                        // directly instead (Part B of the refresh-token-fix doc).
                         .reuseRefreshTokens(false)
                         .build())
                 .build();
+    }
+
+    /**
+     * Part B: per-client override of refresh token lifetime, so a tenant
+     * (e.g. an offline-first app that wants a long-lived, non-rotating
+     * "session" refresh token) can run its own TTL window without
+     * changing the global app.authorization-server.refresh-token-ttl-days
+     * default every other client still gets.
+     */
+    private long resolveRefreshTokenTtlDays(ClientApplication client) {
+        return client.getRefreshTokenTtlDays() != null ? client.getRefreshTokenTtlDays() : refreshTokenTtlDays;
     }
 
     private Set<AuthorizationGrantType> resolveGrantTypes(ClientApplication client) {

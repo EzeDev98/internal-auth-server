@@ -9,6 +9,7 @@ import com.internal.auth.common.reset.OtpResetEngine;
 import com.internal.auth.common.reset.OtpService;
 import com.internal.auth.common.reset.delivery.OtpDeliveryService;
 import com.internal.auth.common.security.SelfIssuedAuthorizationServerContext;
+import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.config.LoginMfaProperties;
 import com.internal.auth.common.exception.InvalidRefreshTokenException;
@@ -32,6 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -53,6 +55,7 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Toke
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -153,9 +156,16 @@ public class UserLoginServiceImpl implements UserLoginService {
     private final AuthorizationServerSettings authorizationServerSettings;
     private final ClientApplicationService clientApplicationService;
     private final SessionManagementService sessionManagementService;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${app.self-issuer-uri}")
     private String selfIssuerUri;
+
+    // Part B (refresh-token-fix doc): same global default
+    // ClientApplicationRegisteredClientRepository falls back to when a
+    // client's own refreshTokenTtlDays is unset - see resolveRefreshTokenTtl().
+    @Value("${app.authorization-server.refresh-token-ttl-days}")
+    private long globalRefreshTokenTtlDays;
 
     @Override
     public LoginResponse login(LoginRequest request, Long clientApplicationId) {
@@ -192,6 +202,7 @@ public class UserLoginServiceImpl implements UserLoginService {
 
         log.info("User id {} logged in", user.getId());
         eventPublisher.publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), clientApplicationId));
+        revokePriorAuthorizations(user.getInternalAuthUserId(), clientApplicationId);
         MintedTokens tokens = mintTokens(user, clientApplicationId);
 
         sessionManagementService.createSession(user.getId(), user.getPhoneNumber(), tokens.accessToken());
@@ -217,20 +228,26 @@ public class UserLoginServiceImpl implements UserLoginService {
 
         log.info("User id {} completed MFA login step-up", user.getId());
         eventPublisher.publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), clientApplicationId));
+        revokePriorAuthorizations(user.getInternalAuthUserId(), clientApplicationId);
         MintedTokens tokens = mintTokens(user, clientApplicationId);
         return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false,
                 tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn(), tokens.refreshExpiresIn());
     }
 
     /**
-     * Step 15C - redeems a refresh token minted by mintTokens() for a new
-     * access token (and a new refresh token, per rotation - see
-     * ClientApplicationRegisteredClientRepository's TokenSettings
-     * javadoc). Every failure path below throws the exact same
-     * InvalidRefreshTokenException/message regardless of which specific
-     * thing was wrong (missing, unknown, wrong-client, expired,
-     * disabled account) - same enumeration-resistance reasoning as
-     * login()'s INVALID_CREDENTIALS_MESSAGE.
+     * Step 15C, Part B (refresh-token-fix doc) - redeems a refresh token
+     * minted by mintTokens()/renewAccessToken(). Every failure path below
+     * throws the exact same InvalidRefreshTokenException/message
+     * regardless of which specific thing was wrong (missing, unknown,
+     * wrong-client, expired, disabled account) - same enumeration-
+     * resistance reasoning as login()'s INVALID_CREDENTIALS_MESSAGE.
+     *
+     * <p>Branches on the calling ClientApplication's
+     * refreshTokenRotationEnabled: true (default, every client today)
+     * keeps the exact original behavior - remove the spent authorization,
+     * mint a brand-new one. false is the non-destructive path added for
+     * clients like SyncPoint that need a durable, non-single-use refresh
+     * token - see renewAccessToken().
      */
     @Override
     public LoginResponse refreshToken(RefreshTokenRequest request, Long clientApplicationId) {
@@ -268,16 +285,31 @@ public class UserLoginServiceImpl implements UserLoginService {
             throw new AccountDisabledException("This account has been disabled.");
         }
 
-        // Rotation (TokenSettings.reuseRefreshTokens(false)): the spent
-        // refresh token must stop working the instant a new one is issued,
-        // not remain valid until its own TTL expires. Removing the whole
-        // authorization row - rather than only marking it invalidated - is
-        // simplest given mintTokens() always creates a brand-new
-        // OAuth2Authorization rather than mutating this one in place.
-        authorizationService.remove(authorization);
+        ClientApplication client = clientApplicationService.getById(clientApplicationId);
 
-        log.info("User id {} refreshed their access token", user.getId());
-        MintedTokens tokens = mintTokens(user, clientApplicationId);
+        MintedTokens tokens;
+        if (client.isRefreshTokenRotationEnabled()) {
+            // Rotation (TokenSettings.reuseRefreshTokens(false)): the spent
+            // refresh token must stop working the instant a new one is
+            // issued, not remain valid until its own TTL expires. Removing
+            // the whole authorization row - rather than only marking it
+            // invalidated - is simplest given mintTokens() always creates a
+            // brand-new OAuth2Authorization rather than mutating this one
+            // in place. Exactly today's behavior, unchanged.
+            authorizationService.remove(authorization);
+            log.info("User id {} refreshed their access token", user.getId());
+            tokens = mintTokens(user, clientApplicationId);
+        } else {
+            // Non-destructive refresh (Part B): this client's refresh token
+            // is a durable session pointer, not single-use - see the
+            // refresh-token-fix doc's root-cause section 2b. Only a new
+            // access token is minted; the existing refresh token keeps its
+            // exact value (so it's never invalidated out from under a
+            // caller whose response gets lost) and just has its expiry
+            // pushed forward.
+            log.info("User id {} refreshed their access token (non-rotating client)", user.getId());
+            tokens = renewAccessToken(authorization, user, client);
+        }
 
         // Keeps the UserSession row's tokenHash pointing at the token that
         // is now actually in use, so a later logout (SessionManagementService
@@ -288,6 +320,107 @@ public class UserLoginServiceImpl implements UserLoginService {
 
         return new LoginResponse(user.getId(), user.getUsername(), "Token refreshed.", false,
                 tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn(), tokens.refreshExpiresIn());
+    }
+
+    /**
+     * Part B non-destructive counterpart to mintTokens(): used only when
+     * the calling client has refreshTokenRotationEnabled=false. Mints a
+     * fresh access token exactly like mintTokens() does, but updates the
+     * existing OAuth2Authorization row in place instead of replacing it -
+     * the refresh token keeps its exact token value (the client-held
+     * token is never invalidated) while its expiry slides forward to
+     * now + the client's refreshTokenTtlDays (or the global default when
+     * unset) - a rolling session window, not a fixed one.
+     */
+    private MintedTokens renewAccessToken(OAuth2Authorization existingAuthorization, User user, ClientApplication client) {
+        RegisteredClient registeredClient = registeredClientRepository.findById(String.valueOf(client.getId()));
+        if (registeredClient == null) {
+            throw new IllegalStateException("No RegisteredClient found for client application id " + client.getId());
+        }
+
+        List<Role> roles = userRolesRepository.findRolesByUserId(user.getId());
+        Collection<GrantedAuthority> authorities = roles.stream()
+                .map(role -> (GrantedAuthority) new SimpleGrantedAuthority(role.getRoleName().toLowerCase(Locale.ROOT)))
+                .collect(Collectors.toSet());
+        UsernamePasswordAuthenticationToken userPrincipal = new UsernamePasswordAuthenticationToken(user.getInternalAuthUserId(), null, authorities);
+        userPrincipal.setDetails(client.getId());
+
+        AuthorizationServerContext authorizationServerContext =
+                new SelfIssuedAuthorizationServerContext(selfIssuerUri, authorizationServerSettings);
+
+        DefaultOAuth2TokenContext tokenContext = DefaultOAuth2TokenContext.builder()
+                .registeredClient(registeredClient)
+                .principal(userPrincipal)
+                .authorizationServerContext(authorizationServerContext)
+                .authorizedScopes(Set.of())
+                .authorizationGrantType(LOCAL_LOGIN_GRANT_TYPE)
+                .authorizationGrant(userPrincipal)
+                .tokenType(OAuth2TokenType.ACCESS_TOKEN)
+                .build();
+
+        OAuth2Token generatedAccessToken = tokenGenerator.generate(tokenContext);
+        if (generatedAccessToken == null) {
+            throw new IllegalStateException("The token generator failed to generate a self-issued access token for user id " + user.getId());
+        }
+
+        OAuth2AccessToken accessToken = new OAuth2AccessToken(
+                OAuth2AccessToken.TokenType.BEARER,
+                generatedAccessToken.getTokenValue(),
+                generatedAccessToken.getIssuedAt(),
+                generatedAccessToken.getExpiresAt());
+
+        OAuth2RefreshToken currentRefreshToken = existingAuthorization.getRefreshToken().getToken();
+        Instant now = Instant.now();
+        Instant newRefreshExpiry = now.plus(resolveRefreshTokenTtl(client));
+        OAuth2RefreshToken renewedRefreshToken = new OAuth2RefreshToken(currentRefreshToken.getTokenValue(), now, newRefreshExpiry);
+
+        OAuth2Authorization.Builder authorizationBuilder = OAuth2Authorization.from(existingAuthorization);
+        if (generatedAccessToken instanceof ClaimAccessor claimAccessor) {
+            authorizationBuilder.token(accessToken, metadata ->
+                    metadata.put(OAuth2Authorization.Token.CLAIMS_METADATA_NAME, claimAccessor.getClaims()));
+        } else {
+            authorizationBuilder.accessToken(accessToken);
+        }
+        authorizationBuilder.refreshToken(renewedRefreshToken);
+
+        authorizationService.save(authorizationBuilder.build());
+
+        Long expiresIn = accessToken.getExpiresAt() == null ? null
+                : Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds();
+        Long refreshExpiresIn = Duration.between(renewedRefreshToken.getIssuedAt(), renewedRefreshToken.getExpiresAt()).getSeconds();
+
+        return new MintedTokens(
+                accessToken.getTokenValue(),
+                renewedRefreshToken.getTokenValue(),
+                expiresIn,
+                refreshExpiresIn);
+    }
+
+    private Duration resolveRefreshTokenTtl(ClientApplication client) {
+        Integer perClientDays = client.getRefreshTokenTtlDays();
+        return Duration.ofDays(perClientDays != null ? perClientDays : globalRefreshTokenTtlDays);
+    }
+
+    /**
+     * Part B hygiene fix: revokes every prior OAuth2Authorization for this
+     * user+client before minting new tokens on a genuinely new login, so
+     * a previous device's refresh token can never remain valid once this
+     * login has happened. Harmless for rotation-enabled clients (the old
+     * authorization is already single-use-dead within one call); load-
+     * bearing for non-rotating clients, where a refresh token can now
+     * outlive a single call and would otherwise survive indefinitely
+     * across logins. Raw SQL against oauth2_authorization directly -
+     * OAuth2AuthorizationService's interface has no "find/remove all for
+     * this principal" operation, only single-record
+     * findById/findByToken/remove (see JdbcOAuth2AuthorizationService).
+     */
+    private void revokePriorAuthorizations(String internalAuthUserId, Long clientApplicationId) {
+        int removed = jdbcTemplate.update(
+                "DELETE FROM oauth2_authorization WHERE principal_name = ? AND registered_client_id = ?",
+                internalAuthUserId, String.valueOf(clientApplicationId));
+        if (removed > 0) {
+            log.info("Revoked {} prior authorization(s) for user id {} on new login", removed, internalAuthUserId);
+        }
     }
 
     private void sendLoginOtp(User user, Long clientApplicationId) {
@@ -361,7 +494,7 @@ public class UserLoginServiceImpl implements UserLoginService {
         Collection<GrantedAuthority> authorities = roles.stream()
                 .map(role -> (GrantedAuthority) new SimpleGrantedAuthority(role.getRoleName().toLowerCase(Locale.ROOT)))
                 .collect(Collectors.toSet());
-        UsernamePasswordAuthenticationToken userPrincipal = new UsernamePasswordAuthenticationToken(user.getUsername(), null, authorities);
+        UsernamePasswordAuthenticationToken userPrincipal = new UsernamePasswordAuthenticationToken(user.getInternalAuthUserId(), null, authorities);
         // See class javadoc: read back by AuthorizationServerConfig's
         // jwtTokenCustomizer to stamp a "client_application_id" claim onto
         // the minted token.
@@ -390,7 +523,7 @@ public class UserLoginServiceImpl implements UserLoginService {
                 generatedAccessToken.getExpiresAt());
 
         OAuth2Authorization.Builder authorizationBuilder = OAuth2Authorization.withRegisteredClient(registeredClient)
-                .principalName(user.getUsername())
+                .principalName(user.getInternalAuthUserId())
                 .authorizationGrantType(LOCAL_LOGIN_GRANT_TYPE)
                 .authorizedScopes(Set.of());
 
@@ -433,11 +566,17 @@ public class UserLoginServiceImpl implements UserLoginService {
     private record MintedTokens(String accessToken, String refreshToken, Long expiresIn, Long refreshExpiresIn) {}
 
     /**
-     * Blocks login only when the user has verified none of the contact
-     * methods they supplied at registration - not when any one of several
-     * is still unverified. Verifying either email or phone is sufficient;
-     * a user who verified their email is never forced to also verify a
-     * phone number they also happened to register with, and vice versa.
+     * Strict per-field gate: blocks login if ANY contact method the user
+     * supplied at registration is still unverified, per User's class
+     * Javadoc (Step 10E) - an account with both phone and email needs
+     * both flags true. This method itself never treats one as a
+     * substitute for the other. The reason verifying phone alone is
+     * often enough in practice is PhoneVerificationServiceImpl#verify,
+     * which auto-sets emailVerified too as a deliberate, one-directional
+     * product decision (see that method's comment for why the reverse
+     * isn't also done) - by the time this runs, that account's
+     * emailVerified may already be true for a reason unrelated to the
+     * email flow itself.
      */
     private String describeUnverifiedContactMethods(User user) {
         boolean hasEmail = user.getEmail() != null && !user.getEmail().isBlank();

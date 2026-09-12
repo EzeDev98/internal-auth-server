@@ -263,7 +263,7 @@ class RegistrationServiceImplTest {
 
         RegisterResponse response = service.register(request, CLIENT_APP_ID);
 
-        assertThat(response.getUserId()).isEqualTo("String123@");
+        assertThat(response.getInternalAuthUserId()).isEqualTo("String123@");
         assertThat(response.getUsername()).isEqualTo("newuser");
         assertThat(response.getMessage()).isEqualTo("Account created successfully.");
     }
@@ -305,7 +305,7 @@ class RegistrationServiceImplTest {
 
         RegisterResponse response = service.register(request, CLIENT_APP_ID);
 
-        assertThat(response.getUserId()).isEqualTo("String123@");
+        assertThat(response.getInternalAuthUserId()).isEqualTo("String123@");
     }
 
     // -- uniqueness-race handling ----------------------------------------------

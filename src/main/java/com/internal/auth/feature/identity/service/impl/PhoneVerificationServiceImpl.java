@@ -106,6 +106,20 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
         user.setPhoneVerified(true);
+
+        // Product decision: verifying phone is sufficient proof of account
+        // ownership to also clear the email leg of the login gate (see
+        // User's class Javadoc / UserLoginServiceImpl#describeUnverifiedContactMethods)
+        // for an account that supplied both. Deliberately one-directional -
+        // EmailVerificationServiceImpl#activate does NOT set phoneVerified
+        // in return, since phoneVerified also gates MfaAdminServiceImpl's
+        // SMS-MFA-enable check and email verification is not proof anyone
+        // received anything at the phone number on file.
+        if (user.getEmail() != null && !user.getEmail().isBlank() && !user.isEmailVerified()) {
+            user.setEmailVerified(true);
+            log.info("Email auto-verified for user id {} via phone verification", user.getId());
+        }
+
         userRepository.save(user);
 
         log.info("Phone number verified for user id {}", user.getId());

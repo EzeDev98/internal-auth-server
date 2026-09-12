@@ -94,6 +94,33 @@ public class ClientApplication {
     @Column(name = "enabled", nullable = false)
     private boolean enabled = true;
 
+    /**
+     * Part B (refresh-token-fix doc): true (default) = today's exact
+     * behavior - UserLoginServiceImpl.refreshToken() deletes the spent
+     * refresh token's OAuth2Authorization and mints a brand-new one on
+     * every call (strict single-use rotation). false = non-destructive
+     * refresh - only a new access token is minted; the existing refresh
+     * token keeps its exact value and just has its expiry pushed forward
+     * (see refreshTokenTtlDays). Admin-settable, plain boolean like
+     * enabled above - no enum, so it can be surfaced directly as a form
+     * field once an admin UI exists for it.
+     */
+    @Column(name = "refresh_token_rotation_enabled", nullable = false)
+    private boolean refreshTokenRotationEnabled = true;
+
+    /**
+     * Part B: per-client override of refresh token lifetime in days. Null
+     * (default) falls back to the global
+     * app.authorization-server.refresh-token-ttl-days property - see
+     * ClientApplicationRegisteredClientRepository#resolveRefreshTokenTtlDays
+     * and UserLoginServiceImpl#resolveRefreshTokenTtl, which both read it
+     * the same way. Only meaningful when refreshTokenRotationEnabled is
+     * false; a rotating client's refresh token is already single-use, so
+     * a long TTL on it is close to moot.
+     */
+    @Column(name = "refresh_token_ttl_days")
+    private Integer refreshTokenTtlDays;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

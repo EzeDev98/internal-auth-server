@@ -86,12 +86,13 @@ class LoginServiceImplTest {
             AuthorizationServerSettings.builder().issuer(SELF_ISSUER_URI).build();
     private final ClientApplicationService clientApplicationService = mock(ClientApplicationService.class);
     private final SessionManagementService sessionManagementService = mock(SessionManagementService.class);
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate = mock(org.springframework.jdbc.core.JdbcTemplate.class);
 
     private final UserLoginServiceImpl service = new UserLoginServiceImpl(
             eventPublisher, userRepository, passwordEncoder, loginMfaOtpRepository, otpService,
             otpDeliveryService, otpResetEngine, loginMfaProperties, redissonClient, userRolesRepository,
             registeredClientRepository, authorizationService, tokenGenerator, authorizationServerSettings,
-            clientApplicationService, sessionManagementService);
+            clientApplicationService, sessionManagementService, jdbcTemplate);
 
     @BeforeEach
     void wireSelfIssuerUri() {
@@ -108,6 +109,7 @@ class LoginServiceImplTest {
         User user = new User();
         user.setId(1L);
         user.setClientApplicationId(CLIENT_APP_ID);
+        user.setInternalAuthUserId("alice");
         user.setUsername("alice");
         user.setPassword("hashed-pw");
         user.setEmail("alice@example.com");
