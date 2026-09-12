@@ -7,4 +7,7 @@ import java.util.Optional;
 
 public interface EmailVerificationTokenRepository extends JpaRepository<EmailVerificationToken, Long> {
     Optional<EmailVerificationToken> findByTokenHash(String tokenHash);
+
+    /** Backs TenantDataWipeService - this table has no clientApplicationId column, only userId. */
+    long deleteAllByUserIdIn(java.util.List<Long> userIds);
 }

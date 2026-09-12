@@ -144,7 +144,7 @@ public class UserRegistrationServiceImpl implements UserRegistrationService {
 
         log.info("New user registered, id={}", savedUser.getId());
 
-        return new RegisterResponse(savedUser.getId(), savedUser.getUsername(), "Account created successfully.");
+        return new RegisterResponse(savedUser.getInternalAuthUserId(), savedUser.getUsername(), "Account created successfully.");
     }
 
     private String normalize(String value) {

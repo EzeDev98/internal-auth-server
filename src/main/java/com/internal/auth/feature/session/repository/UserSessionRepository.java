@@ -35,4 +35,7 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
                                       @Param("ipAddress") String ipAddress,
                                       @Param("device") String device,
                                       Pageable pageable);
+
+    /** Backs TenantDataWipeService - this table has no clientApplicationId column, only userId. */
+    long deleteAllByUserIdIn(java.util.List<Long> userIds);
 }

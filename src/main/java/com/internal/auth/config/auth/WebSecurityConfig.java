@@ -164,6 +164,12 @@ public class WebSecurityConfig {
                                 appTitle + "/otp/**"
                         ).permitAll()
 
+                        // Danger-zone per-tenant data wipe. Opened here so it can be called
+                        // without a JWT - guarded instead by a required X-Reset-Secret plus a
+                        // confirmation phrase, and inert unless admin.reset.secret is configured.
+                        // See TenantResetController.
+                        .requestMatchers(HttpMethod.POST, appTitle + "/admin/reset/wipe-tenant").permitAll()
+
                         .requestMatchers(HttpMethod.GET, "/api/v1/keep-alive").permitAll()
                         // Spring Boot forwards any unhandled 404/500 to /error, and that
                         // forward goes through this filter chain as an ERROR dispatch. If

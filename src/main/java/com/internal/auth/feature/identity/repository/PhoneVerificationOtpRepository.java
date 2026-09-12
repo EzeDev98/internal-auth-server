@@ -15,4 +15,7 @@ import java.util.Optional;
 public interface PhoneVerificationOtpRepository extends JpaRepository<PhoneVerificationOtp, Long> {
     Optional<PhoneVerificationOtp> findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
             String phoneNumber, Long clientApplicationId, ResetStatus status);
+
+    /** Backs TenantDataWipeService. */
+    long deleteAllByClientApplicationId(Long clientApplicationId);
 }

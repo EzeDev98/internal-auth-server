@@ -50,4 +50,7 @@ public interface UserRolesRepository extends JpaRepository<UserRole, Long> {
      */
     @Query("SELECT DISTINCT userRole.user FROM UserRole userRole WHERE userRole.role.id = :roleId")
     List<User> findUsersByRoleId(@Param("roleId") Long roleId);
+
+    /** Backs TenantDataWipeService - batch equivalent of deleteAllByUser_Id above. */
+    long deleteAllByUser_IdIn(List<Long> userIds);
 }

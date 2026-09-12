@@ -17,4 +17,7 @@ import java.util.Optional;
 public interface LoginMfaOtpRepository extends JpaRepository<LoginMfaOtp, Long> {
     Optional<LoginMfaOtp> findTopByPhoneNumberAndStatusOrderByCreatedAtDesc(String phoneNumber, ResetStatus status);
     Optional<LoginMfaOtp> findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(String phoneNumber, Long clientApplicationId, ResetStatus status);
+
+    /** Backs TenantDataWipeService. */
+    long deleteAllByClientApplicationId(Long clientApplicationId);
 }

@@ -16,7 +16,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RegisterResponse {
-    private Long userId;
+    private String userId;
     private String username;
     private String message;
 }

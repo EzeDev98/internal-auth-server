@@ -74,4 +74,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
                                @Param("enabled") Boolean enabled,
                                @Param("search") String search,
                                Pageable pageable);
+
+    /** Backs TenantDataWipeService - every user in one tenant, so their ids can be collected before cascading deletes. */
+    List<User> findAllByClientApplicationId(Long clientApplicationId);
+
+    /** Backs TenantDataWipeService - deletes the users themselves once every child table is cleared. */
+    long deleteAllByClientApplicationId(Long clientApplicationId);
 }

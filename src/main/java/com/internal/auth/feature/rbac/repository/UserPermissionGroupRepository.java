@@ -42,4 +42,7 @@ public interface UserPermissionGroupRepository extends JpaRepository<UserPermiss
     @Query("SELECT DISTINCT userPermissionGroup.permissionGroup FROM UserPermissionGroup userPermissionGroup " +
             "WHERE userPermissionGroup.user.username = :username")
     List<PermissionGroup> findPermissionGroupsByUsername(String username);
+
+    /** Backs TenantDataWipeService - batch equivalent of deleteAllByUser_Id above. */
+    long deleteAllByUser_IdIn(List<Long> userIds);
 }
