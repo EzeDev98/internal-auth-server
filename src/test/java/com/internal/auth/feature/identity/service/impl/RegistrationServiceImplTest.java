@@ -52,9 +52,9 @@ class RegistrationServiceImplTest {
         return new RegisterRequest("newuser", "+23480000000", "new@user.com", "Passw0rd!", "Passw0rd!");
     }
 
-    private static User savedUserWithId(long id) {
+    private static User savedUserWithId(String id) {
         User saved = new User();
-        saved.setId(id);
+        saved.setInternalAuthUserId(id);
         saved.setUsername("newuser");
         return saved;
     }
@@ -123,7 +123,7 @@ class RegistrationServiceImplTest {
     void register_callsAllFiveValidationStepsInOrderBeforeAnyUniquenessCheck() {
         RegisterRequest request = validRequest();
         stubUniquenessChecksPass();
-        when(userRepository.save(any(User.class))).thenReturn(savedUserWithId(1L));
+        when(userRepository.save(any(User.class))).thenReturn(savedUserWithId("String123@"));
         when(userService.addUserToDefaultPermissionGroup("newuser")).thenReturn(new BaseResponse(201));
 
         service.register(request, CLIENT_APP_ID);
@@ -144,7 +144,7 @@ class RegistrationServiceImplTest {
         when(userRepository.findByPhoneNumberAndClientApplicationId("+23480000000", CLIENT_APP_ID)).thenReturn(Optional.empty());
         when(userRepository.findByEmailAndClientApplicationId("new@user.com", CLIENT_APP_ID)).thenReturn(Optional.empty());
         when(passwordEncoder.encode("Passw0rd!")).thenReturn("hashed");
-        when(userRepository.save(any(User.class))).thenReturn(savedUserWithId(6L));
+        when(userRepository.save(any(User.class))).thenReturn(savedUserWithId("String123@"));
         when(userService.addUserToDefaultPermissionGroup(anyString())).thenReturn(new BaseResponse(201));
 
         service.register(request, CLIENT_APP_ID);
@@ -213,7 +213,7 @@ class RegistrationServiceImplTest {
         when(userRepository.findByPhoneNumberAndClientApplicationId("+23480000000", otherTenant)).thenReturn(Optional.empty());
         when(userRepository.findByEmailAndClientApplicationId("new@user.com", otherTenant)).thenReturn(Optional.empty());
         when(passwordEncoder.encode("Passw0rd!")).thenReturn("hashed");
-        when(userRepository.save(any(User.class))).thenReturn(savedUserWithId(2L));
+        when(userRepository.save(any(User.class))).thenReturn(savedUserWithId("String123@"));
         when(userService.addUserToDefaultPermissionGroup("newuser")).thenReturn(new BaseResponse(201));
 
         assertThatCode(() -> service.register(request, otherTenant)).doesNotThrowAnyException();
@@ -228,7 +228,7 @@ class RegistrationServiceImplTest {
         RegisterRequest request = new RegisterRequest("newuser", "   ", "", "Passw0rd!", "Passw0rd!");
         when(userRepository.findByUsernameAndClientApplicationId("newuser", CLIENT_APP_ID)).thenReturn(Optional.empty());
         when(passwordEncoder.encode("Passw0rd!")).thenReturn("hashed");
-        User saved = savedUserWithId(3L);
+        User saved = savedUserWithId("String123@");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User toSave = invocation.getArgument(0);
             assertThat(toSave.getPhoneNumber()).isNull();
@@ -249,7 +249,7 @@ class RegistrationServiceImplTest {
     void register_success_savesEncodedUserAndReturnsConfirmation() {
         RegisterRequest request = validRequest();
         stubUniquenessChecksPass();
-        User saved = savedUserWithId(42L);
+        User saved = savedUserWithId("String123@");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User toSave = invocation.getArgument(0);
             assertThat(toSave.getClientApplicationId()).isEqualTo(CLIENT_APP_ID);
@@ -263,7 +263,7 @@ class RegistrationServiceImplTest {
 
         RegisterResponse response = service.register(request, CLIENT_APP_ID);
 
-        assertThat(response.getUserId()).isEqualTo(42L);
+        assertThat(response.getUserId()).isEqualTo("String123@");
         assertThat(response.getUsername()).isEqualTo("newuser");
         assertThat(response.getMessage()).isEqualTo("Account created successfully.");
     }
@@ -272,7 +272,7 @@ class RegistrationServiceImplTest {
     void register_success_sendsBothEmailAndPhoneVerificationForTheSavedUser() {
         RegisterRequest request = validRequest();
         stubUniquenessChecksPass();
-        User saved = savedUserWithId(43L);
+        User saved = savedUserWithId("String123@");
         when(userRepository.save(any(User.class))).thenReturn(saved);
         when(userService.addUserToDefaultPermissionGroup("newuser")).thenReturn(new BaseResponse(201));
 
@@ -286,7 +286,7 @@ class RegistrationServiceImplTest {
     void register_success_enrollsUserIntoDefaultPermissionGroupByUsername() {
         RegisterRequest request = validRequest();
         stubUniquenessChecksPass();
-        User saved = savedUserWithId(44L);
+        User saved = savedUserWithId("String123@");
         when(userRepository.save(any(User.class))).thenReturn(saved);
         when(userService.addUserToDefaultPermissionGroup("newuser")).thenReturn(new BaseResponse(201));
 
@@ -299,13 +299,13 @@ class RegistrationServiceImplTest {
     void register_currentBehavior_defaultRoleAssignmentFailureIsSoftFailAndNeverThrows() {
         RegisterRequest request = validRequest();
         stubUniquenessChecksPass();
-        User saved = savedUserWithId(45L);
+        User saved = savedUserWithId("String123@");
         when(userRepository.save(any(User.class))).thenReturn(saved);
         when(userService.addUserToDefaultPermissionGroup("newuser")).thenReturn(new BaseResponse(500, "boom"));
 
         RegisterResponse response = service.register(request, CLIENT_APP_ID);
 
-        assertThat(response.getUserId()).isEqualTo(45L);
+        assertThat(response.getUserId()).isEqualTo("String123@");
     }
 
     // -- uniqueness-race handling ----------------------------------------------
