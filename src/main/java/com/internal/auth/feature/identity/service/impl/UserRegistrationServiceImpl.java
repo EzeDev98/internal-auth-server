@@ -21,6 +21,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.UUID;
 
@@ -134,12 +136,45 @@ public class UserRegistrationServiceImpl implements UserRegistrationService {
         phoneVerificationService.sendVerificationOtp(savedUser);
 
         // Default-role gap fix: enroll the new user into the default
-        // permission group/role. addUserToDefaultPermissionGroup never
-        // throws - it always returns a BaseResponse - so this is
-        // soft-fail/log-only, same contract as the two sends above.
-        BaseResponse roleAssignment = userService.addUserToDefaultPermissionGroup(savedUser.getUsername());
-        if (roleAssignment.getStatusCode() != HttpServletResponse.SC_CREATED) {
-            log.warn("Default role assignment did not complete cleanly for user id {} (status={}, message={})", savedUser.getId(), roleAssignment.getStatusCode(), roleAssignment.getDescription());
+        // permission group/role. Must run strictly AFTER this transaction
+        // commits - addUserToDefaultPermissionGroup runs in its own
+        // REQUIRES_NEW transaction/connection, which correctly cannot see
+        // this transaction's INSERT until it is committed. Calling it
+        // synchronously from inside this still-open transaction made
+        // EntityUtilityService#getUser fail with USER_NOT_FOUND on every
+        // registration, and because that failure gets swallowed internally
+        // instead of rethrown, addUserToDefaultPermissionGroup's own
+        // REQUIRES_NEW transaction ended up rollback-only on a normal
+        // method return - which Spring turns into an UnexpectedRollbackException
+        // at commit time. That exception was never caught here, so it
+        // propagated out of register() and rolled back THIS transaction too
+        // (the user row included), surfacing as a 500 - even though the
+        // email/OTP sends above had already fired, since those aren't part
+        // of the DB transaction. Deferring to afterCommit fixes the root
+        // cause: by the time this runs, the user row is guaranteed visible.
+        Runnable assignDefaultRole = () -> {
+            BaseResponse roleAssignment = userService.addUserToDefaultPermissionGroup(savedUser.getUsername());
+            if (roleAssignment.getStatusCode() != HttpServletResponse.SC_CREATED) {
+                log.warn("Default role assignment did not complete cleanly for user id {} (status={}, message={})", savedUser.getId(), roleAssignment.getStatusCode(), roleAssignment.getDescription());
+            }
+        };
+
+        // Only defer via afterCommit when a transaction is actually active
+        // to attach to (the normal HTTP-request path, where register()
+        // itself is @Transactional). Callers with no active transaction
+        // synchronization - e.g. a unit test invoking register() directly
+        // against mocks, or any future caller outside a transactional
+        // context - have no commit event to defer to, so run it inline
+        // immediately instead, matching the pre-fix behavior for them.
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    assignDefaultRole.run();
+                }
+            });
+        } else {
+            assignDefaultRole.run();
         }
 
         log.info("New user registered, id={}", savedUser.getId());
