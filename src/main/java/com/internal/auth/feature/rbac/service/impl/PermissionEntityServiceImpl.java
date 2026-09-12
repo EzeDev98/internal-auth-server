@@ -1,5 +1,6 @@
 package com.internal.auth.feature.rbac.service.impl;
 
+import com.internal.auth.common.exception.PermissionErrorCode;
 import com.internal.auth.common.exception.PermissionException;
 import com.internal.auth.common.response.BaseResponse;
 import com.internal.auth.feature.rbac.model.PermissionGroup;
@@ -50,7 +51,8 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
             // genuinely exists, just not because of this call.
             throw PermissionException.alreadyExists("Role already exists in the database");
         } catch (DataAccessException ex) {
-            throw PermissionException.rolePersistenceFailed("Failed to save role to database");
+            throw PermissionException.of(PermissionErrorCode.ROLE_PERSISTENCE_FAILED,
+                    "Failed to save role to database", ex);
         }
     }
 
@@ -78,7 +80,10 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
             // uk_permission_groups_group_name (V20).
             throw PermissionException.alreadyExists("Group already exists in the database");
         } catch (DataAccessException ex) {
-            throw PermissionException.groupPersistenceFailed("Failed to save group to database");
+            // Previously discarded ex entirely - the real cause (which
+            // constraint/column failed) never made it into the logs.
+            throw PermissionException.of(PermissionErrorCode.GROUP_PERSISTENCE_FAILED,
+                    "Failed to save group to database", ex);
         }
     }
 

@@ -8,7 +8,8 @@ import com.internal.auth.feature.rbac.model.Role;
 import com.internal.auth.feature.rbac.service.PermissionManagementService;
 import com.internal.auth.feature.rbac.service.UserService;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -74,7 +75,18 @@ public class UserServiceImpl implements UserService {
 
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    // Runs in its own transaction, deliberately separate from the caller's
+    // (e.g. UserRegistrationServiceImpl.register()'s user-creation
+    // transaction). This method already catches everything and always
+    // returns a BaseResponse rather than throwing - but a failure deep
+    // inside (e.g. a role/group persistence error) was still able to mark
+    // the CALLER's transaction rollback-only if it stayed a participating
+    // transaction, silently rolling back the user account that had just
+    // been created even though this code's own soft-fail handling never
+    // saw an exception escape. REQUIRES_NEW makes that impossible: this
+    // method can now fail and roll back on its own without ever touching
+    // whatever transaction called it.
     public BaseResponse addUserToDefaultPermissionGroup(String username) {
         return addUserToPermissionGroup(username,
                 DEFAULT_PERMISSION_GROUP, DEFAULT_PERMISSION_GROUP_DESCRIPTION,
@@ -82,7 +94,8 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    // Same isolation reasoning as addUserToDefaultPermissionGroup above.
     public BaseResponse addUserToAdminPermissionGroup(String username) {
         return addUserToPermissionGroup(username,
                 ADMIN_PERMISSION_GROUP, ADMIN_PERMISSION_GROUP_DESCRIPTION,
