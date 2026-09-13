@@ -217,7 +217,7 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
 
         Optional<ClientApplication> existing = clientApplicationRepository.findByClientId(internalAdminClientId);
         if (existing.isPresent()) {
-            return existing.get();
+            return ensureRefreshTokenGrant(existing.get());
         }
 
         ClientApplication client = new ClientApplication();
@@ -229,6 +229,7 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         client.setClientSecretHash(null);
         client.setName("Internal Auth Admin Console");
         client.setDescription("Reserved client application internal-auth-server's own admin accounts are grouped under. Not a real integrating app - never authenticated against via HTTP Basic.");
+        client.setGrantTypes(new HashSet<>(Set.of("client_credentials", "refresh_token")));
         // enabled defaults to true on the entity itself.
 
         try {
@@ -237,9 +238,26 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
             // Lost a create-vs-create race against a concurrent first call -
             // same backstop pattern as createClient() above.
             log.warn("Internal admin client application creation lost a uniqueness race at save-time");
-            return clientApplicationRepository.findByClientId(internalAdminClientId)
-                    .orElseThrow(() -> new BadRequestException("Failed to resolve internal admin client application after a create-vs-create race"));
+            return ensureRefreshTokenGrant(clientApplicationRepository.findByClientId(internalAdminClientId)
+                    .orElseThrow(() -> new BadRequestException("Failed to resolve internal admin client application after a create-vs-create race")));
         }
+    }
+
+    /**
+     * Step 2H self-heal: a row created before this pass has an empty
+     * grantTypes set, so admin login never minted a refresh token. Backfills
+     * it on every read instead of requiring a migration, so an
+     * already-provisioned environment picks this up with no manual step.
+     */
+    private ClientApplication ensureRefreshTokenGrant(ClientApplication client) {
+        if (client.getGrantTypes().contains("refresh_token")) {
+            return client;
+        }
+        Set<String> grantTypes = new HashSet<>(client.getGrantTypes());
+        grantTypes.add("client_credentials");
+        grantTypes.add("refresh_token");
+        client.setGrantTypes(grantTypes);
+        return clientApplicationRepository.save(client);
     }
 
     @Override

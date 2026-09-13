@@ -10,6 +10,7 @@ import com.internal.auth.feature.identity.dto.request.AdminRegisterRequest;
 import com.internal.auth.feature.identity.dto.response.AdminRegisterResponse;
 import com.internal.auth.feature.identity.dto.request.LoginRequest;
 import com.internal.auth.feature.identity.dto.response.LoginResponse;
+import com.internal.auth.feature.identity.dto.request.RefreshTokenRequest;
 import com.internal.auth.feature.identity.dto.request.VerifyLoginOtpRequest;
 import com.internal.auth.feature.identity.service.AdminRegistrationService;
 import com.internal.auth.feature.identity.service.UserLoginService;
@@ -94,6 +95,15 @@ public class AdminController {
                 AppConstant.MAX_LOGIN_OTP_VERIFY_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_DURATION_MINUTES));
         ClientApplication adminClient = clientApplicationService.getOrCreateInternalAdminClient();
         LoginResponse response = loginService.verifyLoginOtp(request, adminClient.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
+    }
+
+    @PostMapping("/refresh-token")
+    public ResponseEntity<InternalAuthApiResponse<LoginResponse>> refreshToken(@RequestBody RefreshTokenRequest request, HttpServletRequest httpRequest) {
+        rateLimiterService.checkRateLimit(AppConstant.REFRESH_TOKEN_RATE_LIMIT_KEY_PREFIX + "admin:" + httpRequest.getRemoteAddr(),
+                AppConstant.MAX_REFRESH_TOKEN_REQUEST, Duration.ofMinutes(AppConstant.REFRESH_TOKEN_RATE_LIMIT_DURATION_MINUTES));
+        ClientApplication adminClient = clientApplicationService.getOrCreateInternalAdminClient();
+        LoginResponse response = loginService.refreshToken(request, adminClient.getId());
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 }

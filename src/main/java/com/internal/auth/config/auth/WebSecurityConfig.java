@@ -161,6 +161,7 @@ public class WebSecurityConfig {
                                 appTitle + "/admin/register",
                                 appTitle + "/admin/login",
                                 appTitle + "/admin/login/verify-otp",
+                                appTitle + "/admin/refresh-token",
                                 appTitle + "/otp/**"
                         ).permitAll()
 
