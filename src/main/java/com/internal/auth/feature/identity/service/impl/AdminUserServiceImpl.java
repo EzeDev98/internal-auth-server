@@ -3,6 +3,7 @@ package com.internal.auth.feature.identity.service.impl;
 import com.internal.auth.common.exception.UserAlreadyExistsException;
 import com.internal.auth.common.exception.UserNotFoundException;
 import com.internal.auth.common.reset.ResetValidator;
+import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.dto.request.AdminCreateUserRequest;
 import com.internal.auth.feature.identity.dto.request.AdminUpdateUserRequest;
 import com.internal.auth.feature.identity.dto.response.PagedUsersResponse;
@@ -42,6 +43,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final ResetValidator resetValidator;
     private final PasswordEncoder passwordEncoder;
     private final EntityUtilityService entityUtilityService;
+    private final ClientApplicationService clientApplicationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -148,7 +150,21 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     private UserSummaryResponse toSummary(User user) {
-        return new UserSummaryResponse(user.getId(), user.getUsername(), user.getPhoneNumber(), user.getEmail(), user.isEnabled(), user.isMfaEnabled(), user.getCreatedAt());
+        return new UserSummaryResponse(user.getId(), user.getUsername(), user.getPhoneNumber(), user.getEmail(), user.isEnabled(), user.isMfaEnabled(), user.getCreatedAt(), resolveClientId(user));
+    }
+
+    // Step 7A: best-effort resolution of the owning client's clientId string
+    // (see UserSummaryResponse's Javadoc on this field). Every user row has
+    // a NOT NULL clientApplicationId FK (V8), so this should always resolve;
+    // caught defensively so one orphaned row can't break an entire page of
+    // the user directory.
+    private String resolveClientId(User user) {
+        try {
+            return clientApplicationService.getById(user.getClientApplicationId()).getClientId();
+        } catch (RuntimeException e) {
+            log.warn("Could not resolve clientId for user id={}, clientApplicationId={}", user.getId(), user.getClientApplicationId());
+            return null;
+        }
     }
 
     private UserProfileResponse toProfile(User user) {

@@ -162,6 +162,12 @@ public class WebSecurityConfig {
                                 appTitle + "/admin/login",
                                 appTitle + "/admin/login/verify-otp",
                                 appTitle + "/admin/refresh-token",
+                                // React Admin Client plan v4, Step 5C/5D: admin-scoped mirrors of
+                                // "/password-reset/request" and "/verify-otp" above - see
+                                // AdminController#requestPasswordResetOtp's Javadoc for why the
+                                // client-Basic-Auth-gated originals can't be called by this app.
+                                appTitle + "/admin/password-reset/request",
+                                appTitle + "/admin/password-reset/verify-otp",
                                 appTitle + "/otp/**"
                         ).permitAll()
 

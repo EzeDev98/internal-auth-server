@@ -3,6 +3,8 @@ package com.internal.auth.feature.identity.controller;
 import com.internal.auth.common.response.InternalAuthApiResponse;
 
 import com.internal.auth.common.constant.AppConstant;
+import com.internal.auth.common.reset.dto.VerifyOtpRequest;
+import com.internal.auth.common.reset.dto.VerifyOtpResponse;
 import com.internal.auth.common.util.RateLimiterService;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
@@ -14,6 +16,9 @@ import com.internal.auth.feature.identity.dto.request.RefreshTokenRequest;
 import com.internal.auth.feature.identity.dto.request.VerifyLoginOtpRequest;
 import com.internal.auth.feature.identity.service.AdminRegistrationService;
 import com.internal.auth.feature.identity.service.UserLoginService;
+import com.internal.auth.feature.passwordreset.dto.request.PasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.response.PasswordResetResponse;
+import com.internal.auth.feature.passwordreset.service.PasswordResetService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +30,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
+
+import static com.internal.auth.common.constant.AppConstant.MAX_RESET_PASSWORD_REQUEST;
+import static com.internal.auth.common.constant.AppConstant.MAX_VERIFY_OTP_REQUEST;
+import static com.internal.auth.common.constant.AppConstant.RESET_PASSWORD_RATE_LIMIT_DURATION;
+import static com.internal.auth.common.constant.AppConstant.VERIFY_OTP_RATE_LIMIT_DURATION_HOURS;
+import static com.internal.auth.common.constant.AppConstant.VERIFY_OTP_RATE_LIMIT_KEY_PREFIX;
 
 /**
  * Admin bootstrap + admin sign-in - the equivalent of Keycloak's master-
@@ -72,6 +83,7 @@ public class AdminController {
     private final UserLoginService loginService;
     private final ClientApplicationService clientApplicationService;
     private final RateLimiterService rateLimiterService;
+    private final PasswordResetService passwordResetService;
 
     @PostMapping("/register")
     public ResponseEntity<InternalAuthApiResponse<AdminRegisterResponse>> register(@RequestBody AdminRegisterRequest request) {
@@ -105,5 +117,40 @@ public class AdminController {
         ClientApplication adminClient = clientApplicationService.getOrCreateInternalAdminClient();
         LoginResponse response = loginService.refreshToken(request, adminClient.getId());
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
+    }
+
+    /**
+     * React Admin Client plan v4, Step 5C/5D backend gap. PasswordResetController's
+     * "/request" and "/verify-otp" resolve the calling ClientApplication via
+     * authenticateClientFromBasicAuthHeader - the same HTTP Basic client-credential
+     * header RegistrationController/LoginController require - which can never
+     * succeed for the internal-auth-admin-console client for the exact reason
+     * documented on refreshToken() above: it has no secret (clientSecretHash is
+     * null) and authenticateClient() unconditionally rejects a null-hash client.
+     * These two endpoints mirror /login and /refresh-token above instead: no
+     * Basic Auth, resolve the reserved admin client directly, same
+     * PasswordResetService the real-client-app flow uses underneath. "/complete"
+     * needs no equivalent - it resolves everything from the reset token's own
+     * hash and takes no client-identifying header at all, so the admin console
+     * calls PasswordResetController's existing "/complete" directly. Rate-limit
+     * keys use their own "admin:" segment so this pool can't exhaust, or be
+     * exhausted by, the real-client-app pool on the same phone number.
+     */
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<InternalAuthApiResponse<PasswordResetResponse>> requestPasswordResetOtp(@RequestBody PasswordResetRequest request) {
+        rateLimiterService.checkRateLimit("ratelimit:password-reset-otp:phone:admin:" + request.getPhoneNumber(),
+                MAX_RESET_PASSWORD_REQUEST, Duration.ofHours(RESET_PASSWORD_RATE_LIMIT_DURATION));
+        ClientApplication adminClient = clientApplicationService.getOrCreateInternalAdminClient();
+        PasswordResetResponse response = passwordResetService.requestOtp(request, adminClient.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
+    }
+
+    @PostMapping("/password-reset/verify-otp")
+    public ResponseEntity<InternalAuthApiResponse<VerifyOtpResponse>> verifyPasswordResetOtp(@RequestBody VerifyOtpRequest request) {
+        rateLimiterService.checkRateLimit(VERIFY_OTP_RATE_LIMIT_KEY_PREFIX + "admin:" + request.getPhoneNumber(),
+                MAX_VERIFY_OTP_REQUEST, Duration.ofHours(VERIFY_OTP_RATE_LIMIT_DURATION_HOURS));
+        ClientApplication adminClient = clientApplicationService.getOrCreateInternalAdminClient();
+        VerifyOtpResponse response = passwordResetService.verifyOtp(request, adminClient.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success("OTP verified successfully.", response));
     }
 }
