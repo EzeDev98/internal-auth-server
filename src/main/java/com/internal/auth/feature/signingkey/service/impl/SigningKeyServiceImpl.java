@@ -106,6 +106,12 @@ public class SigningKeyServiceImpl implements SigningKeyService {
         return newKey;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<SigningKey> listKeys() {
+        return signingKeyRepository.findAllByOrderByCreatedAtDesc();
+    }
+
     @Transactional
     protected void bootstrapIfEmpty() {
         if (signingKeyRepository.count() > 0) {

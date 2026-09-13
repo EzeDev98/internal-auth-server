@@ -14,11 +14,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
+import java.util.List;
 
 /**
  * Step 14D: admin-only JWT signing-key rotation.
@@ -49,5 +51,23 @@ public class SigningKeyController {
         SigningKey newKey = signingKeyService.rotate();
         SigningKeyResponse response = new SigningKeyResponse(newKey.getKid(), newKey.getStatus().name(), newKey.isCurrent(), newKey.getCreatedAt());
         return ResponseEntity.ok(InternalAuthApiResponse.success("Signing key rotated successfully.", response));
+    }
+
+    /**
+     * Step 11A (React Admin Client plan v4): the plan's own Step 2's
+     * "Already built, no work needed" list only names the rotate endpoint
+     * above - nothing upstream exposed the current key (or its history) a
+     * real Settings panel needs to show before a rotate. Purely additive,
+     * same reasoning as Step 2H's password-reset endpoints: reuses
+     * SigningKeyResponse as-is, no existing endpoint or DTO touched.
+     */
+    @Operation(method = "GET", summary = "List signing keys", description = "Admin-only audit list of every signing key this server has ever minted, newest first.")
+    @PreAuthorize(Roles.HAS_ADMIN)
+    @GetMapping("/admin/signing-keys")
+    public ResponseEntity<InternalAuthApiResponse<List<SigningKeyResponse>>> list() {
+        List<SigningKeyResponse> response = signingKeyService.listKeys().stream()
+                .map(key -> new SigningKeyResponse(key.getKid(), key.getStatus().name(), key.isCurrent(), key.getCreatedAt()))
+                .toList();
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response));
     }
 }

@@ -1,6 +1,7 @@
 package com.internal.auth.feature.session.service.impl;
 
 import com.internal.auth.common.crypto.TokenHasher;
+import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
@@ -38,9 +39,10 @@ class SessionManagementServiceImplTest {
     private final UserSessionRepository userSessionRepository = mock(UserSessionRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final TokenHasher tokenHasher = mock(TokenHasher.class);
+    private final ClientApplicationService clientApplicationService = mock(ClientApplicationService.class);
 
     private final SessionManagementServiceImpl service =
-            new SessionManagementServiceImpl(userSessionRepository, userRepository, tokenHasher);
+            new SessionManagementServiceImpl(userSessionRepository, userRepository, tokenHasher, clientApplicationService);
 
     @Test
     void createSession_noExistingActiveSession_savesANewActiveSession() {

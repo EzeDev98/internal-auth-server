@@ -15,4 +15,6 @@ public interface SigningKeyRepository extends JpaRepository<SigningKey, Long> {
     Optional<SigningKey> findByCurrentTrue();
 
     List<SigningKey> findByStatusAndCurrentFalseAndCreatedAtBefore(SigningKeyStatus status, LocalDateTime cutoff);
+
+    List<SigningKey> findAllByOrderByCreatedAtDesc();
 }

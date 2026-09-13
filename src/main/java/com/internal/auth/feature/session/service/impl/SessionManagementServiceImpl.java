@@ -1,6 +1,7 @@
 package com.internal.auth.feature.session.service.impl;
 
 import com.internal.auth.common.crypto.TokenHasher;
+import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
@@ -63,11 +64,13 @@ public class SessionManagementServiceImpl implements SessionManagementService {
     private final UserSessionRepository userSessionRepository;
     private final UserRepository userRepository;
     private final TokenHasher tokenHasher;
+    private final ClientApplicationService clientApplicationService;
 
-    public SessionManagementServiceImpl(UserSessionRepository userSessionRepository, UserRepository userRepository, TokenHasher tokenHasher) {
+    public SessionManagementServiceImpl(UserSessionRepository userSessionRepository, UserRepository userRepository, TokenHasher tokenHasher, ClientApplicationService clientApplicationService) {
         this.userSessionRepository = userSessionRepository;
         this.userRepository = userRepository;
         this.tokenHasher = tokenHasher;
+        this.clientApplicationService = clientApplicationService;
     }
 
     @Override
@@ -195,8 +198,11 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         Page<UserSession> page = userSessionRepository.searchForAdmin(userId, active, normalizedIp, normalizedDevice, pageable);
 
         List<Long> userIds = page.getContent().stream().map(UserSession::getUserId).distinct().toList();
-        Map<Long, String> usernamesById = userRepository.findAllById(userIds).stream()
+        List<User> users = userRepository.findAllById(userIds);
+        Map<Long, String> usernamesById = users.stream()
                 .collect(Collectors.toMap(User::getId, User::getUsername));
+        Map<Long, String> clientIdsById = users.stream()
+                .collect(Collectors.toMap(User::getId, this::resolveClientId));
 
         List<AdminSessionSummaryResponse> content = page.getContent().stream()
                 .map(session -> new AdminSessionSummaryResponse(
@@ -208,10 +214,26 @@ public class SessionManagementServiceImpl implements SessionManagementService {
                         session.isActive(),
                         session.getCreatedAt(),
                         session.getEndedAt(),
-                        session.getEndReason()))
+                        session.getEndReason(),
+                        clientIdsById.get(session.getUserId())))
                 .toList();
 
         return new PagedAdminSessionsResponse(content, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
+
+    // Step 10B: best-effort resolution of the owning client's clientId
+    // string, same pattern and same caveats as AdminUserServiceImpl's own
+    // resolveClientId (Step 7A) - the standalone Sessions - List screen's
+    // Revoke action needs clientId on each row to call DELETE
+    // ${app.title}/users/{username}/sessions, since username alone is
+    // ambiguous across client applications (see User's class Javadoc, V8).
+    private String resolveClientId(User user) {
+        try {
+            return clientApplicationService.getById(user.getClientApplicationId()).getClientId();
+        } catch (RuntimeException e) {
+            log.warn("Could not resolve clientId for user id={}, clientApplicationId={}", user.getId(), user.getClientApplicationId());
+            return null;
+        }
     }
 
     private void closeSession(UserSession session, String reason) {
