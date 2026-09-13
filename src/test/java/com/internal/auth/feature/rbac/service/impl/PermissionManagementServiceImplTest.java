@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -306,7 +305,7 @@ class PermissionManagementServiceImplTest {
         verify(userRoleService).unassignRole("user1", "buyer");
         assertThat(response.getStatusCode()).isEqualTo(200);
         assertThat(response.getDescription()).isEqualTo("Role unassigned");
-        assertThat(response.getData()).isEqualTo(Map.of("username", "user1", "roleName", "buyer"));
+        assertThat(response.getData()).usingRecursiveComparison().isEqualTo(new UnassignRoleResult("user1", "buyer"));
     }
 
     @Test
@@ -348,7 +347,7 @@ class PermissionManagementServiceImplTest {
 
         verify(groupService).removeUserFromPermissionGroup("user1", "buyers");
         assertThat(response.getStatusCode()).isEqualTo(200);
-        assertThat(response.getData()).isEqualTo(Map.of("username", "user1", "roleName", "buyers"));
+        assertThat(response.getData()).usingRecursiveComparison().isEqualTo(new RemoveUserFromGroupResult("user1", "buyers"));
     }
 
     // -- deleteSuperGroup ---------------------------------------------------------
