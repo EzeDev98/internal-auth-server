@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -337,9 +336,12 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
 
         try {
             RemoveRoleResponse roleResponse = userRoleService.unassignRole(username, roleName);
+            // Step 2F: typed replacement for the Map.of(...) this used to
+            // build - identical two keys/values, so the JSON response is
+            // unchanged; only the Java side is now a real type
+            // PermissionController can declare instead of Object.
             return new BaseResponse(HttpServletResponse.SC_OK, roleResponse.getMessage(),
-                    Map.of("username", roleResponse.getUsername(),
-                           "roleName", roleResponse.getRoleName()));
+                    new UnassignRoleResult(roleResponse.getUsername(), roleResponse.getRoleName()));
         } catch (PermissionException ex) {
             throw ex;
         } catch (Exception e) {
@@ -363,7 +365,12 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
 
         try {
             RemoveUserResponse removeUserResponse = groupService.removeUserFromPermissionGroup(username, groupName);
-            return new BaseResponse(HttpServletResponse.SC_OK, removeUserResponse.getMessage(), Map.of("username", removeUserResponse.getUsername(), "roleName", removeUserResponse.getGroupName()));
+            // Step 2F: typed replacement for the Map.of(...) this used to
+            // build, including the pre-existing "roleName" key actually
+            // holding the group name (see RemoveUserFromGroupResult's
+            // javadoc for why that's kept as-is, not corrected here).
+            return new BaseResponse(HttpServletResponse.SC_OK, removeUserResponse.getMessage(),
+                    new RemoveUserFromGroupResult(removeUserResponse.getUsername(), removeUserResponse.getGroupName()));
         } catch (PermissionException ex) {
             throw ex;
         } catch (Exception e) {
