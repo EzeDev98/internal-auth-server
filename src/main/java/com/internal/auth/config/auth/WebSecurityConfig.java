@@ -13,8 +13,6 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.core.GrantedAuthorityDefaults;
 import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -297,17 +295,8 @@ public class WebSecurityConfig {
         return new GrantedAuthorityDefaults("");
     }
 
-    /**
-     * The app-wide password hasher: BCrypt, for values that need brute-force
-     * resistance and are only ever verified against an already-located row
-     * (users.password, and eventually client_applications.client_secret_hash).
-     * For values that instead need to be looked up directly by their hash
-     * (session tokens, password-reset tokens), see TokenHasher (SHA-256) -
-     * Stage 2 punch-list item 4 (credential storage policy) covers why these
-     * are deliberately two different mechanisms.
-     */
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+    // PasswordEncoder moved to PasswordEncoderConfig (same package) - it used
+    // to be a @Bean method here, but that created a circular bean dependency
+    // with JwtSessionTrackingFilter. See PasswordEncoderConfig's class
+    // Javadoc for the full chain.
 }

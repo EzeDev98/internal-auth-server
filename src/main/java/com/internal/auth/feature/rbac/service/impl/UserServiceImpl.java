@@ -94,8 +94,22 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    // Same isolation reasoning as addUserToDefaultPermissionGroup above.
+    @Transactional
+    // Deliberately NOT REQUIRES_NEW, unlike addUserToDefaultPermissionGroup
+    // above. AdminRegistrationServiceImpl's bootstrap path takes a FOR
+    // UPDATE lock on the admin Role row and holds it for the rest of its
+    // own transaction before calling this method - a REQUIRES_NEW here
+    // would open a second connection that can't see that row's uncommitted
+    // insert/lock, tries to re-create/re-lock it, and blocks on the first
+    // transaction, which is itself synchronously blocked waiting on this
+    // call to return. Neither side's DB session sees a lock cycle (the
+    // circular wait lives in the Java call stack, not in MySQL's lock
+    // graph), so it doesn't surface as a deadlock - it just hangs until
+    // innodb_lock_wait_timeout fires. Joining the caller's transaction
+    // also matches this class's own documented intent for the admin path
+    // (unlike the default-user path): a role-assignment failure here
+    // should roll back the whole registration, which only reliably happens
+    // if it's the same transaction as the user-row insert.
     public BaseResponse addUserToAdminPermissionGroup(String username) {
         return addUserToPermissionGroup(username,
                 ADMIN_PERMISSION_GROUP, ADMIN_PERMISSION_GROUP_DESCRIPTION,
