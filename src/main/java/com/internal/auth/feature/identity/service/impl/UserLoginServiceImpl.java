@@ -169,6 +169,11 @@ public class UserLoginServiceImpl implements UserLoginService {
 
     @Override
     public LoginResponse login(LoginRequest request, Long clientApplicationId) {
+        return login(request, clientApplicationId, null, null);
+    }
+
+    @Override
+    public LoginResponse login(LoginRequest request, Long clientApplicationId, String ipAddress, String userAgent) {
         String username = request.getUsername() == null ? null : request.getUsername().trim();
         if (username == null || username.isBlank() || request.getPassword() == null) {
             throw new InvalidCredentialsException(INVALID_CREDENTIALS_MESSAGE);
@@ -205,7 +210,7 @@ public class UserLoginServiceImpl implements UserLoginService {
         revokePriorAuthorizations(user.getInternalAuthUserId(), clientApplicationId);
         MintedTokens tokens = mintTokens(user, clientApplicationId);
 
-        sessionManagementService.createSession(user.getId(), user.getPhoneNumber(), tokens.accessToken());
+        sessionManagementService.createSession(user.getId(), user.getPhoneNumber(), tokens.accessToken(), ipAddress, userAgent);
 
         return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false,
                 tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn(), tokens.refreshExpiresIn());
@@ -213,6 +218,11 @@ public class UserLoginServiceImpl implements UserLoginService {
 
     @Override
     public LoginResponse verifyLoginOtp(VerifyLoginOtpRequest request, Long clientApplicationId) {
+        return verifyLoginOtp(request, clientApplicationId, null, null);
+    }
+
+    @Override
+    public LoginResponse verifyLoginOtp(VerifyLoginOtpRequest request, Long clientApplicationId, String ipAddress, String userAgent) {
         String phoneNumber = request.getPhoneNumber();
         if (phoneNumber == null || phoneNumber.isBlank()) {
             throw new OtpInvalidException("The verification code is invalid.");
@@ -230,6 +240,7 @@ public class UserLoginServiceImpl implements UserLoginService {
         eventPublisher.publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), clientApplicationId));
         revokePriorAuthorizations(user.getInternalAuthUserId(), clientApplicationId);
         MintedTokens tokens = mintTokens(user, clientApplicationId);
+        sessionManagementService.createSession(user.getId(), user.getPhoneNumber(), tokens.accessToken(), ipAddress, userAgent);
         return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false,
                 tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn(), tokens.refreshExpiresIn());
     }

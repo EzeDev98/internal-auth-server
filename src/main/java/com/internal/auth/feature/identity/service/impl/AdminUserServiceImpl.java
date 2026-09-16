@@ -5,8 +5,10 @@ import com.internal.auth.common.exception.UserNotFoundException;
 import com.internal.auth.common.reset.ResetValidator;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.dto.request.AdminCreateUserRequest;
+import com.internal.auth.feature.identity.dto.request.AdminResetPasswordRequest;
 import com.internal.auth.feature.identity.dto.request.AdminUpdateUserRequest;
 import com.internal.auth.feature.identity.dto.response.PagedUsersResponse;
+import com.internal.auth.feature.identity.dto.response.UserCredentialResponse;
 import com.internal.auth.feature.identity.dto.response.UserProfileResponse;
 import com.internal.auth.feature.identity.dto.response.UserSummaryResponse;
 import com.internal.auth.feature.identity.model.User;
@@ -14,7 +16,9 @@ import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.identity.service.AdminUserService;
 import com.internal.auth.feature.identity.validation.RegistrationValidator;
 import com.internal.auth.feature.rbac.service.impl.EntityUtilityService;
+import com.internal.auth.feature.session.service.SessionManagementService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -24,6 +28,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -34,16 +39,17 @@ import java.util.UUID;
  * MfaAdminServiceImpl already relies on.
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AdminUserServiceImpl implements AdminUserService {
 
     private final UserRepository userRepository;
-    private static final Logger log = LoggerFactory.getLogger(AdminUserServiceImpl.class);
     private final RegistrationValidator registrationValidator;
     private final ResetValidator resetValidator;
     private final PasswordEncoder passwordEncoder;
     private final EntityUtilityService entityUtilityService;
     private final ClientApplicationService clientApplicationService;
+    private final SessionManagementService sessionManagementService;
 
     @Override
     @Transactional(readOnly = true)
@@ -143,6 +149,34 @@ public class AdminUserServiceImpl implements AdminUserService {
             entityUtilityService.deleteUserGroups(user);
             userRepository.delete(user);
         });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserCredentialResponse getCredential(String username, Long clientApplicationId) {
+        User user = userRepository.findByUsernameAndClientApplicationId(username, clientApplicationId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+        LocalDateTime createdAt = user.getPasswordChangedAt() != null ? user.getPasswordChangedAt() : user.getCreatedAt();
+        return new UserCredentialResponse("password", createdAt);
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(String username, Long clientApplicationId, AdminResetPasswordRequest request) {
+        resetValidator.validateNewPassword(request.getNewPassword(), request.getConfirmPassword());
+
+        User user = userRepository.findByUsernameAndClientApplicationId(username, clientApplicationId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setPasswordChangedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        // Same post-reset session invalidation PasswordResetServiceImpl#completeReset
+        // performs - forces a fresh login with the new password.
+        sessionManagementService.invalidateActiveSessionForUser(user.getId());
+
+        log.info("Admin reset password for user id={}", user.getId());
     }
 
     private String normalize(String value) {

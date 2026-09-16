@@ -56,7 +56,7 @@ public class LoginController {
         rateLimiterService.checkRateLimit(AppConstant.LOGIN_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_LOGIN_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_RATE_LIMIT_DURATION_MINUTES));
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
         checkAccountRateLimit(client.getId(), request.getUsername());
-        LoginResponse response = loginService.login(request, client.getId());
+        LoginResponse response = loginService.login(request, client.getId(), httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 
@@ -88,7 +88,7 @@ public class LoginController {
             HttpServletRequest httpRequest) {
         rateLimiterService.checkRateLimit(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_LOGIN_OTP_VERIFY_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_DURATION_MINUTES));
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
-        LoginResponse response = loginService.verifyLoginOtp(request, client.getId());
+        LoginResponse response = loginService.verifyLoginOtp(request, client.getId(), httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 

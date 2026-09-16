@@ -97,7 +97,7 @@ public class AdminController {
         rateLimiterService.checkRateLimit(AppConstant.LOGIN_RATE_LIMIT_KEY_PREFIX + "admin:" + httpRequest.getRemoteAddr(),
                 AppConstant.MAX_LOGIN_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_RATE_LIMIT_DURATION_MINUTES));
         ClientApplication adminClient = clientApplicationService.getOrCreateInternalAdminClient();
-        LoginResponse response = loginService.login(request, adminClient.getId());
+        LoginResponse response = loginService.login(request, adminClient.getId(), httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 
@@ -106,7 +106,7 @@ public class AdminController {
         rateLimiterService.checkRateLimit(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_KEY_PREFIX + "admin:" + httpRequest.getRemoteAddr(),
                 AppConstant.MAX_LOGIN_OTP_VERIFY_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_DURATION_MINUTES));
         ClientApplication adminClient = clientApplicationService.getOrCreateInternalAdminClient();
-        LoginResponse response = loginService.verifyLoginOtp(request, adminClient.getId());
+        LoginResponse response = loginService.verifyLoginOtp(request, adminClient.getId(), httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 

@@ -1,8 +1,10 @@
 package com.internal.auth.feature.identity.service;
 
 import com.internal.auth.feature.identity.dto.request.AdminCreateUserRequest;
+import com.internal.auth.feature.identity.dto.request.AdminResetPasswordRequest;
 import com.internal.auth.feature.identity.dto.request.AdminUpdateUserRequest;
 import com.internal.auth.feature.identity.dto.response.PagedUsersResponse;
+import com.internal.auth.feature.identity.dto.response.UserCredentialResponse;
 import com.internal.auth.feature.identity.dto.response.UserProfileResponse;
 import org.springframework.data.domain.Pageable;
 
@@ -36,4 +38,21 @@ public interface AdminUserService {
     UserProfileResponse createUser(Long clientApplicationId, AdminCreateUserRequest request);
 
     void deleteUser(String internalAuthUserId, Long clientApplicationId);
+
+    /**
+     * Step 2H (Users - Detail Credentials tab). Always resolves - every
+     * account has a password (User.password is set at creation, either by
+     * self-registration or #createUser above).
+     */
+    UserCredentialResponse getCredential(String username, Long clientApplicationId);
+
+    /**
+     * Step 2H. Admin sets a new password directly for the account - no
+     * OTP/token round trip, unlike PasswordResetServiceImpl's self-service
+     * flow. Also invalidates the user's active session (same
+     * SessionManagementService#invalidateActiveSessionForUser call
+     * PasswordResetServiceImpl#completeReset makes), forcing a fresh login
+     * with the new password.
+     */
+    void resetPassword(String username, Long clientApplicationId, AdminResetPasswordRequest request);
 }

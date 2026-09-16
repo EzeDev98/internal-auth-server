@@ -49,7 +49,7 @@ public class SigningKeyController {
     public ResponseEntity<InternalAuthApiResponse<SigningKeyResponse>> rotate(HttpServletRequest httpRequest) {
         rateLimiterService.checkRateLimit(AppConstant.SIGNING_KEY_ROTATE_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_SIGNING_KEY_ROTATE_REQUEST, Duration.ofDays(AppConstant.SIGNING_KEY_ROTATE_RATE_LIMIT_DURATION_DAYS));
         SigningKey newKey = signingKeyService.rotate();
-        SigningKeyResponse response = new SigningKeyResponse(newKey.getKid(), newKey.getStatus().name(), newKey.isCurrent(), newKey.getCreatedAt());
+        SigningKeyResponse response = new SigningKeyResponse(newKey.getKid(), newKey.getStatus().name(), newKey.isCurrent(), newKey.getCreatedAt(), newKey.getRetiredAt());
         return ResponseEntity.ok(InternalAuthApiResponse.success("Signing key rotated successfully.", response));
     }
 
@@ -66,7 +66,7 @@ public class SigningKeyController {
     @GetMapping("/admin/signing-keys")
     public ResponseEntity<InternalAuthApiResponse<List<SigningKeyResponse>>> list() {
         List<SigningKeyResponse> response = signingKeyService.listKeys().stream()
-                .map(key -> new SigningKeyResponse(key.getKid(), key.getStatus().name(), key.isCurrent(), key.getCreatedAt()))
+                .map(key -> new SigningKeyResponse(key.getKid(), key.getStatus().name(), key.isCurrent(), key.getCreatedAt(), key.getRetiredAt()))
                 .toList();
         return ResponseEntity.ok(InternalAuthApiResponse.success(response));
     }

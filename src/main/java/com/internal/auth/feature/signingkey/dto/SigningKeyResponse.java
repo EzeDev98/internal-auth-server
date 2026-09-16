@@ -16,4 +16,5 @@ public class SigningKeyResponse {
     private String status;
     private boolean current;
     private LocalDateTime createdAt;
+    private LocalDateTime retiredAt;
 }

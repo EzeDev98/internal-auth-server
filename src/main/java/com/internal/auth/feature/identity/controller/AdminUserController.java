@@ -6,8 +6,10 @@ import com.internal.auth.config.auth.Roles;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.dto.request.AdminCreateUserRequest;
+import com.internal.auth.feature.identity.dto.request.AdminResetPasswordRequest;
 import com.internal.auth.feature.identity.dto.request.AdminUpdateUserRequest;
 import com.internal.auth.feature.identity.dto.response.PagedUsersResponse;
+import com.internal.auth.feature.identity.dto.response.UserCredentialResponse;
 import com.internal.auth.feature.identity.dto.response.UserProfileResponse;
 import com.internal.auth.feature.identity.service.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -97,5 +99,23 @@ public class AdminUserController {
         ClientApplication client = clientApplicationService.getEnabledClientByClientId(callerClientId);
         adminUserService.deleteUser(internalAuthUserId, client.getId());
         return ResponseEntity.ok(InternalAuthApiResponse.success("User deleted", null));
+    }
+
+    @Operation(method = "GET", summary = "Get credential", description = "The account's password credential: type and when it was created/last changed. This app stores one credential per user.")
+    @PreAuthorize(Roles.HAS_ADMIN)
+    @GetMapping("/users/{username}/credentials")
+    public ResponseEntity<InternalAuthApiResponse<UserCredentialResponse>> getCredential(@PathVariable String username, @RequestParam String clientId) {
+        ClientApplication client = clientApplicationService.getEnabledClientByClientId(clientId);
+        UserCredentialResponse response = adminUserService.getCredential(username, client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response));
+    }
+
+    @Operation(method = "POST", summary = "Reset password", description = "Admin sets a new password directly for the account and invalidates its active session.")
+    @PreAuthorize(Roles.HAS_ADMIN)
+    @PostMapping("/users/{username}/credentials/reset")
+    public ResponseEntity<InternalAuthApiResponse<Void>> resetPassword(@PathVariable String username, @RequestParam String clientId, @RequestBody AdminResetPasswordRequest request) {
+        ClientApplication client = clientApplicationService.getEnabledClientByClientId(clientId);
+        adminUserService.resetPassword(username, client.getId(), request);
+        return ResponseEntity.ok(InternalAuthApiResponse.success("Password reset successfully."));
     }
 }
