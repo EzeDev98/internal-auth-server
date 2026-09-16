@@ -83,7 +83,7 @@ public class ClientApplicationController {
         return ResponseEntity.ok(InternalAuthApiResponse.success(response));
     }
 
-    @Operation(method = "GET", summary = "Get client application detail", description = "Single client application's detail. Never includes the secret or its hash - that's only ever returned once, at creation/rotation time.")
+    @Operation(method = "GET", summary = "Get client application detail", description = "Single client application's detail. Includes a decrypted, viewable clientSecret for CONFIDENTIAL clients that have one (created or rotated after this field shipped) - never the BCrypt hash used for authentication. Older clients return a null clientSecret until rotated.")
     @PreAuthorize(Roles.HAS_ADMIN)
     @GetMapping("/{clientId}")
     public ResponseEntity<InternalAuthApiResponse<ClientApplicationDetailResponse>> getClient(@PathVariable String clientId) {

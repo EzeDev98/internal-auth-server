@@ -33,6 +33,11 @@ import java.util.Set;
  * not brute-force resistance. A client secret is more like a password than
  * a bearer token: it is compared with PasswordEncoder#matches against an
  * already-located row, never looked up by its hash directly.
+ *
+ * clientSecretEncrypted (admin-console secret reveal): a second,
+ * reversible copy of the same raw secret, encrypted (not hashed) via
+ * SecretEncryptionService - see that field's own javadoc below for why it
+ * exists alongside clientSecretHash instead of replacing it.
  */
 @Getter
 @Setter
@@ -60,6 +65,22 @@ public class ClientApplication {
      */
     @Column(name = "client_secret_hash")
     private String clientSecretHash;
+
+    /**
+     * AES-256-GCM ciphertext of the same raw secret clientSecretHash is the
+     * one-way hash of (SecretEncryptionService - the same key already
+     * protecting signing_key.encrypted_private_key). Purely additive and
+     * never consulted for authentication - verifyClientSecret/
+     * authenticateClient/ClientApplicationRegisteredClientRepository all
+     * still compare against clientSecretHash exactly as before. This exists
+     * only so the admin console can decrypt and display/copy a client's
+     * secret on demand (matching Keycloak's Credentials tab), not just once
+     * at creation/rotation time. Null for public clients and for any
+     * confidential client created before this column existed - those rows
+     * have no recoverable secret and must be rotated to get one.
+     */
+    @Column(name = "client_secret_encrypted", columnDefinition = "TEXT")
+    private String clientSecretEncrypted;
 
     @Column(name = "name", nullable = false)
     private String name;

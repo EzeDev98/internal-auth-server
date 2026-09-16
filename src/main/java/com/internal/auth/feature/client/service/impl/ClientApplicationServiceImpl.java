@@ -3,6 +3,7 @@ package com.internal.auth.feature.client.service.impl;
 import com.internal.auth.common.exception.BadRequestException;
 import com.internal.auth.common.exception.ClientAlreadyExistsException;
 import com.internal.auth.common.exception.InvalidClientCredentialsException;
+import com.internal.auth.common.util.SecretEncryptionService;
 import com.internal.auth.feature.client.dto.ClientApplicationDetailResponse;
 import com.internal.auth.feature.client.dto.ClientApplicationSummaryResponse;
 import com.internal.auth.feature.client.dto.CreateClientApplicationRequest;
@@ -67,6 +68,7 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
 
     private final ClientApplicationRepository clientApplicationRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SecretEncryptionService secretEncryptionService;
 
     @Override
     @Transactional
@@ -83,6 +85,7 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         ClientApplication client = new ClientApplication();
         client.setClientId(clientId);
         client.setClientSecretHash(passwordEncoder.encode(rawSecret));
+        client.setClientSecretEncrypted(secretEncryptionService.encrypt(rawSecret));
         client.setName(name);
         client.setDescription(request.getDescription());
         client.setRedirectUris(nullSafe(request.getRedirectUris()));
@@ -180,6 +183,7 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
 
         String rawSecret = generateClientSecret();
         client.setClientSecretHash(passwordEncoder.encode(rawSecret));
+        client.setClientSecretEncrypted(secretEncryptionService.encrypt(rawSecret));
         ClientApplication saved = clientApplicationRepository.save(client);
 
         log.info("Client secret rotated for client application id={}, clientId={}", saved.getId(), saved.getClientId());
@@ -328,7 +332,20 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
                 client.getClientSecretHash() == null ? ClientType.PUBLIC : ClientType.CONFIDENTIAL,
                 client.isEnabled(),
                 client.getCreatedAt(),
-                client.getUpdatedAt());
+                client.getUpdatedAt(),
+                decryptSecretForDisplay(client));
+    }
+
+    // Admin-console-only reveal: decrypts clientSecretEncrypted purely for
+    // display, never for authentication (see ClientApplication's javadoc on
+    // that field). Null for PUBLIC clients and for any CONFIDENTIAL client
+    // that predates this column - regenerate is the only way for those to
+    // get a viewable secret.
+    private String decryptSecretForDisplay(ClientApplication client) {
+        if (client.getClientSecretEncrypted() == null) {
+            return null;
+        }
+        return secretEncryptionService.decrypt(client.getClientSecretEncrypted());
     }
 
 }
