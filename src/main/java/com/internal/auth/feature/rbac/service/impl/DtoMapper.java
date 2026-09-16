@@ -3,7 +3,9 @@ package com.internal.auth.feature.rbac.service.impl;
 import com.internal.auth.common.exception.PermissionException;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.rbac.model.*;
+import com.internal.auth.feature.rbac.repository.UserPermissionGroupRepository;
 import com.internal.auth.feature.rbac.response.*;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
@@ -14,6 +16,12 @@ import java.util.stream.Collectors;
 
 @Component
 public class DtoMapper {
+
+    private final UserPermissionGroupRepository userPermissionGroupRepository;
+
+    public DtoMapper(UserPermissionGroupRepository userPermissionGroupRepository) {
+        this.userPermissionGroupRepository = userPermissionGroupRepository;
+    }
 
     public GroupResponse createUserPermissionGroupResponseForSuperGroup(PermissionGroup permissionGroup, List<UserPermissionGroup> userGroups) {
 
@@ -119,7 +127,40 @@ public class DtoMapper {
     private GroupedUserResponse createUserResponse(User user) {
         GroupedUserResponse userResponse = new GroupedUserResponse();
         userResponse.setUserId(user.getId());
+        userResponse.setUsername(user.getUsername());
+        userResponse.setEmail(user.getEmail());
+        userResponse.setMembership(buildMembershipPaths(user));
         return userResponse;
+    }
+
+    /**
+     * Every group/subgroup this user belongs to, across the whole system
+     * (not just the group being viewed) - matches Keycloak's own Members
+     * tab "Membership" column, which lists every group path a user is in,
+     * not only the one whose Members tab you're looking at.
+     */
+    private String buildMembershipPaths(User user) {
+        List<UserPermissionGroup> memberships = userPermissionGroupRepository.findAllByUser(user);
+        if (CollectionUtils.isEmpty(memberships)) {
+            return "";
+        }
+        return memberships.stream()
+                .map(this::formatMembershipPath)
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .collect(Collectors.joining(", "));
+    }
+
+    private String formatMembershipPath(UserPermissionGroup membership) {
+        SubPermissionGroup subGroup = membership.getSubPermissionGroup();
+        if (subGroup != null) {
+            String parentName = subGroup.getParentGroup() != null ? subGroup.getParentGroup().getGroupName() : "";
+            return "/" + parentName + "/" + subGroup.getGroupName();
+        }
+        if (membership.getPermissionGroup() != null) {
+            return "/" + membership.getPermissionGroup().getGroupName();
+        }
+        return "";
     }
 
     public GroupCreationResponse buildPermissionGroupResponse(PermissionGroup group) {

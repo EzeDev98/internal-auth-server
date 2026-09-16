@@ -85,7 +85,7 @@ public class RoleQueryServiceImpl implements RoleQueryService {
                         .map(this::toGroupLabel)
                         .toList(),
                 usersInRole.stream()
-                        .map(u -> new RoleUserSummary(u.getId(), u.getUsername()))
+                        .map(u -> new RoleUserSummary(u.getId(), u.getUsername(), u.getEmail()))
                         .toList());
     }
 

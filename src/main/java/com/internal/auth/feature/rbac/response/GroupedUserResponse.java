@@ -12,4 +12,14 @@ import lombok.Setter;
 public class GroupedUserResponse {
     private Long userId;
     private String username;
+    private String email;
+
+    /**
+     * Every group and subgroup this user belongs to across the whole
+     * system (not just the group this response is for), formatted as
+     * slash paths and comma-joined - e.g. "/lagos, /lagos/eti-osa,
+     * /offline_pay_base_access_group" - matching Keycloak's own Members
+     * tab "Membership" column. Built in DtoMapper#buildMembershipPaths.
+     */
+    private String membership;
 }

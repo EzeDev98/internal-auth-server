@@ -16,4 +16,5 @@ import lombok.Setter;
 public class RoleUserSummary {
     private Long id;
     private String username;
+    private String email;
 }

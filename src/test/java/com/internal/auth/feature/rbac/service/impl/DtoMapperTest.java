@@ -9,6 +9,7 @@ import com.internal.auth.feature.rbac.model.RolePermissionGroupMapping;
 import com.internal.auth.feature.rbac.model.SubPermissionGroup;
 import com.internal.auth.feature.rbac.model.UserPermissionGroup;
 import com.internal.auth.feature.rbac.model.UserRole;
+import com.internal.auth.feature.rbac.repository.UserPermissionGroupRepository;
 import com.internal.auth.feature.rbac.response.GroupCreationResponse;
 import com.internal.auth.feature.rbac.response.GroupResponse;
 import com.internal.auth.feature.rbac.response.PermissionGroupResponse;
@@ -28,14 +29,23 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 /**
  * Step 6D - field-by-field entity-to-response mapping for every public
  * method on DtoMapper, including the null/empty-input branches that throw.
+ *
+ * userPermissionGroupRepository is a bare Mockito mock, not stubbed per
+ * test - DtoMapper#buildMembershipPaths only needs it to return something
+ * for findAllByUser(...), and an unstubbed mock returning null is handled
+ * the same as "no memberships" (CollectionUtils.isEmpty(null) is true), so
+ * every test below gets membership == "" for free without needing to stub
+ * this on a per-test basis.
  */
 class DtoMapperTest {
 
-    private final DtoMapper mapper = new DtoMapper();
+    private final UserPermissionGroupRepository userPermissionGroupRepository = mock(UserPermissionGroupRepository.class);
+    private final DtoMapper mapper = new DtoMapper(userPermissionGroupRepository);
 
     // -- createUserPermissionGroupResponseForSuperGroup -----------------------
 
@@ -77,9 +87,12 @@ class DtoMapperTest {
         assertThat(response.getRoles().get(0).getRoleName()).isEqualTo("buyer");
         assertThat(response.getUserResponses()).hasSize(1);
         assertThat(response.getUserResponses().get(0).getUserId()).isEqualTo(30L);
-        // Current behavior: GroupedUserResponse has a username field, but
-        // createUserResponse() never populates it - only userId is set.
-        assertThat(response.getUserResponses().get(0).getUsername()).isNull();
+        assertThat(response.getUserResponses().get(0).getUsername()).isEqualTo(user.getUsername());
+        assertThat(response.getUserResponses().get(0).getEmail()).isEqualTo(user.getEmail());
+        // userPermissionGroupRepository is an unstubbed mock here, so
+        // findAllByUser(...) returns null - buildMembershipPaths treats
+        // that the same as "no memberships found".
+        assertThat(response.getUserResponses().get(0).getMembership()).isEmpty();
     }
 
     @Test
