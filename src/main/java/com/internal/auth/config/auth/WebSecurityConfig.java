@@ -24,6 +24,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Slf4j
@@ -67,6 +68,15 @@ public class WebSecurityConfig {
      */
     @Value("${app.token-issuer-uri}")
     private String tokenIssuerUrl;
+
+    // Comma-separated browser origins allowed to call this API directly -
+    // only RegisterPage/ForgotPasswordPage/ResetPasswordPage need this
+    // (see apiClient.js), everything else goes through the client's BFF
+    // (server-to-server, not subject to CORS). Property-driven instead of
+    // hardcoded so the deployed client's onrender.com origin doesn't need
+    // a code change + redeploy to add.
+    @Value("${app.cors.allowed-origins}")
+    private String allowedOrigins;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
@@ -166,16 +176,12 @@ public class WebSecurityConfig {
                                 // client-Basic-Auth-gated originals can't be called by this app.
                                 appTitle + "/admin/password-reset/request",
                                 appTitle + "/admin/password-reset/verify-otp",
+                                appTitle + "/admin/reset/wipe-tenant",
+                                appTitle + "/logout/backchannel",
                                 appTitle + "/otp/**"
                         ).permitAll()
 
-                        // Danger-zone per-tenant data wipe. Opened here so it can be called
-                        // without a JWT - guarded instead by a required X-Reset-Secret plus a
-                        // confirmation phrase, and inert unless admin.reset.secret is configured.
-                        // See TenantResetController.
-                        .requestMatchers(HttpMethod.POST, appTitle + "/admin/reset/wipe-tenant").permitAll()
-
-                        .requestMatchers(HttpMethod.GET, "/api/v1/keep-alive").permitAll()
+                        .requestMatchers(HttpMethod.GET, appTitle + "/keep-alive").permitAll()
                         // Spring Boot forwards any unhandled 404/500 to /error, and that
                         // forward goes through this filter chain as an ERROR dispatch. If
                         // /error isn't permitted it falls to anyRequest().authenticated(),
@@ -192,11 +198,6 @@ public class WebSecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
 
                         .requestMatchers(HttpMethod.GET, appTitle + "/auth/activate").permitAll()
-
-                        // OIDC back-channel logout - called server-to-server by Keycloak, not by a
-                        // logged-in user, so there's no bearer token to check here. It authenticates
-                        // itself via the signed logout_token validated in BackchannelLogoutService.
-                        .requestMatchers(HttpMethod.POST, appTitle + "/logout/backchannel").permitAll()
 
                         .anyRequest().authenticated())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -231,9 +232,12 @@ public class WebSecurityConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOriginPatterns(List.of(
-                "http://localhost:*"
-        ));
+        configuration.setAllowedOriginPatterns(
+                Arrays.stream(allowedOrigins.split(","))
+                        .map(String::trim)
+                        .filter(origin -> !origin.isEmpty())
+                        .toList()
+        );
 
         configuration.setAllowedMethods(List.of(
                 "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"
