@@ -206,6 +206,31 @@ public class EntityUtilityService {
         subPermissionGroupRepository.delete(subGroup);
     }
 
+    /**
+     * Reuses getSubGroup's existing validation (both names exist, and
+     * subGroupName is actually a child of parentGroupName), same pattern
+     * as deleteSubGroup above.
+     */
+    public SubPermissionGroup renameSubGroup(String parentGroupName, String subGroupName, String newGroupName) {
+        SubPermissionGroup subGroup = getSubGroup(parentGroupName, subGroupName);
+        subGroup.setGroupName(newGroupName);
+        return subPermissionGroupRepository.save(subGroup);
+    }
+
+    /**
+     * Re-parents an existing subgroup under a different top-level group,
+     * leaving its name, role mappings, and members untouched. Reuses
+     * getSubGroup's existing validation (both names exist, and
+     * subGroupName is actually a child of currentParentGroupName), same
+     * pattern as deleteSubGroup/renameSubGroup above.
+     */
+    public SubPermissionGroup moveSubGroup(String currentParentGroupName, String subGroupName, String newParentGroupName) {
+        SubPermissionGroup subGroup = getSubGroup(currentParentGroupName, subGroupName);
+        PermissionGroup newParentGroup = getPermissionGroup(newParentGroupName);
+        subGroup.setParentGroup(newParentGroup);
+        return subPermissionGroupRepository.save(subGroup);
+    }
+
     private void deleteAllSubGroups(PermissionGroup parentGroup) {
         rolePermissionGroupMappingRepository.deleteAllByParentGroup(parentGroup);
         userPermissionGroupRepository.deleteAllByParentGroup(parentGroup);

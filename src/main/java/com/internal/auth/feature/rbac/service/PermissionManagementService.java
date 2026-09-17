@@ -18,4 +18,6 @@ public interface PermissionManagementService {
     BaseResponse removeUserFromGroup(String username, String groupName);
     BaseResponse deleteSuperGroup(String groupName);
     BaseResponse deleteSubGroup(String parentGroupName, String subGroupName);
+    BaseResponse renameSubGroup(String parentGroupName, String subGroupName, String newGroupName);
+    BaseResponse moveSubGroup(String parentGroupName, String subGroupName, String newParentGroupName);
 }

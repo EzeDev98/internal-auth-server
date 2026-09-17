@@ -191,7 +191,9 @@ public class DtoMapper {
     public RoleAndPermissionGroupMappingResponse buildRoleAndPermissionGroupMappingResponse(RolePermissionGroupMapping mapping) {
         RoleAndPermissionGroupMappingResponse response = new RoleAndPermissionGroupMappingResponse();
         response.setId(mapping.getId());
-        response.setGroupName(mapping.getPermissionGroup().getGroupName());
+        response.setGroupName(mapping.getPermissionGroup() != null
+                ? mapping.getPermissionGroup().getGroupName()
+                : mapping.getSubPermissionGroup().getGroupName());
         response.setRoleName(mapping.getRole().getRoleName());
         return response;
     }

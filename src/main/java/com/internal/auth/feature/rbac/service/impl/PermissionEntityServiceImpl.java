@@ -163,6 +163,27 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
     }
 
     @Override
+    public SubGroupCreationResponse renameSubGroup(String parentGroupName, String subGroupName, String newGroupName) {
+
+        if (entityUtils.isSubGroupExist(newGroupName)) {
+            throw PermissionException.alreadyExists("Subgroup already exists in the database");
+        }
+
+        try {
+            SubPermissionGroup renamed = entityUtils.renameSubGroup(parentGroupName, subGroupName, newGroupName);
+            return mapper.buildSubPermissionGroupResponse(renamed);
+        } catch (PermissionException ex) {
+            throw ex;
+        } catch (DataIntegrityViolationException ex) {
+            // Same create-vs-create race as createSubGroup above, caught
+            // here by uk_sub_permission_group_group_name (V20).
+            throw PermissionException.alreadyExists("Subgroup already exists in the database");
+        } catch (DataAccessException ex) {
+            throw PermissionException.subGroupPersistenceFailed(newGroupName);
+        }
+    }
+
+    @Override
     public BaseResponse getSubGroupByName(String parentGroupName, String subGroupName) {
 
         if (StringUtils.isBlank(parentGroupName) || StringUtils.isBlank(subGroupName)) {
@@ -170,6 +191,24 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
         }
         SubPermissionGroup subGroup = entityUtils.getSubGroup(parentGroupName, subGroupName);
         return new BaseResponse(HttpServletResponse.SC_OK, "Subgroup retrieved successfully", subGroup);
+    }
+
+    @Override
+    public SubGroupCreationResponse moveSubGroup(String parentGroupName, String subGroupName, String newParentGroupName) {
+
+        if (parentGroupName.equals(newParentGroupName)) {
+            throw PermissionException.operationFailed(
+                    "Subgroup '" + subGroupName + "' is already under group '" + newParentGroupName + "'");
+        }
+
+        try {
+            SubPermissionGroup moved = entityUtils.moveSubGroup(parentGroupName, subGroupName, newParentGroupName);
+            return mapper.buildSubPermissionGroupResponse(moved);
+        } catch (PermissionException ex) {
+            throw ex;
+        } catch (DataAccessException ex) {
+            throw PermissionException.subGroupPersistenceFailed(subGroupName);
+        }
     }
 
     @Override

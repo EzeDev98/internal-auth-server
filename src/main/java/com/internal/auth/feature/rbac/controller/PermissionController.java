@@ -353,4 +353,22 @@ public class PermissionController {
                 .body(InternalAuthApiResponse.success(response.getDescription(), (Void) response.getData()));
     }
 
+    @PreAuthorize(Roles.HAS_ADMIN)
+    @Operation(summary = "Rename a subgroup", description = "Renames a single subgroup without affecting its parent group, sibling subgroups, members, or role mappings.")
+    @PatchMapping("/groups/{parentGroupName}/subgroups/{subGroupName}")
+    public ResponseEntity<InternalAuthApiResponse<SubGroupCreationResponse>> renameSubGroup(@PathVariable String parentGroupName, @PathVariable String subGroupName, @RequestBody SubGroupRequest request) {
+        BaseResponse response = permissionService.renameSubGroup(parentGroupName, subGroupName, request.getGroupName());
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), (SubGroupCreationResponse) response.getData()));
+    }
+
+    @PreAuthorize(Roles.HAS_ADMIN)
+    @Operation(summary = "Move a subgroup", description = "Re-parents a subgroup under a different top-level group, leaving its name, role mappings, and members untouched.")
+    @PatchMapping("/groups/{parentGroupName}/subgroups/{subGroupName}/move")
+    public ResponseEntity<InternalAuthApiResponse<SubGroupCreationResponse>> moveSubGroup(@PathVariable String parentGroupName, @PathVariable String subGroupName, @RequestBody MoveSubGroupRequest request) {
+        BaseResponse response = permissionService.moveSubGroup(parentGroupName, subGroupName, request.getNewParentGroupName());
+        return ResponseEntity.status(response.getStatusCode())
+                .body(InternalAuthApiResponse.success(response.getDescription(), (SubGroupCreationResponse) response.getData()));
+    }
+
 }

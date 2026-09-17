@@ -13,6 +13,8 @@ public interface PermissionEntityService {
     BaseResponse getPermissionGroupUsersByGroupName(String groupName);
     void deleteSuperGroup(String groupName);
     void deleteSubGroup(String parentGroupName, String subGroupName);
+    SubGroupCreationResponse renameSubGroup(String parentGroupName, String subGroupName, String newGroupName);
+    SubGroupCreationResponse moveSubGroup(String parentGroupName, String subGroupName, String newParentGroupName);
     BaseResponse getSubGroupByName(String parentGroupName, String subGroupName);
     BaseResponse getSubPermissionGroupUsersByGroupName(String superGroupName, String subGroupName);
     BaseResponse retrieveUserGroups(String username);

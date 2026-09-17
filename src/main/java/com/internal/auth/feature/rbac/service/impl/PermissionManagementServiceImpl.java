@@ -429,4 +429,48 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
             throw PermissionException.internalError("Unexpected error deleting subgroup: " + subGroupName + " — " + ex.getMessage());
         }
     }
+
+    @Override
+    @Transactional
+    public BaseResponse renameSubGroup(String parentGroupName, String subGroupName, String newGroupName) {
+
+        if (StringUtils.isBlank(parentGroupName) || StringUtils.isBlank(subGroupName) || StringUtils.isBlank(newGroupName)) {
+            throw PermissionException.emptyField("Parent group name, sub group name and new group name are required");
+        }
+
+        parentGroupName = parentGroupName.toLowerCase().trim();
+        subGroupName = subGroupName.toLowerCase().trim();
+        newGroupName = newGroupName.toLowerCase().trim();
+
+        try {
+            SubGroupCreationResponse response = permissionEntityService.renameSubGroup(parentGroupName, subGroupName, newGroupName);
+            return new BaseResponse(HttpStatus.OK.value(), "Subgroup renamed successfully", response);
+        } catch (PermissionException e) {
+            throw e;
+        } catch (Exception ex) {
+            throw PermissionException.internalError("Unexpected error renaming subgroup: " + subGroupName + " — " + ex.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional
+    public BaseResponse moveSubGroup(String parentGroupName, String subGroupName, String newParentGroupName) {
+
+        if (StringUtils.isBlank(parentGroupName) || StringUtils.isBlank(subGroupName) || StringUtils.isBlank(newParentGroupName)) {
+            throw PermissionException.emptyField("Parent group name, sub group name and destination group name are required");
+        }
+
+        parentGroupName = parentGroupName.toLowerCase().trim();
+        subGroupName = subGroupName.toLowerCase().trim();
+        newParentGroupName = newParentGroupName.toLowerCase().trim();
+
+        try {
+            SubGroupCreationResponse response = permissionEntityService.moveSubGroup(parentGroupName, subGroupName, newParentGroupName);
+            return new BaseResponse(HttpStatus.OK.value(), "Subgroup moved successfully", response);
+        } catch (PermissionException e) {
+            throw e;
+        } catch (Exception ex) {
+            throw PermissionException.internalError("Unexpected error moving subgroup: " + subGroupName + " — " + ex.getMessage());
+        }
+    }
 }
