@@ -63,13 +63,23 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * to mean "no text filter", otherwise matched case-insensitively as a
      * substring against username, phoneNumber, and email.
      */
+    // CAST(:search AS string) below is not decorative - without it, Postgres
+    // has to infer a type for :search purely from its position inside
+    // CONCAT(...)/LOWER(...), since it's never compared directly against a
+    // typed column. Hibernate 7 + pgjdbc infers that as bytea instead of
+    // text in this shape, and Postgres's lower() has no bytea overload,
+    // so every search-filtered call to this query fails with
+    // "function lower(bytea) does not exist" - confirmed via
+    // information_schema (username/phone_number/email are all plain
+    // character varying; this was never a real schema issue). The
+    // explicit cast removes the ambiguity Postgres was guessing at.
     @Query("SELECT u FROM User u WHERE " +
             "(:clientApplicationId IS NULL OR u.clientApplicationId = :clientApplicationId) AND " +
             "(:enabled IS NULL OR u.enabled = :enabled) AND " +
             "(:search IS NULL OR " +
-            "LOWER(u.username) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-            "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-            "LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')))")
+            "LOWER(u.username) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR " +
+            "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR " +
+            "LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))")
     Page<User> searchForAdmin(@Param("clientApplicationId") Long clientApplicationId,
                                @Param("enabled") Boolean enabled,
                                @Param("search") String search,
