@@ -25,11 +25,17 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
      * list/filter. Every filter is nullable to mean "don't filter on
      * this"; ipAddress/device match as a case-insensitive substring.
      */
+    // CAST(... AS string) on :ipAddress/:device: same fix, same reason, as
+    // UserRepository#searchForAdmin's :search cast - a parameter used only
+    // inside LOWER(CONCAT(...)), never compared directly to a typed
+    // column, gets its type inferred as bytea by Hibernate 7 + pgjdbc
+    // instead of text, and lower(bytea) doesn't exist in Postgres. Fixes
+    // the same "service temporarily unavailable" 503 on the Sessions page.
     @Query("SELECT s FROM UserSession s WHERE " +
             "(:userId IS NULL OR s.userId = :userId) AND " +
             "(:active IS NULL OR s.isActive = :active) AND " +
-            "(:ipAddress IS NULL OR LOWER(s.ipAddress) LIKE LOWER(CONCAT('%', :ipAddress, '%'))) AND " +
-            "(:device IS NULL OR LOWER(s.userAgent) LIKE LOWER(CONCAT('%', :device, '%')))")
+            "(:ipAddress IS NULL OR LOWER(s.ipAddress) LIKE LOWER(CONCAT('%', CAST(:ipAddress AS string), '%'))) AND " +
+            "(:device IS NULL OR LOWER(s.userAgent) LIKE LOWER(CONCAT('%', CAST(:device AS string), '%')))")
     Page<UserSession> searchForAdmin(@Param("userId") Long userId,
                                       @Param("active") Boolean active,
                                       @Param("ipAddress") String ipAddress,
