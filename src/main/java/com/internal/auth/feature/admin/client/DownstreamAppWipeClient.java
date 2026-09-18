@@ -54,8 +54,7 @@ public class DownstreamAppWipeClient {
             @Value("${sync-point.wipe.base-url}") String syncPointBaseUrl,
             @Value("${sync-point.wipe.secret:}") String syncPointSecret,
             @Value("${notare.wipe.base-url}") String notareBaseUrl,
-            @Value("${notare.wipe.secret:}") String notareSecret,
-            ObjectMapper objectMapper) {
+            @Value("${notare.wipe.secret:}") String notareSecret) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(10_000);
         requestFactory.setReadTimeout(60_000);
@@ -64,7 +63,12 @@ public class DownstreamAppWipeClient {
         this.notareClient = RestClient.builder().baseUrl(notareBaseUrl).requestFactory(requestFactory).build();
         this.syncPointSecret = syncPointSecret;
         this.notareSecret = notareSecret;
-        this.objectMapper = objectMapper;
+        // Built directly rather than autowired - this app's ApplicationContext
+        // doesn't publish a Jackson ObjectMapper bean (Render deploy log: "No
+        // qualifying bean of type 'ObjectMapper' available"), and this class's
+        // use of it (readTree/convertValue on plain JSON bodies) needs no
+        // app-wide serialization customization anyway.
+        this.objectMapper = new ObjectMapper();
     }
 
     /**
