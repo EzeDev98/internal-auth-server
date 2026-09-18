@@ -64,6 +64,34 @@ public class TenantResetAuthorizer {
         }
     }
 
+    /**
+     * Guards the top-level "wipe everything" endpoint (SyncPoint + Notare +
+     * internal-auth) - same secret and confirmation phrase as {@link
+     * #authorize}, just without an appId, since this always wipes every
+     * connected app rather than one tenant.
+     *
+     * @param providedSecret value of the {@code X-Reset-Secret} header
+     * @param confirmation   confirmation phrase from the request body
+     * @throws InvalidResetSecretException if the endpoint is disabled or the secret is missing/invalid
+     * @throws BadRequestException         if the confirmation phrase is missing/incorrect
+     */
+    public void authorizeWipeAll(String providedSecret, String confirmation) {
+        if (configuredSecret == null || configuredSecret.isBlank()) {
+            log.warn("[WipeAll] Rejected — endpoint disabled (no admin.reset.secret configured)");
+            throw new InvalidResetSecretException("Wipe-all endpoint is disabled. Set admin.reset.secret to enable it.");
+        }
+
+        if (!secretMatches(providedSecret)) {
+            log.warn("[WipeAll] Rejected — missing or invalid X-Reset-Secret");
+            throw new InvalidResetSecretException("Invalid or missing reset secret.");
+        }
+
+        if (!REQUIRED_CONFIRMATION.equals(confirmation)) {
+            log.warn("[WipeAll] Rejected — confirmation phrase missing or incorrect");
+            throw new BadRequestException("Confirmation required: send {\"confirmation\": \"" + REQUIRED_CONFIRMATION + "\"} in the body.");
+        }
+    }
+
     private boolean secretMatches(String providedSecret) {
         if (providedSecret == null) {
             return false;

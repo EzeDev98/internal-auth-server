@@ -2,9 +2,12 @@ package com.internal.auth.feature.admin.web;
 
 import com.internal.auth.common.response.InternalAuthApiResponse;
 import com.internal.auth.feature.admin.dto.request.TenantWipeRequest;
+import com.internal.auth.feature.admin.dto.request.WipeAllRequest;
 import com.internal.auth.feature.admin.dto.response.TenantWipeResponse;
+import com.internal.auth.feature.admin.dto.response.WipeAllResponse;
 import com.internal.auth.feature.admin.security.TenantResetAuthorizer;
 import com.internal.auth.feature.admin.service.TenantDataWipeService;
+import com.internal.auth.feature.admin.service.WipeAllService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +41,7 @@ public class TenantResetController {
 
     private final TenantResetAuthorizer tenantResetAuthorizer;
     private final TenantDataWipeService tenantDataWipeService;
+    private final WipeAllService wipeAllService;
 
     @PostMapping("/admin/reset/wipe-tenant")
     public ResponseEntity<InternalAuthApiResponse<TenantWipeResponse>> wipeTenant(
@@ -55,5 +59,35 @@ public class TenantResetController {
 
         TenantWipeResponse response = new TenantWipeResponse(appId, deletedCounts);
         return ResponseEntity.ok(InternalAuthApiResponse.success("Tenant data wiped.", response));
+    }
+
+    /**
+     * Settings-page "wipe everything" danger zone: SyncPoint, Notare, and
+     * internal-auth's own data, together - see {@link WipeAllService}'s
+     * class Javadoc for the full reasoning (order, stop-on-first-failure,
+     * why Notare's own internal-auth tenant step is normally a no-op
+     * today). Does not replace or change SyncPoint's own
+     * {@code /admin/reset/wipe} or Notare's own
+     * {@code /admin/database/wipe} - both keep working unchanged, callable
+     * directly, independent of this endpoint.
+     */
+    @PostMapping("/admin/reset/wipe-all")
+    public ResponseEntity<InternalAuthApiResponse<WipeAllResponse>> wipeAll(
+            @RequestHeader(value = "X-Reset-Secret", required = false) String providedSecret,
+            @RequestBody(required = false) WipeAllRequest request) {
+
+        String confirmation = request != null ? request.getConfirmation() : null;
+        boolean includeSystemWallet = request != null && Boolean.TRUE.equals(request.getIncludeSystemWallet());
+
+        tenantResetAuthorizer.authorizeWipeAll(providedSecret, confirmation);
+
+        log.warn("[WipeAll] AUTHORIZED wipe-everything starting. includeSystemWallet={}", includeSystemWallet);
+
+        WipeAllResponse response = wipeAllService.wipeEverything(includeSystemWallet);
+
+        String message = response.isCompletedFully()
+                ? "Everything wiped: SyncPoint, Notare, and internal-auth."
+                : "Wipe stopped after a failure - see steps for details.";
+        return ResponseEntity.ok(InternalAuthApiResponse.success(message, response));
     }
 }
