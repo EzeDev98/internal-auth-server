@@ -28,8 +28,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.internal.auth.common.constant.AppConstant.*;
 
@@ -174,6 +176,15 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
     public ClientApplication getById(Long id) {
         return clientApplicationRepository.findById(id)
                 .orElseThrow(() -> new BadRequestException("Unknown client application"));
+    }
+
+    @Override
+    public Map<Long, String> getClientIdsByIds(Set<Long> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return clientApplicationRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(ClientApplication::getId, ClientApplication::getClientId));
     }
 
     @Override

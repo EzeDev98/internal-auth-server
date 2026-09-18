@@ -9,6 +9,9 @@ import com.internal.auth.feature.client.enums.ClientType;
 import com.internal.auth.feature.client.model.ClientApplication;
 import org.springframework.data.domain.Pageable;
 
+import java.util.Map;
+import java.util.Set;
+
 public interface ClientApplicationService {
 
     CreateClientApplicationResponse createClient(CreateClientApplicationRequest request);
@@ -67,6 +70,21 @@ public interface ClientApplicationService {
      * authenticateClientFromBasicAuthHeader call earlier in the request.
      */
     ClientApplication getById(Long id);
+
+    /**
+     * Step 7A N+1 fix: batch-resolves the owning clientId string for every
+     * ClientApplication in ids, in a single query. The Users admin list
+     * page (AdminUserServiceImpl#listUsers) previously called getById()
+     * once per row, which meant a page of 20 users paid 20 extra
+     * sequential DB round trips on top of the paged user query itself -
+     * cross-region latency to a remotely-hosted Postgres turns that into
+     * multi-second page loads that can outrun the connection pool's
+     * timeout and surface as a 503, while Clients/Roles/Groups (no
+     * per-row lookup) stay fast. Missing ids are simply absent from the
+     * returned map rather than throwing, so one stale/orphaned
+     * clientApplicationId on a user row can't break the whole page.
+     */
+    Map<Long, String> getClientIdsByIds(Set<Long> ids);
 
     /**
      * Regenerates the client secret for an existing, enabled client

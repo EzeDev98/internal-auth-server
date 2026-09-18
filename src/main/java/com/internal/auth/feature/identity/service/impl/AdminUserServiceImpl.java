@@ -30,7 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Step 2A (React Admin Client plan v4). Reuses
@@ -56,8 +60,19 @@ public class AdminUserServiceImpl implements AdminUserService {
     public PagedUsersResponse listUsers(Long clientApplicationId, String search, Boolean enabled, Pageable pageable) {
         String normalizedSearch = (search == null || search.isBlank()) ? null : search.trim();
         Page<User> page = userRepository.searchForAdmin(clientApplicationId, enabled, normalizedSearch, pageable);
+
+        // Batch-resolve every distinct clientApplicationId on this page in
+        // ONE query instead of the old per-row resolveClientId() lookup -
+        // see ClientApplicationService#getClientIdsByIds's javadoc for why
+        // that N+1 pattern was the real cause of this endpoint timing out.
+        Set<Long> clientApplicationIds = page.getContent().stream()
+                .map(User::getClientApplicationId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> clientIdByApplicationId = clientApplicationService.getClientIdsByIds(clientApplicationIds);
+
         List<UserSummaryResponse> content = page.getContent().stream()
-                .map(this::toSummary)
+                .map(user -> toSummary(user, clientIdByApplicationId))
                 .toList();
         return new PagedUsersResponse(content, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
@@ -183,22 +198,14 @@ public class AdminUserServiceImpl implements AdminUserService {
         return (value == null || value.isBlank()) ? null : value.trim();
     }
 
-    private UserSummaryResponse toSummary(User user) {
-        return new UserSummaryResponse(user.getId(), user.getUsername(), user.getPhoneNumber(), user.getEmail(), user.isEnabled(), user.isMfaEnabled(), user.getCreatedAt(), resolveClientId(user));
-    }
-
-    // Step 7A: best-effort resolution of the owning client's clientId string
-    // (see UserSummaryResponse's Javadoc on this field). Every user row has
-    // a NOT NULL clientApplicationId FK (V8), so this should always resolve;
-    // caught defensively so one orphaned row can't break an entire page of
-    // the user directory.
-    private String resolveClientId(User user) {
-        try {
-            return clientApplicationService.getById(user.getClientApplicationId()).getClientId();
-        } catch (RuntimeException e) {
-            log.warn("Could not resolve clientId for user id={}, clientApplicationId={}", user.getId(), user.getClientApplicationId());
-            return null;
-        }
+    // Step 7A (see UserSummaryResponse's Javadoc on the clientId field),
+    // batch-resolved in listUsers() above instead of a per-row DB call - a
+    // missing entry in clientIdByApplicationId (a stale/orphaned FK) just
+    // resolves to null rather than throwing, same defensive intent the old
+    // per-row try/catch had.
+    private UserSummaryResponse toSummary(User user, Map<Long, String> clientIdByApplicationId) {
+        String clientId = user.getClientApplicationId() == null ? null : clientIdByApplicationId.get(user.getClientApplicationId());
+        return new UserSummaryResponse(user.getId(), user.getUsername(), user.getPhoneNumber(), user.getEmail(), user.isEnabled(), user.isMfaEnabled(), user.getCreatedAt(), clientId);
     }
 
     private UserProfileResponse toProfile(User user) {
