@@ -49,6 +49,12 @@ public interface SessionManagementService {
     InvalidatedSessionResponse invalidateUserSessionByAdmin(String username, Long clientApplicationId);
 
     /**
+     * True while the user still holds an unexpired refresh token for the given client. Admin
+     * sign-out and password reset delete those tokens, so this turns false after either.
+     */
+    boolean hasLiveRefreshToken(String username, Long clientApplicationId);
+
+    /**
      * Step 2E (React Admin Client plan v4): backs GET
      * ${app.title}/admin/sessions. username is resolved against
      * clientApplicationId the same way invalidateUserSessionByAdmin above

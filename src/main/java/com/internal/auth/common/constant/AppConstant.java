@@ -143,6 +143,11 @@ public class AppConstant {
     public static final String SESSION_INVALIDATE_RATE_LIMIT_KEY_PREFIX = "ratelimit:session-invalidate:ip:";
     public static final int SESSION_INVALIDATE_RATE_LIMIT_DURATION_HOURS = 1;
     public static final int MAX_SESSION_INVALIDATE_REQUEST = 20;
+    // Called by an integrating app's server on each login that finds a local "active" session,
+    // so it needs far more headroom than the admin invalidate limit above.
+    public static final String SESSION_STATUS_RATE_LIMIT_KEY_PREFIX = "ratelimit:session-status:ip:";
+    public static final int SESSION_STATUS_RATE_LIMIT_DURATION_HOURS = 1;
+    public static final int MAX_SESSION_STATUS_REQUEST = 600;
 
     /**
      * Step 14D: grace period an old signing key stays ACTIVE (verifiable)

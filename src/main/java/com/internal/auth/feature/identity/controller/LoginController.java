@@ -7,8 +7,8 @@ import com.internal.auth.common.util.RateLimiterService;
 import com.internal.auth.feature.identity.dto.request.LoginRequest;
 import com.internal.auth.common.exception.BadRequestException;
 import com.internal.auth.feature.identity.dto.request.RefreshTokenRequest;
-import com.internal.auth.feature.identity.dto.request.RevokeSessionsRequest;
-import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
+import com.internal.auth.feature.identity.dto.request.SessionStatusRequest;
+import com.internal.auth.feature.session.dto.SessionStatusResponse;
 import com.internal.auth.feature.session.service.SessionManagementService;
 import com.internal.auth.feature.identity.dto.request.VerifyLoginOtpRequest;
 import com.internal.auth.feature.identity.dto.response.LoginResponse;
@@ -118,22 +118,23 @@ public class LoginController {
     }
 
     /**
-     * Server-to-server: lets an integrating app end one of its own users' logins. Closes the tracked
-     * session and deletes that user's refresh tokens for the calling client, so a device that still
-     * holds a refresh token cannot keep minting access tokens. Same HTTP Basic client-credential
-     * requirement as login(); the user is looked up within the calling client only.
+     * Server-to-server: tells an integrating app whether one of its own users still holds a live
+     * refresh token here. The app uses it to notice that an admin signed the user out in this
+     * console (which deletes those tokens), so its own "already signed in" record can be released.
+     * Same HTTP Basic client-credential requirement as login(); the user is looked up within the
+     * calling client only.
      */
-    @PostMapping("/revoke-sessions")
-    public ResponseEntity<InternalAuthApiResponse<InvalidatedSessionResponse>> revokeSessions(
+    @PostMapping("/session-status")
+    public ResponseEntity<InternalAuthApiResponse<SessionStatusResponse>> sessionStatus(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
-            @RequestBody RevokeSessionsRequest request,
+            @RequestBody SessionStatusRequest request,
             HttpServletRequest httpRequest) {
-        rateLimiterService.checkRateLimit(AppConstant.SESSION_INVALIDATE_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_SESSION_INVALIDATE_REQUEST, Duration.ofHours(AppConstant.SESSION_INVALIDATE_RATE_LIMIT_DURATION_HOURS));
+        rateLimiterService.checkRateLimit(AppConstant.SESSION_STATUS_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_SESSION_STATUS_REQUEST, Duration.ofHours(AppConstant.SESSION_STATUS_RATE_LIMIT_DURATION_HOURS));
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
         if (request.getUsername() == null || request.getUsername().isBlank()) {
             throw new BadRequestException("username is required");
         }
-        InvalidatedSessionResponse response = sessionManagementService.invalidateUserSessionByAdmin(request.getUsername().trim(), client.getId());
-        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
+        boolean active = sessionManagementService.hasLiveRefreshToken(request.getUsername().trim(), client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success("Session status", new SessionStatusResponse(active)));
     }
 }

@@ -169,6 +169,23 @@ public class SessionManagementServiceImpl implements SessionManagementService {
 
     @Override
     @Transactional
+    public boolean hasLiveRefreshToken(String username, Long clientApplicationId) {
+        User user = userRepository.findByUsernameAndClientApplicationId(username, clientApplicationId).orElse(null);
+        if (user == null || user.getInternalAuthUserId() == null) {
+            return false;
+        }
+        Integer live = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM oauth2_authorization WHERE principal_name = ? AND registered_client_id = ? "
+                        + "AND refresh_token_value IS NOT NULL "
+                        + "AND (refresh_token_expires_at IS NULL OR refresh_token_expires_at > ?)",
+                Integer.class,
+                user.getInternalAuthUserId(), String.valueOf(user.getClientApplicationId()),
+                java.sql.Timestamp.from(java.time.Instant.now()));
+        return live != null && live > 0;
+    }
+
+    @Override
+    @Transactional
     public void updateSessionOnRefresh(Long userId, String newToken) {
         userSessionRepository.findByUserIdAndIsActiveTrue(userId)
                 .ifPresentOrElse(
