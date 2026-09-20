@@ -159,6 +159,7 @@ public class WebSecurityConfig {
                                 appTitle + "/auth/login",
                                 appTitle + "/auth/login/verify-otp",
                                 appTitle + "/auth/refresh-token",
+                                appTitle + "/auth/revoke-sessions",
                                 appTitle + "/auth/activate",
                                 appTitle + "/auth/resend-activation",
                                 appTitle + "/auth/verify-phone",
