@@ -99,6 +99,8 @@ class LoginServiceImplTest {
         // @Value-injected field - not part of @RequiredArgsConstructor, so
         // it has to be set via reflection to match how Spring wires it.
         ReflectionTestUtils.setField(service, "selfIssuerUri", SELF_ISSUER_URI);
+        // login()/verifyLoginOtp() now read the client's revokePriorSessionsOnLogin flag (default true).
+        when(clientApplicationService.getById(CLIENT_APP_ID)).thenReturn(clientApplication("TestApp"));
     }
 
     private static LoginRequest loginRequest(String username, String password) {

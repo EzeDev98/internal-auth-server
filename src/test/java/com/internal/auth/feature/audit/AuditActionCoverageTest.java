@@ -31,15 +31,15 @@ class AuditActionCoverageTest {
     private static final Path MAIN_SOURCE_ROOT = Paths.get("src", "main", "java");
 
     @Test
-    void auditActionHasExactlyOneValue_loginSuccess() {
+    void auditActionHasExactlyTheWiredValues() {
         assertThat(AuditAction.values())
                 .as("a new AuditAction value means a new audit event is being wired - see this "
                         + "class's Javadoc before adding one without a matching test")
-                .containsExactly(AuditAction.LOGIN_SUCCESS);
+                .containsExactly(AuditAction.LOGIN_SUCCESS, AuditAction.CLIENT_SESSION_SETTINGS_CHANGED);
     }
 
     @Test
-    void loginSuccessIsTheOnlyAuditActionReferencedInMainSource() {
+    void onlyWiredAuditActionsAreReferencedInMainSource() {
         assertThat(Files.exists(MAIN_SOURCE_ROOT))
                 .as("expected to find %s from the project root - run this test with the module base "
                         + "directory as the working directory", MAIN_SOURCE_ROOT)
@@ -68,7 +68,8 @@ class AuditActionCoverageTest {
             List<String> lines = Files.readAllLines(path);
             for (int i = 0; i < lines.size(); i++) {
                 String line = lines.get(i);
-                if (line.contains("AuditAction.") && !line.contains("AuditAction.LOGIN_SUCCESS")) {
+                if (line.contains("AuditAction.") && !line.contains("AuditAction.LOGIN_SUCCESS")
+                        && !line.contains("AuditAction.CLIENT_SESSION_SETTINGS_CHANGED")) {
                     violations.add(path + ":" + (i + 1) + ": " + line.trim());
                 }
             }

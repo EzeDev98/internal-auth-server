@@ -91,7 +91,7 @@ public class ClientApplicationController {
         return ResponseEntity.ok(InternalAuthApiResponse.success(response));
     }
 
-    @Operation(method = "PATCH", summary = "Update client application", description = "Admin edits: name, description, redirect URIs, scopes, enabled. Any field left null is left unchanged; redirectUris/scopes are replaced wholesale when provided, not merged.")
+    @Operation(method = "PATCH", summary = "Update client application", description = "Admin edits: name, description, redirect URIs, scopes, enabled, refreshTokenRotationEnabled, refreshTokenTtlDays, refreshTokenMaxLifetimeDays, revokePriorSessionsOnLogin, grantTypes. Any field left null is left unchanged; redirectUris/scopes are replaced wholesale when provided, not merged.")
     @PreAuthorize(Roles.HAS_ADMIN)
     @PatchMapping("/{clientId}")
     public ResponseEntity<InternalAuthApiResponse<ClientApplicationDetailResponse>> updateClient(@PathVariable String clientId, @RequestBody UpdateClientApplicationRequest request) {

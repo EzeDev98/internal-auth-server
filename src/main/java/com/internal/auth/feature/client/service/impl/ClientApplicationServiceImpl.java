@@ -3,6 +3,8 @@ package com.internal.auth.feature.client.service.impl;
 import com.internal.auth.common.exception.BadRequestException;
 import com.internal.auth.common.exception.ClientAlreadyExistsException;
 import com.internal.auth.common.exception.InvalidClientCredentialsException;
+import com.internal.auth.common.security.AuthenticationHelper;
+import com.internal.auth.feature.audit.event.ClientSettingsChangedEvent;
 import com.internal.auth.common.util.SecretEncryptionService;
 import com.internal.auth.feature.client.dto.ClientApplicationDetailResponse;
 import com.internal.auth.feature.client.dto.ClientApplicationSummaryResponse;
@@ -17,6 +19,7 @@ import com.internal.auth.feature.client.service.ClientApplicationService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -66,11 +69,17 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
 
     private static final Logger log = LoggerFactory.getLogger(ClientApplicationServiceImpl.class);
     private static final String BASIC_PREFIX = "Basic ";
+    private static final int MIN_REFRESH_TOKEN_TTL_DAYS = 1;
+    private static final int MAX_REFRESH_TOKEN_TTL_DAYS = 365;
+    private static final int MAX_SESSION_LIFETIME_DAYS = 3650;
+    private static final Set<String> ALLOWED_GRANT_TYPES = Set.of("authorization_code", "refresh_token", "client_credentials");
     private static final String INVALID_CLIENT_CREDENTIALS_MESSAGE = "Invalid client credentials";
 
     private final ClientApplicationRepository clientApplicationRepository;
     private final PasswordEncoder passwordEncoder;
     private final SecretEncryptionService secretEncryptionService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final AuthenticationHelper authenticationHelper;
 
     @Override
     @Transactional
@@ -93,6 +102,8 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         client.setRedirectUris(nullSafe(request.getRedirectUris()));
         client.setScopes(nullSafe(request.getScopes()));
         client.setGrantTypes(nullSafe(request.getGrantTypes()));
+        applyRefreshTokenSettings(client, request.getRefreshTokenRotationEnabled(), request.getRefreshTokenTtlDays(), request.getRefreshTokenMaxLifetimeDays());
+        client.setRevokePriorSessionsOnLogin(request.getRevokePriorSessionsOnLogin() == null || request.getRevokePriorSessionsOnLogin());
         // enabled defaults to true on the entity itself.
 
         ClientApplication saved;
@@ -104,6 +115,7 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         }
 
         log.info("New client application registered, id={}, clientId={}", saved.getId(), saved.getClientId());
+        publishSessionSettingsAudit(saved, null);
 
         return new CreateClientApplicationResponse(
                 saved.getId(),
@@ -300,6 +312,8 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         ClientApplication client = clientApplicationRepository.findByClientId(clientId)
                 .orElseThrow(() -> new BadRequestException("Unknown client application"));
 
+        String settingsBefore = sessionSettingsSnapshot(client);
+
         if (request.getName() != null) {
             client.setName(require(request.getName(), "name cannot be blank"));
         }
@@ -315,10 +329,112 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         if (request.getEnabled() != null) {
             client.setEnabled(request.getEnabled());
         }
+        if (request.getGrantTypes() != null) {
+            client.setGrantTypes(validateGrantTypes(request.getGrantTypes()));
+        }
+        applyRefreshTokenSettings(client, request.getRefreshTokenRotationEnabled(), request.getRefreshTokenTtlDays(), request.getRefreshTokenMaxLifetimeDays());
+        if (!client.isRefreshTokenRotationEnabled() && !client.getGrantTypes().contains("refresh_token")) {
+            throw new BadRequestException("Turn off the persistent refresh token before removing the refresh_token grant type");
+        }
+        if (request.getRevokePriorSessionsOnLogin() != null) {
+            client.setRevokePriorSessionsOnLogin(request.getRevokePriorSessionsOnLogin());
+        }
 
         ClientApplication saved = clientApplicationRepository.save(client);
         log.info("Client application updated, id={}, clientId={}", saved.getId(), saved.getClientId());
+        publishSessionSettingsAudit(saved, settingsBefore);
         return toDetail(saved);
+    }
+
+    /**
+     * Persistent (non-rotating) refresh token settings. Both arguments null
+     * means "leave as is". Rotation on always clears the per-client TTL
+     * (a single-use token has no use for one); rotation off requires an
+     * explicit TTL and the refresh_token grant, since without that grant
+     * UserLoginServiceImpl never mints a refresh token at all.
+     */
+    private void applyRefreshTokenSettings(ClientApplication client, Boolean rotationEnabled, Integer ttlDays, Integer maxLifetimeDays) {
+        if (rotationEnabled == null && ttlDays == null && maxLifetimeDays == null) {
+            return;
+        }
+        boolean rotation = rotationEnabled != null ? rotationEnabled : client.isRefreshTokenRotationEnabled();
+        Integer ttl = ttlDays != null ? ttlDays : client.getRefreshTokenTtlDays();
+        // When rotationEnabled is supplied, the persistent settings are replaced as a set, so a
+        // null maxLifetimeDays clears the cap. Otherwise a null leaves the existing cap alone.
+        Integer maxLifetime = (rotationEnabled != null || maxLifetimeDays != null)
+                ? maxLifetimeDays
+                : client.getRefreshTokenMaxLifetimeDays();
+
+        if (rotation) {
+            if (ttlDays != null || maxLifetimeDays != null) {
+                throw new BadRequestException("refreshTokenTtlDays and refreshTokenMaxLifetimeDays only apply when refreshTokenRotationEnabled is false");
+            }
+            client.setRefreshTokenRotationEnabled(true);
+            client.setRefreshTokenTtlDays(null);
+            client.setRefreshTokenMaxLifetimeDays(null);
+            return;
+        }
+
+        if (ttl == null) {
+            throw new BadRequestException("refreshTokenTtlDays is required when refreshTokenRotationEnabled is false");
+        }
+        if (ttl < MIN_REFRESH_TOKEN_TTL_DAYS || ttl > MAX_REFRESH_TOKEN_TTL_DAYS) {
+            throw new BadRequestException("refreshTokenTtlDays must be between " + MIN_REFRESH_TOKEN_TTL_DAYS + " and " + MAX_REFRESH_TOKEN_TTL_DAYS);
+        }
+        if (!client.getGrantTypes().contains("refresh_token")) {
+            throw new BadRequestException("A persistent refresh token requires the client to have the refresh_token grant type");
+        }
+
+        if (maxLifetime != null && (maxLifetime < ttl || maxLifetime > MAX_SESSION_LIFETIME_DAYS)) {
+            throw new BadRequestException("refreshTokenMaxLifetimeDays must be between refreshTokenTtlDays (" + ttl + ") and " + MAX_SESSION_LIFETIME_DAYS);
+        }
+
+        boolean changed = client.isRefreshTokenRotationEnabled()
+                || !ttl.equals(client.getRefreshTokenTtlDays())
+                || !java.util.Objects.equals(maxLifetime, client.getRefreshTokenMaxLifetimeDays());
+        client.setRefreshTokenRotationEnabled(false);
+        client.setRefreshTokenTtlDays(ttl);
+        client.setRefreshTokenMaxLifetimeDays(maxLifetime);
+        if (changed) {
+            log.info("Client application {} persistent refresh tokens: ttlDays={}, maxLifetimeDays={}", client.getClientId(), ttl, maxLifetime);
+        }
+    }
+
+    /**
+     * Grant types can be edited on a live client, with three rules: at least one must remain (an empty set would silently fall back to
+     * client_credentials), only the three supported values are accepted, and refresh_token cannot be removed from a client that still has
+     * persistent refresh tokens on. Tokens already issued are not revoked by removing a grant type.
+     */
+    private Set<String> validateGrantTypes(Set<String> requested) {
+        if (requested.isEmpty()) {
+            throw new BadRequestException("At least one grant type is required");
+        }
+        for (String grantType : requested) {
+            if (!ALLOWED_GRANT_TYPES.contains(grantType)) {
+                throw new BadRequestException("Unsupported grant type: " + grantType);
+            }
+        }
+        return new HashSet<>(requested);
+    }
+
+    private String sessionSettingsSnapshot(ClientApplication client) {
+        return "rotationEnabled=" + client.isRefreshTokenRotationEnabled()
+                + ", refreshTokenTtlDays=" + client.getRefreshTokenTtlDays()
+                + ", refreshTokenMaxLifetimeDays=" + client.getRefreshTokenMaxLifetimeDays()
+                + ", revokePriorSessionsOnLogin=" + client.isRevokePriorSessionsOnLogin()
+                + ", grantTypes=" + new java.util.TreeSet<>(client.getGrantTypes());
+    }
+
+    /** before == null means the client was just created. Publishes nothing when an update changed none of these settings. */
+    private void publishSessionSettingsAudit(ClientApplication saved, String before) {
+        String after = sessionSettingsSnapshot(saved);
+        if (before != null && before.equals(after)) {
+            return;
+        }
+        String description = before == null
+                ? "Client " + saved.getClientId() + " created with " + after
+                : "Client " + saved.getClientId() + " session settings changed from [" + before + "] to [" + after + "]";
+        eventPublisher.publishEvent(new ClientSettingsChangedEvent(authenticationHelper.getCurrentUsername(), saved.getId(), description));
     }
 
     private ClientApplicationSummaryResponse toSummary(ClientApplication client) {
@@ -344,7 +460,11 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
                 client.isEnabled(),
                 client.getCreatedAt(),
                 client.getUpdatedAt(),
-                decryptSecretForDisplay(client));
+                decryptSecretForDisplay(client),
+                client.isRefreshTokenRotationEnabled(),
+                client.getRefreshTokenTtlDays(),
+                client.getRefreshTokenMaxLifetimeDays(),
+                client.isRevokePriorSessionsOnLogin());
     }
 
     // Admin-console-only reveal: decrypts clientSecretEncrypted purely for

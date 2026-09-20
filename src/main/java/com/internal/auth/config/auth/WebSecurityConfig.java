@@ -177,6 +177,7 @@ public class WebSecurityConfig {
                                 appTitle + "/admin/password-reset/request",
                                 appTitle + "/admin/password-reset/verify-otp",
                                 appTitle + "/admin/reset/wipe-tenant",
+                                appTitle + "/admin/reset/wipe-all",
                                 appTitle + "/logout/backchannel",
                                 appTitle + "/otp/**"
                         ).permitAll()

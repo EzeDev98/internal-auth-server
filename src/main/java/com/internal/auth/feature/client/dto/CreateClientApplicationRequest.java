@@ -23,4 +23,22 @@ public class CreateClientApplicationRequest {
     private Set<String> redirectUris;
     private Set<String> scopes;
     private Set<String> grantTypes;
+
+    /** null = default (true: strict single-use rotation). false = persistent refresh token. */
+    private Boolean refreshTokenRotationEnabled;
+
+    /** Days. Required when refreshTokenRotationEnabled is false; must be omitted otherwise. */
+    private Integer refreshTokenTtlDays;
+
+    /** Days from login after which the session ends regardless of activity. Omit for no cap. */
+    private Integer refreshTokenMaxLifetimeDays;
+
+    /** null = default (true: a new login revokes every other session for this user+client). false = allow concurrent devices/sessions. */
+    private Boolean revokePriorSessionsOnLogin;
+
+    /** Pre-persistent-refresh-token constructor, kept so existing callers/tests compile unchanged. */
+    public CreateClientApplicationRequest(String clientId, String name, String description,
+                                          Set<String> redirectUris, Set<String> scopes, Set<String> grantTypes) {
+        this(clientId, name, description, redirectUris, scopes, grantTypes, null, null, null, null);
+    }
 }

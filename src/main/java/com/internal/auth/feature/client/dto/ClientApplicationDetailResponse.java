@@ -39,4 +39,8 @@ public class ClientApplicationDetailResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String clientSecret;
+    private boolean refreshTokenRotationEnabled;
+    private Integer refreshTokenTtlDays;
+    private Integer refreshTokenMaxLifetimeDays;
+    private boolean revokePriorSessionsOnLogin;
 }

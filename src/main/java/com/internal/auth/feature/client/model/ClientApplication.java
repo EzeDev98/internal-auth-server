@@ -142,6 +142,29 @@ public class ClientApplication {
     @Column(name = "refresh_token_ttl_days")
     private Integer refreshTokenTtlDays;
 
+    /**
+     * Absolute cap, in days from the original login, on a persistent
+     * (non-rotating) refresh token session, however often it is used. Null
+     * (default) = no cap. Only meaningful when refreshTokenRotationEnabled
+     * is false. Must be >= refreshTokenTtlDays.
+     */
+    @Column(name = "refresh_token_max_lifetime_days")
+    private Integer refreshTokenMaxLifetimeDays;
+
+    /**
+     * Part D: whether a genuinely new login (login()/verifyLoginOtp() in
+     * UserLoginServiceImpl) revokes every other still-valid OAuth2Authorization
+     * this user already holds for this client. true (default) preserves
+     * today's exact behavior - at most one live session per user per client,
+     * enforced by UserLoginServiceImpl#revokePriorAuthorizations. false lets
+     * multiple devices stay signed in at once for the same user+client - for
+     * clients like an offline payment terminal, where a second device (or a
+     * reconnecting first device) logging in must never invalidate another
+     * device's still-valid refresh token.
+     */
+    @Column(name = "revoke_prior_sessions_on_login", nullable = false)
+    private boolean revokePriorSessionsOnLogin = true;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

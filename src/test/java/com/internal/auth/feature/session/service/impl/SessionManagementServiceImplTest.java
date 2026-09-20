@@ -40,9 +40,10 @@ class SessionManagementServiceImplTest {
     private final UserRepository userRepository = mock(UserRepository.class);
     private final TokenHasher tokenHasher = mock(TokenHasher.class);
     private final ClientApplicationService clientApplicationService = mock(ClientApplicationService.class);
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate = mock(org.springframework.jdbc.core.JdbcTemplate.class);
 
     private final SessionManagementServiceImpl service =
-            new SessionManagementServiceImpl(userSessionRepository, userRepository, tokenHasher, clientApplicationService);
+            new SessionManagementServiceImpl(userSessionRepository, userRepository, tokenHasher, clientApplicationService, jdbcTemplate);
 
     @Test
     void createSession_noExistingActiveSession_savesANewActiveSession() {
@@ -81,6 +82,21 @@ class SessionManagementServiceImplTest {
         UserSession newSession = captor.getAllValues().get(1);
         assertThat(newSession).isNotSameAs(existing);
         assertThat(newSession.isActive()).isTrue();
+    }
+
+    @Test
+    void createSession_sameTokenAlreadyTracked_keepsTheExistingRowAndSavesNothing() {
+        UserSession existing = new UserSession();
+        existing.setUserId(1L);
+        existing.setActive(true);
+        existing.setTokenHash("hashed-token");
+        when(userSessionRepository.findByUserIdAndIsActiveTrue(1L)).thenReturn(Optional.of(existing));
+        when(tokenHasher.sha256Hex("raw-token")).thenReturn("hashed-token");
+
+        service.createSession(1L, "08010000000", "raw-token");
+
+        verify(userSessionRepository, never()).save(org.mockito.ArgumentMatchers.any(UserSession.class));
+        assertThat(existing.isActive()).isTrue();
     }
 
     @Test
@@ -128,6 +144,47 @@ class SessionManagementServiceImplTest {
         service.invalidateActiveSessionForUser(3L);
 
         verify(userSessionRepository, never()).save(any());
+    }
+
+    @Test
+    void invalidateActiveSessionForUser_alsoDeletesThatUsersRefreshTokensForTheirClient() {
+        User user = new User();
+        user.setId(3L);
+        user.setInternalAuthUserId("alice");
+        user.setClientApplicationId(9L);
+        when(userRepository.findById(3L)).thenReturn(Optional.of(user));
+        when(userSessionRepository.findByUserIdAndIsActiveTrue(3L)).thenReturn(Optional.empty());
+
+        service.invalidateActiveSessionForUser(3L);
+
+        verify(jdbcTemplate).update(org.mockito.ArgumentMatchers.eq("DELETE FROM oauth2_authorization WHERE principal_name = ? AND registered_client_id = ?"),
+                org.mockito.ArgumentMatchers.eq("alice"), org.mockito.ArgumentMatchers.eq("9"));
+    }
+
+    @Test
+    void invalidateActiveSessionForUser_unknownUser_deletesNoAuthorizations() {
+        when(userRepository.findById(3L)).thenReturn(Optional.empty());
+        when(userSessionRepository.findByUserIdAndIsActiveTrue(3L)).thenReturn(Optional.empty());
+
+        service.invalidateActiveSessionForUser(3L);
+
+        org.mockito.Mockito.verifyNoInteractions(jdbcTemplate);
+    }
+
+    @Test
+    void invalidateUserSessionByAdmin_deletesRefreshTokensEvenWhenNoTrackedSessionExists() {
+        User user = new User();
+        user.setId(4L);
+        user.setInternalAuthUserId("bob");
+        user.setClientApplicationId(9L);
+        when(userRepository.findByUsernameAndClientApplicationId("bob", 9L)).thenReturn(Optional.of(user));
+        when(userSessionRepository.findByUserIdAndIsActiveTrue(4L)).thenReturn(Optional.empty());
+
+        InvalidatedSessionResponse response = service.invalidateUserSessionByAdmin("bob", 9L);
+
+        assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_NOT_FOUND);
+        verify(jdbcTemplate).update(org.mockito.ArgumentMatchers.eq("DELETE FROM oauth2_authorization WHERE principal_name = ? AND registered_client_id = ?"),
+                org.mockito.ArgumentMatchers.eq("bob"), org.mockito.ArgumentMatchers.eq("9"));
     }
 
     @Test

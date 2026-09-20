@@ -9,5 +9,6 @@ package com.internal.auth.feature.audit.enums;
  * ahead of what's actually instrumented.
  */
 public enum AuditAction {
-    LOGIN_SUCCESS
+    LOGIN_SUCCESS,
+    CLIENT_SESSION_SETTINGS_CHANGED
 }

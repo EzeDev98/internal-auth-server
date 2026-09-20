@@ -40,7 +40,9 @@ public interface SessionManagementService {
      * Invalidates the caller's own already-known active session by userId
      * directly - no username lookup, so no client-application ambiguity
      * to resolve. For internal callers (e.g. PasswordResetServiceImpl)
-     * that already hold a resolved User.
+     * that already hold a resolved User. Also deletes the user's stored refresh-token
+     * authorizations for their client, so a password reset or admin action really ends
+     * the login instead of only closing the tracking row.
      */
     void invalidateActiveSessionForUser(Long userId);
 

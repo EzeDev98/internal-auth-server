@@ -133,6 +133,11 @@ public class UserLoginServiceImpl implements UserLoginService {
     private static final String INVALID_CREDENTIALS_MESSAGE = "Username or password is incorrect";
     private static final String INVALID_REFRESH_TOKEN_MESSAGE = "Refresh token is invalid or expired";
 
+    // Original login time, stamped on the OAuth2Authorization at mint time and carried across
+    // in-place refreshes, so refreshTokenMaxLifetimeDays can be measured from the real login
+    // (the refresh token's own issuedAt is reset on every sliding refresh).
+    private static final String SESSION_STARTED_AT_ATTRIBUTE = "internal_auth.session_started_at";
+
     // Step 12F: a dedicated grant-type marker for tokens minted this way,
     // purely for audit/introspection on the persisted OAuth2Authorization
     // record - this never routes through anything that checks grant-type
@@ -207,7 +212,9 @@ public class UserLoginServiceImpl implements UserLoginService {
 
         log.info("User id {} logged in", user.getId());
         eventPublisher.publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), clientApplicationId));
-        revokePriorAuthorizations(user.getInternalAuthUserId(), clientApplicationId);
+        if (clientApplicationService.getById(clientApplicationId).isRevokePriorSessionsOnLogin()) {
+            revokePriorAuthorizations(user.getInternalAuthUserId(), clientApplicationId);
+        }
         MintedTokens tokens = mintTokens(user, clientApplicationId);
 
         sessionManagementService.createSession(user.getId(), user.getPhoneNumber(), tokens.accessToken(), ipAddress, userAgent);
@@ -238,7 +245,9 @@ public class UserLoginServiceImpl implements UserLoginService {
 
         log.info("User id {} completed MFA login step-up", user.getId());
         eventPublisher.publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), clientApplicationId));
-        revokePriorAuthorizations(user.getInternalAuthUserId(), clientApplicationId);
+        if (clientApplicationService.getById(clientApplicationId).isRevokePriorSessionsOnLogin()) {
+            revokePriorAuthorizations(user.getInternalAuthUserId(), clientApplicationId);
+        }
         MintedTokens tokens = mintTokens(user, clientApplicationId);
         sessionManagementService.createSession(user.getId(), user.getPhoneNumber(), tokens.accessToken(), ipAddress, userAgent);
         return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false,
@@ -318,8 +327,15 @@ public class UserLoginServiceImpl implements UserLoginService {
             // exact value (so it's never invalidated out from under a
             // caller whose response gets lost) and just has its expiry
             // pushed forward.
+            Instant sessionDeadline = resolveSessionDeadline(authorization, client);
+            if (sessionDeadline != null && !Instant.now().isBefore(sessionDeadline)) {
+                authorizationService.remove(authorization);
+                log.info("User id {} must sign in again: persistent session reached its {}-day maximum lifetime",
+                        user.getId(), client.getRefreshTokenMaxLifetimeDays());
+                throw new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN_MESSAGE);
+            }
             log.info("User id {} refreshed their access token (non-rotating client)", user.getId());
-            tokens = renewAccessToken(authorization, user, client);
+            tokens = renewAccessToken(authorization, user, client, sessionDeadline);
         }
 
         // Keeps the UserSession row's tokenHash pointing at the token that
@@ -343,7 +359,7 @@ public class UserLoginServiceImpl implements UserLoginService {
      * now + the client's refreshTokenTtlDays (or the global default when
      * unset) - a rolling session window, not a fixed one.
      */
-    private MintedTokens renewAccessToken(OAuth2Authorization existingAuthorization, User user, ClientApplication client) {
+    private MintedTokens renewAccessToken(OAuth2Authorization existingAuthorization, User user, ClientApplication client, Instant sessionDeadline) {
         RegisteredClient registeredClient = registeredClientRepository.findById(String.valueOf(client.getId()));
         if (registeredClient == null) {
             throw new IllegalStateException("No RegisteredClient found for client application id " + client.getId());
@@ -383,6 +399,9 @@ public class UserLoginServiceImpl implements UserLoginService {
         OAuth2RefreshToken currentRefreshToken = existingAuthorization.getRefreshToken().getToken();
         Instant now = Instant.now();
         Instant newRefreshExpiry = now.plus(resolveRefreshTokenTtl(client));
+        if (sessionDeadline != null && newRefreshExpiry.isAfter(sessionDeadline)) {
+            newRefreshExpiry = sessionDeadline;
+        }
         OAuth2RefreshToken renewedRefreshToken = new OAuth2RefreshToken(currentRefreshToken.getTokenValue(), now, newRefreshExpiry);
 
         OAuth2Authorization.Builder authorizationBuilder = OAuth2Authorization.from(existingAuthorization);
@@ -393,6 +412,11 @@ public class UserLoginServiceImpl implements UserLoginService {
             authorizationBuilder.accessToken(accessToken);
         }
         authorizationBuilder.refreshToken(renewedRefreshToken);
+        if (existingAuthorization.getAttribute(SESSION_STARTED_AT_ATTRIBUTE) == null) {
+            // Authorization minted before the cap existed: its real login time is unknown, so the
+            // cap counts from this first refresh after rollout.
+            authorizationBuilder.attribute(SESSION_STARTED_AT_ATTRIBUTE, now.toString());
+        }
 
         authorizationService.save(authorizationBuilder.build());
 
@@ -405,6 +429,17 @@ public class UserLoginServiceImpl implements UserLoginService {
                 renewedRefreshToken.getTokenValue(),
                 expiresIn,
                 refreshExpiresIn);
+    }
+
+    /** Hard end of a persistent session (login time + client's max lifetime), or null when the client has no cap. */
+    private Instant resolveSessionDeadline(OAuth2Authorization authorization, ClientApplication client) {
+        Integer maxLifetimeDays = client.getRefreshTokenMaxLifetimeDays();
+        if (maxLifetimeDays == null) {
+            return null;
+        }
+        String startedAt = authorization.getAttribute(SESSION_STARTED_AT_ATTRIBUTE);
+        Instant sessionStart = startedAt != null ? Instant.parse(startedAt) : Instant.now();
+        return sessionStart.plus(Duration.ofDays(maxLifetimeDays));
     }
 
     private Duration resolveRefreshTokenTtl(ClientApplication client) {
@@ -536,7 +571,8 @@ public class UserLoginServiceImpl implements UserLoginService {
         OAuth2Authorization.Builder authorizationBuilder = OAuth2Authorization.withRegisteredClient(registeredClient)
                 .principalName(user.getInternalAuthUserId())
                 .authorizationGrantType(LOCAL_LOGIN_GRANT_TYPE)
-                .authorizedScopes(Set.of());
+                .authorizedScopes(Set.of())
+                .attribute(SESSION_STARTED_AT_ATTRIBUTE, Instant.now().toString());
 
         if (generatedAccessToken instanceof ClaimAccessor claimAccessor) {
             authorizationBuilder.token(accessToken, metadata ->

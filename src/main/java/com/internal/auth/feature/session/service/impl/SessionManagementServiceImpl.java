@@ -14,6 +14,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -65,12 +66,17 @@ public class SessionManagementServiceImpl implements SessionManagementService {
     private final UserRepository userRepository;
     private final TokenHasher tokenHasher;
     private final ClientApplicationService clientApplicationService;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
-    public SessionManagementServiceImpl(UserSessionRepository userSessionRepository, UserRepository userRepository, TokenHasher tokenHasher, ClientApplicationService clientApplicationService) {
+    @Value("${app.authorization-server.refresh-token-ttl-days}")
+    private long globalRefreshTokenTtlDays;
+
+    public SessionManagementServiceImpl(UserSessionRepository userSessionRepository, UserRepository userRepository, TokenHasher tokenHasher, ClientApplicationService clientApplicationService, org.springframework.jdbc.core.JdbcTemplate jdbcTemplate) {
         this.userSessionRepository = userSessionRepository;
         this.userRepository = userRepository;
         this.tokenHasher = tokenHasher;
         this.clientApplicationService = clientApplicationService;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
@@ -90,13 +96,21 @@ public class SessionManagementServiceImpl implements SessionManagementService {
     @Override
     @Transactional
     public void createSession(Long userId, String phoneNumber, String token, String ipAddress, String userAgent) {
-        userSessionRepository.findByUserIdAndIsActiveTrue(userId)
-                .ifPresent(existing -> closeSession(existing, REPLACED_BY_NEW_LOGIN));
+        String tokenHash = tokenHasher.sha256Hex(token);
+        UserSession existing = userSessionRepository.findByUserIdAndIsActiveTrue(userId).orElse(null);
+        if (existing != null && tokenHash.equals(existing.getTokenHash())) {
+            // Same token already tracked (login, or updateSessionOnRefresh, got there first):
+            // keep the row instead of closing it and opening an identical one.
+            return;
+        }
+        if (existing != null) {
+            closeSession(existing, REPLACED_BY_NEW_LOGIN);
+        }
 
         UserSession session = new UserSession();
         session.setUserId(userId);
         session.setPhoneNumber(phoneNumber);
-        session.setTokenHash(tokenHasher.sha256Hex(token));
+        session.setTokenHash(tokenHash);
         session.setIpAddress(ipAddress);
         session.setUserAgent(userAgent);
         session.setActive(true);
@@ -127,6 +141,7 @@ public class SessionManagementServiceImpl implements SessionManagementService {
                     closeSession(session, ADMIN_ACTION);
                     log.info("Session invalidated for user id: {}", userId);
                 });
+        revokeAuthorizations(userRepository.findById(userId).orElse(null));
     }
 
     @Override
@@ -137,6 +152,8 @@ public class SessionManagementServiceImpl implements SessionManagementService {
             log.warn("No user found for username {} in client application {} during admin session invalidation", username, clientApplicationId);
             return new InvalidatedSessionResponse(HttpServletResponse.SC_NOT_FOUND, "No user found with username " + username);
         }
+
+        revokeAuthorizations(user);
 
         return userSessionRepository.findByUserIdAndIsActiveTrue(user.getId())
                 .map(session -> {
@@ -170,14 +187,49 @@ public class SessionManagementServiceImpl implements SessionManagementService {
     public boolean hasActiveSession(Long userId) {
         return userSessionRepository.findByUserIdAndIsActiveTrue(userId)
                 .map(session -> {
-                    LocalDateTime expiryThreshold = session.getCreatedAt().plusDays(SESSION_TTL_DAYS);
+                    long ttlDays = resolveSessionTtlDays(userId);
+                    LocalDateTime expiryThreshold = session.getCreatedAt().plusDays(ttlDays);
                     if (LocalDateTime.now().isAfter(expiryThreshold)) {
-                        log.info("Session for user id {} exceeded {}-day TTL - expiring", userId, SESSION_TTL_DAYS);
+                        log.info("Session for user id {} exceeded {}-day TTL - expiring", userId, ttlDays);
                         closeSession(session, TTL_EXPIRED);
                         return false;
                     }
                     return true;
                 }).orElse(false);
+    }
+
+    /**
+     * The session row must never expire before the refresh token it tracks,
+     * otherwise a client with a long-lived (persistent) refresh token would
+     * be cut off while its refresh token is still valid. Uses the larger of
+     * the fixed SESSION_TTL_DAYS floor and the client's effective refresh
+     * token TTL (per-client override, else the global default).
+     */
+    private long resolveSessionTtlDays(Long userId) {
+        long refreshTtlDays = userRepository.findById(userId)
+                .map(user -> {
+                    Integer perClientDays = clientApplicationService.getById(user.getClientApplicationId()).getRefreshTokenTtlDays();
+                    return perClientDays != null ? perClientDays.longValue() : globalRefreshTokenTtlDays;
+                })
+                .orElse(globalRefreshTokenTtlDays);
+        return Math.max(SESSION_TTL_DAYS, refreshTtlDays);
+    }
+
+    /**
+     * Deletes the user's refresh-token authorizations for their own client. Without this, closing the
+     * tracking row does not stop a stored refresh token from minting new access tokens. Access tokens
+     * already issued stay valid until their own short expiry.
+     */
+    private void revokeAuthorizations(User user) {
+        if (user == null || user.getInternalAuthUserId() == null || user.getClientApplicationId() == null) {
+            return;
+        }
+        int removed = jdbcTemplate.update(
+                "DELETE FROM oauth2_authorization WHERE principal_name = ? AND registered_client_id = ?",
+                user.getInternalAuthUserId(), String.valueOf(user.getClientApplicationId()));
+        if (removed > 0) {
+            log.info("Revoked {} refresh-token authorization(s) for user id {}", removed, user.getId());
+        }
     }
 
     private static final Long NO_MATCHING_USER_ID = -1L;
