@@ -6,6 +6,7 @@ import com.internal.auth.common.exception.BadRequestException;
 import com.internal.auth.config.auth.Roles;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
+import com.internal.auth.feature.session.client.SyncPointSessionClient;
 import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
 import com.internal.auth.feature.session.dto.PagedAdminSessionsResponse;
 import com.internal.auth.feature.session.service.SessionManagementService;
@@ -14,6 +15,7 @@ import com.internal.auth.common.util.RateLimiterService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -53,6 +55,17 @@ public class UserSessionController {
     private final SessionManagementService sessionService;
     private final ClientApplicationService clientApplicationService;
     private final RateLimiterService rateLimiterService;
+    private final SyncPointSessionClient syncPointSessionClient;
+
+    /**
+     * clientId SyncPoint is registered under in THIS app's client_applications
+     * table (see application.properties). Only this client gets the push
+     * below - SyncPoint is the one integrating app with its own downstream
+     * per-user session row that needs to hear about this action directly;
+     * every other client is unaffected.
+     */
+    @Value("${sync-point.internal-auth-client-id:sync-point}")
+    private String syncPointClientId;
 
     /**
      * Fixes a confirmed broken-access-control gap found while confirming
@@ -70,6 +83,14 @@ public class UserSessionController {
         rateLimiterService.checkRateLimit(AppConstant.SESSION_INVALIDATE_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_SESSION_INVALIDATE_REQUEST, Duration.ofHours(AppConstant.SESSION_INVALIDATE_RATE_LIMIT_DURATION_HOURS));
         ClientApplication client = clientApplicationService.getEnabledClientByClientId(clientId);
         InvalidatedSessionResponse response = sessionService.invalidateUserSessionByAdmin(username, client.getId());
+        // Push straight to SyncPoint so its own user_sessions row is freed now, not just on
+        // the user's next login attempt (see SyncPointSessionClient's Javadoc). Fired even if
+        // this app had no active UserSession row to close above (response 404) - the
+        // oauth2_authorization rows behind it are deleted unconditionally by
+        // invalidateUserSessionByAdmin, so SyncPoint's own record is stale either way.
+        if (syncPointClientId.equals(clientId)) {
+            syncPointSessionClient.notifySessionInvalidated(username);
+        }
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 
