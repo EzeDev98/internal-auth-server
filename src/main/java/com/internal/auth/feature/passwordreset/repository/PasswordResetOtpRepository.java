@@ -17,6 +17,7 @@ import java.util.Optional;
 public interface PasswordResetOtpRepository extends JpaRepository<PasswordResetOtp, Long> {
     Optional<PasswordResetOtp> findTopByPhoneNumberAndStatusOrderByCreatedAtDesc(String phoneNumber, ResetStatus status);
     Optional<PasswordResetOtp> findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(String phoneNumber, Long clientApplicationId, ResetStatus status);
+    Optional<PasswordResetOtp> findTopByEmailAndClientApplicationIdAndStatusOrderByCreatedAtDesc(String email, Long clientApplicationId, ResetStatus status);
 
     /** Backs TenantDataWipeService. */
     long deleteAllByClientApplicationId(Long clientApplicationId);

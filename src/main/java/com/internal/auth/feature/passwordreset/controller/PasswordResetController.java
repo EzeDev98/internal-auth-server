@@ -9,6 +9,8 @@ import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.passwordreset.dto.request.CompletePasswordResetRequest;
 import com.internal.auth.feature.passwordreset.dto.request.PasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.request.EmailPasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.request.EmailVerifyOtpRequest;
 import com.internal.auth.feature.passwordreset.dto.response.PasswordResetResponse;
 import com.internal.auth.feature.passwordreset.service.PasswordResetService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -102,5 +104,25 @@ public class PasswordResetController {
         rateLimiterService.checkRateLimit(COMPLETE_RESET_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), MAX_COMPLETE_RESET_REQUEST, Duration.ofHours(COMPLETE_RESET_RATE_LIMIT_DURATION_HOURS));
         PasswordResetResponse response = passwordResetService.completeReset(request);
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
+    }
+
+    @PostMapping("/email/request")
+    public ResponseEntity<InternalAuthApiResponse<PasswordResetResponse>> requestEmailOtp(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
+            @RequestBody EmailPasswordResetRequest request) {
+        ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
+        rateLimiterService.checkRateLimit("ratelimit:password-reset-otp:email:" + client.getId() + ":" + request.getEmail(), MAX_RESET_PASSWORD_REQUEST, Duration.ofHours(RESET_PASSWORD_RATE_LIMIT_DURATION));
+        PasswordResetResponse response = passwordResetService.requestEmailOtp(request, client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
+    }
+
+    @PostMapping("/email/verify-otp")
+    public ResponseEntity<InternalAuthApiResponse<VerifyOtpResponse>> verifyEmailOtp(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
+            @RequestBody EmailVerifyOtpRequest request) {
+        ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
+        rateLimiterService.checkRateLimit(VERIFY_OTP_RATE_LIMIT_KEY_PREFIX + client.getId() + ":" + request.getEmail(), MAX_VERIFY_OTP_REQUEST, Duration.ofHours(VERIFY_OTP_RATE_LIMIT_DURATION_HOURS));
+        VerifyOtpResponse response = passwordResetService.verifyEmailOtp(request, client.getId());
+        return ResponseEntity.ok(InternalAuthApiResponse.success("OTP verified successfully.", response));
     }
 }

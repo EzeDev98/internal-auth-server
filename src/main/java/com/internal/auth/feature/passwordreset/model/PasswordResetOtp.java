@@ -44,8 +44,12 @@ public class PasswordResetOtp implements ResettableOtp {
     @Column(name = "client_application_id", nullable = false)
     private Long clientApplicationId;
 
-    @Column(name = "phone_number", nullable = false)
+    // Nullable: an email-based reset (V29) is keyed by email instead.
+    @Column(name = "phone_number")
     private String phoneNumber;
+
+    @Column(name = "email")
+    private String email;
 
     @Column(name = "otp_hash", nullable = false)
     private String otpHash;

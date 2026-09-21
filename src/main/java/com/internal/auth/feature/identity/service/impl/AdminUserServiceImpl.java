@@ -6,6 +6,7 @@ import com.internal.auth.common.reset.ResetValidator;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.dto.request.AdminCreateUserRequest;
 import com.internal.auth.feature.identity.dto.request.AdminResetPasswordRequest;
+import com.internal.auth.feature.identity.client.NotareUserEventClient;
 import com.internal.auth.feature.identity.dto.request.AdminUpdateUserRequest;
 import com.internal.auth.feature.identity.dto.response.PagedUsersResponse;
 import com.internal.auth.feature.identity.dto.response.UserCredentialResponse;
@@ -27,6 +28,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -54,6 +57,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final EntityUtilityService entityUtilityService;
     private final ClientApplicationService clientApplicationService;
     private final SessionManagementService sessionManagementService;
+    private final NotareUserEventClient notareUserEventClient;
 
     @Override
     @Transactional(readOnly = true)
@@ -91,6 +95,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         User user = userRepository.findByUsernameAndClientApplicationId(username, clientApplicationId)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
+        boolean wasEnabled = user.isEnabled();
         if (request.getEnabled() != null) {
             user.setEnabled(request.getEnabled());
         }
@@ -102,6 +107,10 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
 
         userRepository.save(user);
+        if (request.getEnabled() != null && request.getEnabled() != wasEnabled) {
+            pushToNotare(user.getInternalAuthUserId(), clientApplicationId,
+                    request.getEnabled() ? NotareUserEventClient.Event.ENABLED : NotareUserEventClient.Event.DISABLED);
+        }
         return toProfile(user);
     }
 
@@ -163,7 +172,25 @@ public class AdminUserServiceImpl implements AdminUserService {
             entityUtilityService.deleteUserRoles(user);
             entityUtilityService.deleteUserGroups(user);
             userRepository.delete(user);
+            pushToNotare(internalAuthUserId, clientApplicationId, NotareUserEventClient.Event.DELETED);
         });
+    }
+
+    /** Notify notare after the IAM change commits; only for notare-tenant users. */
+    private void pushToNotare(String internalAuthUserId, Long clientApplicationId, NotareUserEventClient.Event event) {
+        if (!notareUserEventClient.isNotareTenant(clientApplicationService.getById(clientApplicationId).getClientId())) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    notareUserEventClient.notifyUserEvent(internalAuthUserId, event);
+                }
+            });
+        } else {
+            notareUserEventClient.notifyUserEvent(internalAuthUserId, event);
+        }
     }
 
     @Override

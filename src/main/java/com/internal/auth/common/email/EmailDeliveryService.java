@@ -26,4 +26,13 @@ public interface EmailDeliveryService {
      *                         branding (sender name and message copy)
      */
     void sendVerificationEmail(String email, String verificationLink, String appName);
+
+    /**
+     * Send a password-reset one-time code to the given address.
+     *
+     * @param email   the recipient's email address
+     * @param otp     the raw one-time code
+     * @param appName the calling app's display name, for email branding
+     */
+    void sendPasswordResetOtpEmail(String email, String otp, String appName);
 }

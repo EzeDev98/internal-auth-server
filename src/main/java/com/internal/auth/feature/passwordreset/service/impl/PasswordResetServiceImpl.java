@@ -1,6 +1,10 @@
 package com.internal.auth.feature.passwordreset.service.impl;
 
 import com.internal.auth.common.exception.OtpInvalidException;
+import com.internal.auth.common.exception.BadRequestException;
+import com.internal.auth.common.email.EmailDeliveryService;
+import com.internal.auth.feature.passwordreset.dto.request.EmailPasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.request.EmailVerifyOtpRequest;
 import com.internal.auth.common.exception.ResetTokenInvalidException;
 import com.internal.auth.common.exception.UserNotFoundException;
 import com.internal.auth.common.reset.OtpResetEngine;
@@ -87,6 +91,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private final RedissonClient redissonClient;
     private final OtpResetEngine otpResetEngine;
     private final ClientApplicationService clientApplicationService;
+    private final EmailDeliveryService emailDeliveryService;
 
     @Override
     @Transactional
@@ -143,6 +148,69 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         String phoneNumber = request.getPhoneNumber();
         PasswordResetOtp otpEntity = passwordResetOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(phoneNumber, clientApplicationId, ResetStatus.ACTIVE)
+                .orElseThrow(() -> new OtpInvalidException("The verification code is invalid."));
+
+        otpResetEngine.verify(otpEntity, request.getOtp(), passwordResetOtpRepository::save);
+
+        String rawResetToken = otpService.generateResetToken();
+        PasswordResetToken resetToken = new PasswordResetToken();
+        resetToken.setUserId(otpEntity.getUserId());
+        otpResetEngine.populateNewToken(resetToken, rawResetToken, properties.getToken().getExpirationMinutes());
+        passwordResetTokenRepository.save(resetToken);
+
+        return new VerifyOtpResponse(rawResetToken);
+    }
+
+    @Override
+    @Transactional
+    public PasswordResetResponse requestEmailOtp(EmailPasswordResetRequest request, Long clientApplicationId) {
+        String email = request.getEmail() == null ? "" : request.getEmail().trim();
+        if (email.isEmpty() || !email.contains("@")) {
+            throw new BadRequestException("A valid email address is required.");
+        }
+
+        String cooldownKey = clientApplicationId + ":email:" + email.toLowerCase();
+        RBucket<String> cooldownBucket = otpResetEngine.getCooldownBucket(redissonClient, PASSWORD_RESET_COOLDOWN_KEY_PREFIX, cooldownKey);
+        otpResetEngine.rejectIfCoolingDown(cooldownBucket);
+
+        Optional<User> userOptional = userRepository.findByEmailAndClientApplicationId(email, clientApplicationId);
+
+        // Same enumeration protection as the phone flow: only send when the
+        // email is registered, but always answer and cool down identically.
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            otpResetEngine.invalidateExisting(
+                    passwordResetOtpRepository.findTopByEmailAndClientApplicationIdAndStatusOrderByCreatedAtDesc(email, clientApplicationId, ResetStatus.ACTIVE),
+                    passwordResetOtpRepository::save);
+
+            String rawOtp = otpService.generateOtp(properties.getOtp().getLength());
+
+            PasswordResetOtp otpEntity = new PasswordResetOtp();
+            otpEntity.setUserId(user.getId());
+            otpEntity.setClientApplicationId(clientApplicationId);
+            otpResetEngine.populateNewOtp(otpEntity, null, rawOtp, properties.getOtp().getExpirationMinutes(), properties.getOtp().getMaxAttempts());
+            otpEntity.setEmail(email);
+            passwordResetOtpRepository.save(otpEntity);
+
+            String appName = clientApplicationService.getById(clientApplicationId).getName();
+            emailDeliveryService.sendPasswordResetOtpEmail(email, rawOtp, appName);
+            log.info("Password reset email OTP requested for a registered email address");
+        } else {
+            log.info("Password reset email OTP requested for an unregistered email address");
+        }
+
+        otpResetEngine.startCooldown(cooldownBucket, properties.getOtp().getResendCooldownSeconds());
+
+        return new PasswordResetResponse(GENERIC_REQUEST_MESSAGE, 200, null);
+    }
+
+    @Override
+    @Transactional
+    public VerifyOtpResponse verifyEmailOtp(EmailVerifyOtpRequest request, Long clientApplicationId) {
+        resetValidator.validateOtpFormat(request.getOtp(), properties.getOtp().getLength());
+
+        String email = request.getEmail() == null ? "" : request.getEmail().trim();
+        PasswordResetOtp otpEntity = passwordResetOtpRepository.findTopByEmailAndClientApplicationIdAndStatusOrderByCreatedAtDesc(email, clientApplicationId, ResetStatus.ACTIVE)
                 .orElseThrow(() -> new OtpInvalidException("The verification code is invalid."));
 
         otpResetEngine.verify(otpEntity, request.getOtp(), passwordResetOtpRepository::save);

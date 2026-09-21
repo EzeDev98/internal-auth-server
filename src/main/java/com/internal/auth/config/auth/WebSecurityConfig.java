@@ -166,6 +166,8 @@ public class WebSecurityConfig {
                                 appTitle + "/auth/resend-phone-verification",
                                 appTitle + "/password-reset/request",
                                 appTitle + "/password-reset/verify-otp",
+                                appTitle + "/password-reset/email/request",
+                                appTitle + "/password-reset/email/verify-otp",
                                 appTitle + "/password-reset/complete",
                                 appTitle + "/admin/register",
                                 appTitle + "/admin/login",

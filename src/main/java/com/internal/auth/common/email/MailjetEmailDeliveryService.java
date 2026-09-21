@@ -117,6 +117,54 @@ public class MailjetEmailDeliveryService implements EmailDeliveryService {
         }
     }
 
+    @Override
+    public void sendPasswordResetOtpEmail(String email, String otp, String appName) {
+        if (apiKey == null || apiKey.isBlank() || secretKey == null || secretKey.isBlank()
+                || senderEmail == null || senderEmail.isBlank()) {
+            log.error("Mailjet is selected as the email provider but its api-key/secret-key/sender-email are not fully configured.");
+            return;
+        }
+
+        String senderName = (appName == null || appName.isBlank()) ? defaultSenderName : appName;
+        String subject = "Your " + senderName + " password reset code";
+        String textPart = "Your " + senderName + " password reset code is: " + otp
+                + "\n\nIt expires shortly. If you didn't request this, you can safely ignore this message.";
+        String htmlPart = "<p>Your <strong>" + senderName + "</strong> password reset code is:</p>"
+                + "<p style=\"font-size:24px;letter-spacing:4px\"><strong>" + otp + "</strong></p>"
+                + "<p>It expires shortly. If you didn't request this, you can safely ignore this message.</p>";
+
+        try {
+            Map<String, Object> message = Map.of(
+                    "From", Map.of("Email", senderEmail, "Name", senderName),
+                    "To", List.of(Map.of("Email", email)),
+                    "Subject", subject,
+                    "TextPart", textPart,
+                    "HTMLPart", htmlPart
+            );
+            String requestBody = objectMapper.writeValueAsString(Map.of("Messages", List.of(message)));
+            String basicAuth = Base64.getEncoder().encodeToString(
+                    (apiKey + ":" + secretKey).getBytes(StandardCharsets.UTF_8));
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(SEND_URL))
+                    .timeout(REQUEST_TIMEOUT)
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Basic " + basicAuth)
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                log.info("Password reset email sent via Mailjet (app={})", senderName);
+            } else {
+                log.error("Mailjet password reset email failed with status {}: {}", response.statusCode(), safeErrorSummary(response.body()));
+            }
+        } catch (Exception ex) {
+            log.error("Failed to send password reset email via Mailjet", ex);
+        }
+    }
+
     private String safeErrorSummary(String body) {
         try {
             JsonNode node = objectMapper.readTree(body);

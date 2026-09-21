@@ -36,4 +36,13 @@ public class LoggingEmailDeliveryService implements EmailDeliveryService {
             log.info("Email verification link generated for {} (app={}, delivery provider not configured)", email, appName);
         }
     }
+
+    @Override
+    public void sendPasswordResetOtpEmail(String email, String otp, String appName) {
+        if (logToConsole) {
+            log.info("[DEV ONLY] Password reset code for {} (app={}): {}", email, appName, otp);
+        } else {
+            log.info("Password reset code generated for {} (app={}, delivery provider not configured)", email, appName);
+        }
+    }
 }

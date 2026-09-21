@@ -5,6 +5,8 @@ import com.internal.auth.common.reset.dto.VerifyOtpRequest;
 import com.internal.auth.common.reset.dto.VerifyOtpResponse;
 import com.internal.auth.feature.passwordreset.dto.request.CompletePasswordResetRequest;
 import com.internal.auth.feature.passwordreset.dto.request.PasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.request.EmailPasswordResetRequest;
+import com.internal.auth.feature.passwordreset.dto.request.EmailVerifyOtpRequest;
 import com.internal.auth.feature.passwordreset.dto.response.PasswordResetResponse;
 
 public interface PasswordResetService {
@@ -38,4 +40,10 @@ public interface PasswordResetService {
      * invalidating all active sessions for the user.
      */
     PasswordResetResponse completeReset(CompletePasswordResetRequest request);
+
+    /** Email counterpart of {@link #requestOtp}: sends the reset code by email. Always answers generically. */
+    PasswordResetResponse requestEmailOtp(EmailPasswordResetRequest request, Long clientApplicationId);
+
+    /** Email counterpart of {@link #verifyOtp}: exchanges the emailed code for a reset token. */
+    VerifyOtpResponse verifyEmailOtp(EmailVerifyOtpRequest request, Long clientApplicationId);
 }
