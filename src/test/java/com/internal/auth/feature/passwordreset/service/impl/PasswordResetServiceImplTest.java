@@ -5,6 +5,7 @@ import com.internal.auth.common.exception.OtpInvalidException;
 import com.internal.auth.common.exception.OtpResendCooldownException;
 import com.internal.auth.common.exception.ResetTokenInvalidException;
 import com.internal.auth.common.exception.UserNotFoundException;
+import com.internal.auth.common.email.EmailDeliveryService;
 import com.internal.auth.common.reset.OtpResetEngine;
 import com.internal.auth.common.reset.OtpService;
 import com.internal.auth.common.reset.ResetValidator;
@@ -98,6 +99,8 @@ class PasswordResetServiceImplTest {
     @Mock
     private ClientApplicationService clientApplicationService;
     @Mock
+    private EmailDeliveryService emailDeliveryService;
+    @Mock
     private RBucket<String> cooldownBucket;
 
     private PasswordResetProperties properties;
@@ -118,7 +121,8 @@ class PasswordResetServiceImplTest {
                 resetValidator,
                 redissonClient,
                 otpResetEngine,
-                clientApplicationService);
+                clientApplicationService,
+                emailDeliveryService);
 
         lenient().when(otpResetEngine.getCooldownBucket(eq(redissonClient), eq(PASSWORD_RESET_COOLDOWN_KEY_PREFIX), anyString()))
                 .thenReturn(cooldownBucket);
