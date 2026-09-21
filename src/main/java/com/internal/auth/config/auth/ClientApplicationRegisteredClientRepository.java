@@ -133,7 +133,15 @@ public class ClientApplicationRegisteredClientRepository implements RegisteredCl
                 .clientName(client.getName())
                 .clientAuthenticationMethod(authenticationMethod)
                 .authorizationGrantTypes(types -> types.addAll(grantTypes))
-                .redirectUris(uris -> uris.addAll(client.getRedirectUris()))
+                .redirectUris(uris -> {
+                    uris.addAll(client.getRedirectUris());
+                    // Spring requires a redirect URI on any authorization_code client. Tenants that only use
+                    // this app's own password login (e.g. notare) never redirect anywhere, so give them an
+                    // inert placeholder rather than making every such tenant invent a fake one.
+                    if (uris.isEmpty() && grantTypes.contains(AuthorizationGrantType.AUTHORIZATION_CODE)) {
+                        uris.add("http://127.0.0.1/unused-redirect");
+                    }
+                })
                 .scopes(scopes -> scopes.addAll(client.getScopes()))
                 .clientSettings(ClientSettings.builder().build())
                 .tokenSettings(TokenSettings.builder()
