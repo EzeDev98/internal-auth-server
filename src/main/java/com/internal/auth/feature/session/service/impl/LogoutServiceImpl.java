@@ -81,4 +81,29 @@ public class LogoutServiceImpl implements LogoutService {
             return new LogoutResponse("Logout failed. Please try again.", HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
     }
+
+    /**
+     * "Sign out everywhere". Unlike logout(), failures are thrown rather than
+     * folded into a 200 body, so the caller sees a real HTTP error.
+     */
+    @Transactional
+    @Override
+    public LogoutResponse logoutAll(String token) {
+        if (token == null || token.trim().isEmpty()) {
+            throw new BadRequestException("Invalid token");
+        }
+
+        UserSession session = userSessionRepo.findByTokenHash(tokenHasher.sha256Hex(token))
+                .orElseThrow(() -> new BadRequestException("No active session found"));
+
+        OAuth2Authorization authorization = authorizationService.findByToken(token, OAuth2TokenType.ACCESS_TOKEN);
+        if (authorization != null) {
+            authorizationService.remove(authorization);
+        }
+
+        sessionManagementService.invalidateActiveSessionForUser(session.getUserId());
+        log.info("All sessions ended for user id: {}", session.getUserId());
+
+        return new LogoutResponse("Signed out everywhere", HttpServletResponse.SC_OK);
+    }
 }

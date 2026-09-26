@@ -1,6 +1,7 @@
 package com.internal.auth.feature.session.service;
 
 import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
+import com.internal.auth.feature.session.dto.OwnSessionResponse;
 import com.internal.auth.feature.session.dto.PagedAdminSessionsResponse;
 import org.springframework.data.domain.Pageable;
 
@@ -65,5 +66,8 @@ public interface SessionManagementService {
      */
     PagedAdminSessionsResponse listSessions(String username, Long clientApplicationId, String ipAddress, String device, Boolean active, Pageable pageable);
     void updateSessionOnRefresh(Long userId, String newToken);
+
+    /** The caller's own active session(s), found by the token they presented. */
+    java.util.List<OwnSessionResponse> listOwnSessions(String token);
     boolean hasActiveSession(Long userId);
 }

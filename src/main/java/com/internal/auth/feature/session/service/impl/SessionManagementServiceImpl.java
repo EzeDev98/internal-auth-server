@@ -5,6 +5,7 @@ import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
+import com.internal.auth.feature.session.dto.OwnSessionResponse;
 import com.internal.auth.feature.session.dto.AdminSessionSummaryResponse;
 import com.internal.auth.feature.session.dto.PagedAdminSessionsResponse;
 import com.internal.auth.feature.session.model.UserSession;
@@ -182,6 +183,27 @@ public class SessionManagementServiceImpl implements SessionManagementService {
                 user.getInternalAuthUserId(), String.valueOf(user.getClientApplicationId()),
                 java.sql.Timestamp.from(java.time.Instant.now()));
         return live != null && live > 0;
+    }
+
+    @Override
+    @Transactional
+    public List<OwnSessionResponse> listOwnSessions(String token) {
+        return userSessionRepository.findByTokenHash(tokenHasher.sha256Hex(token))
+                .filter(UserSession::isActive)
+                .map(session -> {
+                    java.time.Instant created = session.getCreatedAt() == null
+                            ? java.time.Instant.now()
+                            : session.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant();
+                    return List.of(new OwnSessionResponse(
+                            String.valueOf(session.getId()),
+                            session.getUserAgent(),
+                            session.getIpAddress(),
+                            created,
+                            created,
+                            created.plus(java.time.Duration.ofDays(globalRefreshTokenTtlDays)),
+                            true));
+                })
+                .orElseGet(List::of);
     }
 
     @Override

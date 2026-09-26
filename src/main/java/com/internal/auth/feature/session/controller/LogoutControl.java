@@ -3,11 +3,14 @@ package com.internal.auth.feature.session.controller;
 import com.internal.auth.common.response.InternalAuthApiResponse;
 
 import com.internal.auth.feature.session.dto.LogoutResponse;
+import com.internal.auth.feature.session.dto.OwnSessionResponse;
 import com.internal.auth.feature.session.service.LogoutService;
+import com.internal.auth.feature.session.service.SessionManagementService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,11 +22,25 @@ import org.springframework.web.bind.annotation.RestController;
 public class LogoutControl {
 
     private final LogoutService logoutService;
+    private final SessionManagementService sessionManagementService;
 
     @DeleteMapping("/session")
     public ResponseEntity<InternalAuthApiResponse<LogoutResponse>> logout(@RequestHeader("Authorization") String authHeader) {
         String token = authHeader.replace("Bearer ", "").trim();
         LogoutResponse response = logoutService.logout(token);
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
+    }
+
+    @DeleteMapping("/session/all")
+    public ResponseEntity<InternalAuthApiResponse<LogoutResponse>> logoutAll(@RequestHeader("Authorization") String authHeader) {
+        String token = authHeader.replace("Bearer ", "").trim();
+        LogoutResponse response = logoutService.logoutAll(token);
+        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
+    }
+
+    @GetMapping("/session")
+    public ResponseEntity<InternalAuthApiResponse<java.util.List<OwnSessionResponse>>> listOwnSessions(@RequestHeader("Authorization") String authHeader) {
+        String token = authHeader.replace("Bearer ", "").trim();
+        return ResponseEntity.ok(InternalAuthApiResponse.success(sessionManagementService.listOwnSessions(token)));
     }
 }
