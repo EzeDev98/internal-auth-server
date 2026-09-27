@@ -153,9 +153,14 @@ public class UserRegistrationServiceImpl implements UserRegistrationService {
         // of the DB transaction. Deferring to afterCommit fixes the root
         // cause: by the time this runs, the user row is guaranteed visible.
         Runnable assignDefaultRole = () -> {
-            BaseResponse roleAssignment = userService.addUserToDefaultPermissionGroup(savedUser.getUsername());
-            if (roleAssignment.getStatusCode() != HttpServletResponse.SC_CREATED) {
-                log.warn("Default role assignment did not complete cleanly for user id {} (status={}, message={})", savedUser.getId(), roleAssignment.getStatusCode(), roleAssignment.getDescription());
+            try {
+                BaseResponse roleAssignment = userService.addUserToDefaultPermissionGroup(savedUser.getUsername());
+                if (roleAssignment.getStatusCode() != HttpServletResponse.SC_CREATED) {
+                    log.warn("Default role assignment did not complete cleanly for user id {} (status={}, message={})", savedUser.getId(), roleAssignment.getStatusCode(), roleAssignment.getDescription());
+                }
+            } catch (Exception e) {
+                // The account is already committed; never fail registration over role wiring.
+                log.error("Default role assignment threw for user id {}", savedUser.getId(), e);
             }
         };
 
