@@ -1,0 +1,89 @@
+# ---------------------------------------------------------------------------
+# Production datastore: PostgreSQL. Flyway owns this schema (migrations in
+# src/main/resources/db/migration) and Hibernate is restricted to `validate`
+# ? it checks the entities against the real schema at startup and refuses
+# to boot on a mismatch, but never alters a production table itself.
+#
+# No defaults on the values below, on purpose (same fail-closed pattern as
+# app.token-issuer-uri in application.properties): a prod deploy that's
+# missing one of these env vars fails fast at startup with a clear
+# unresolved-placeholder/connection error, instead of silently booting
+# against the wrong database or with an empty password.
+# ---------------------------------------------------------------------------
+spring.datasource.url=jdbc:postgresql://${POSTGRES_URL}:${DB_PORT:5432}/${POSTGRES_USER}?sslmode=require
+spring.datasource.username=${POSTGRES_USER:}
+spring.datasource.password=${POSTGRES_PASSWORD:}
+
+# ---------------------------------------------------------------------------
+# Actuator on a separate port from the public API, restored here after
+# being removed from the shared application.properties default (that
+# removal was specifically to stop dev from opening a second, unwanted
+# Tomcat listener - see the comment there). Prod keeping this isolation is
+# deliberate: health/metrics/prometheus stay off the public-facing port.
+# ---------------------------------------------------------------------------
+management.server.port=${MANAGEMENT_PORT:8081}
+
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.show-sql=false
+
+spring.flyway.enabled=true
+spring.flyway.locations=classpath:db/migration
+
+# Step 10B safeguard: flyway:clean drops every Flyway-managed table
+# outright. Already Flyway's own default since 7.0, but stated explicitly
+# here rather than relying on nobody overriding an unstated library
+# default - this is the real environment with real rows, and V8/V9/V12's
+# TRUNCATEs (already applied, one-time, pre-production) must stay the last
+# time this schema is ever wiped wholesale.
+spring.flyway.clean-disabled=true
+
+# ---------------------------------------------------------------------------
+# Stage 1 punch-list item 6 (OTP delivery provider). Contiguity's plain-text
+# SMS API delivers password-reset OTPs (see ContiguityOtpDeliveryService) ?
+# free tier covers 500 SMS/month. No default on contiguity.api-key: unlike
+# the datasource settings above, a missing key does NOT fail startup ? by
+# design (ContiguityOtpDeliveryService.sendPasswordResetOtp never throws, so
+# a provider outage can't change what the "request OTP" endpoint returns and
+# leak whether a phone number is registered). A missing/wrong key instead
+# fails *silently per-request*: the app boots fine, but no OTP SMS ever goes
+# out and only the server log shows it. Verify with a real test reset after
+# deploying, and monitor for "Contiguity OTP send failed" / "api-key is not
+# configured" log lines.
+# ---------------------------------------------------------------------------
+app.otp.provider=contiguity
+contiguity.api-key=${CONTIGUITY_API_KEY:}
+contiguity.sender-app-name=${CONTIGUITY_SENDER_APP_NAME:SyncPoint}
+
+# ---------------------------------------------------------------------------
+# Step 15E (email delivery provider). Mailjet's transactional Send API
+# (see MailjetEmailDeliveryService) - was previously unset here entirely,
+# meaning prod was silently falling back to LoggingEmailDeliveryService
+# (email-verification links only ever reaching the server log, never an
+# actual inbox). Same fail-silently-per-request contract as Contiguity
+# above: a missing/wrong key never fails the request itself, only shows up
+# as a "Mailjet email send failed" / "api-key is not configured" log line.
+# ---------------------------------------------------------------------------
+app.email.provider=mailjet
+mailjet.api-key=${MAILJET_API_KEY:}
+mailjet.secret-key=${MAILJET_SECRET_KEY:}
+mailjet.sender-email=${MAILJET_SENDER_EMAIL:}
+mailjet.sender-name=${MAILJET_SENDER_NAME:SyncPoint}
+
+spring.datasource.hikari.maximum-pool-size=5
+spring.datasource.hikari.minimum-idle=2
+spring.datasource.hikari.connection-timeout=20000
+spring.datasource.hikari.max-lifetime=270000
+spring.datasource.hikari.keepalive-time=120000
+spring.datasource.hikari.data-source-properties.prepareThreshold=0
+
+
+# ---------------------------------------------------------------------------
+# Step 14A - Spring Modulith's JDBC event publication registry (backs the
+# audit-logging event flow - see AuditEventListener's Javadoc). Prod owns
+# its schema through Flyway (see spring.flyway.enabled above), so
+# Modulith's own auto-schema-init is turned off here - V15 migration
+# creates the event_publication table instead, the same way every other
+# prod table is created. See application-dev.properties for the opposite
+# setting and why dev doesn't need this.
+# ---------------------------------------------------------------------------
+spring.modulith.events.jdbc.schema-initialization.enabled=false
