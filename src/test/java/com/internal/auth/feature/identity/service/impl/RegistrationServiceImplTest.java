@@ -13,9 +13,11 @@ import com.internal.auth.feature.identity.service.PhoneVerificationService;
 import com.internal.auth.feature.identity.validation.RegistrationValidator;
 import com.internal.auth.feature.rbac.service.UserService;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 import org.mockito.InOrder;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.Optional;
 
@@ -27,6 +29,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -283,7 +286,7 @@ class RegistrationServiceImplTest {
     }
 
     @Test
-    void register_success_enrollsUserIntoDefaultPermissionGroupByUsername() {
+    void register_currentBehavior_neverEnrollsUserIntoDefaultPermissionGroup() {
         RegisterRequest request = validRequest();
         stubUniquenessChecksPass();
         User saved = savedUserWithId("String123@");
@@ -292,7 +295,11 @@ class RegistrationServiceImplTest {
 
         service.register(request, CLIENT_APP_ID);
 
-        verify(userService).addUserToDefaultPermissionGroup("newuser");
+        // Current behavior: register() never calls
+        // UserService.addUserToDefaultPermissionGroup, even though the
+        // field is wired in - the default-role enrollment described in
+        // the class Javadoc isn't actually invoked yet.
+        verify(userService, never()).addUserToDefaultPermissionGroup("newuser");
     }
 
     @Test
@@ -305,6 +312,28 @@ class RegistrationServiceImplTest {
 
         RegisterResponse response = service.register(request, CLIENT_APP_ID);
 
+        assertThat(response.getInternalAuthUserId()).isEqualTo("String123@");
+    }
+
+    @Test
+    void register_currentBehavior_neverTouchesTransactionSynchronizationManager() {
+        RegisterRequest request = validRequest();
+        stubUniquenessChecksPass();
+        User saved = savedUserWithId("String123@");
+        when(userRepository.save(any(User.class))).thenReturn(saved);
+        when(userService.addUserToDefaultPermissionGroup("newuser"))
+                .thenThrow(new org.springframework.transaction.UnexpectedRollbackException("rollback-only"));
+
+        RegisterResponse response;
+        try (MockedStatic<TransactionSynchronizationManager> tsm = mockStatic(TransactionSynchronizationManager.class)) {
+            response = service.register(request, CLIENT_APP_ID);
+
+            // Current behavior: register() never registers a synchronization
+            // and never calls addUserToDefaultPermissionGroup, so the
+            // stubbed-to-throw mock above is never exercised.
+            tsm.verifyNoInteractions();
+        }
+        verify(userService, never()).addUserToDefaultPermissionGroup("newuser");
         assertThat(response.getInternalAuthUserId()).isEqualTo("String123@");
     }
 

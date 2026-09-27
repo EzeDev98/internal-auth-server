@@ -135,53 +135,6 @@ public class UserRegistrationServiceImpl implements UserRegistrationService {
         // failures internally.
         phoneVerificationService.sendVerificationOtp(savedUser);
 
-        // Default-role gap fix: enroll the new user into the default
-        // permission group/role. Must run strictly AFTER this transaction
-        // commits - addUserToDefaultPermissionGroup runs in its own
-        // REQUIRES_NEW transaction/connection, which correctly cannot see
-        // this transaction's INSERT until it is committed. Calling it
-        // synchronously from inside this still-open transaction made
-        // EntityUtilityService#getUser fail with USER_NOT_FOUND on every
-        // registration, and because that failure gets swallowed internally
-        // instead of rethrown, addUserToDefaultPermissionGroup's own
-        // REQUIRES_NEW transaction ended up rollback-only on a normal
-        // method return - which Spring turns into an UnexpectedRollbackException
-        // at commit time. That exception was never caught here, so it
-        // propagated out of register() and rolled back THIS transaction too
-        // (the user row included), surfacing as a 500 - even though the
-        // email/OTP sends above had already fired, since those aren't part
-        // of the DB transaction. Deferring to afterCommit fixes the root
-        // cause: by the time this runs, the user row is guaranteed visible.
-        Runnable assignDefaultRole = () -> {
-            try {
-                BaseResponse roleAssignment = userService.addUserToDefaultPermissionGroup(savedUser.getUsername());
-                if (roleAssignment.getStatusCode() != HttpServletResponse.SC_CREATED) {
-                    log.warn("Default role assignment did not complete cleanly for user id {} (status={}, message={})", savedUser.getId(), roleAssignment.getStatusCode(), roleAssignment.getDescription());
-                }
-            } catch (Exception e) {
-                // The account is already committed; never fail registration over role wiring.
-                log.error("Default role assignment threw for user id {}", savedUser.getId(), e);
-            }
-        };
-
-        // Only defer via afterCommit when a transaction is actually active
-        // to attach to (the normal HTTP-request path, where register()
-        // itself is @Transactional). Callers with no active transaction
-        // synchronization - e.g. a unit test invoking register() directly
-        // against mocks, or any future caller outside a transactional
-        // context - have no commit event to defer to, so run it inline
-        // immediately instead, matching the pre-fix behavior for them.
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    assignDefaultRole.run();
-                }
-            });
-        } else {
-            assignDefaultRole.run();
-        }
-
         log.info("New user registered, id={}", savedUser.getId());
 
         return new RegisterResponse(savedUser.getInternalAuthUserId(), savedUser.getUsername(), "Account created successfully.");

@@ -17,6 +17,7 @@ import com.internal.auth.feature.rbac.repository.UserRolesRepository;
 import com.internal.auth.feature.rbac.service.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -63,10 +64,9 @@ import static com.internal.auth.common.constant.AppConstant.ADMIN_ROLE_DESCRIPTI
  * registration instead.
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AdminRegistrationServiceImpl implements AdminRegistrationService {
-
-    private static final Logger log = LoggerFactory.getLogger(AdminRegistrationServiceImpl.class);
 
     private final UserRepository userRepository;
     private final RegistrationValidator registrationValidator;
