@@ -7,6 +7,7 @@ import com.internal.auth.config.auth.Roles;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.feature.session.client.SyncPointSessionClient;
+import com.internal.auth.feature.session.client.AhorraSessionClient;
 import com.internal.auth.feature.session.dto.InvalidatedSessionResponse;
 import com.internal.auth.feature.session.dto.PagedAdminSessionsResponse;
 import com.internal.auth.feature.session.service.SessionManagementService;
@@ -56,6 +57,7 @@ public class UserSessionController {
     private final ClientApplicationService clientApplicationService;
     private final RateLimiterService rateLimiterService;
     private final SyncPointSessionClient syncPointSessionClient;
+    private final AhorraSessionClient ahorraSessionClient;
 
     /**
      * clientId SyncPoint is registered under in THIS app's client_applications
@@ -66,6 +68,10 @@ public class UserSessionController {
      */
     @Value("${sync-point.internal-auth-client-id:sync-point}")
     private String syncPointClientId;
+
+    /** Same pattern as syncPointClientId above, for Ahorra's own push. */
+    @Value("${ahorra.internal-auth-client-id:ahorra}")
+    private String ahorraClientId;
 
     /**
      * Fixes a confirmed broken-access-control gap found while confirming
@@ -90,6 +96,9 @@ public class UserSessionController {
         // invalidateUserSessionByAdmin, so SyncPoint's own record is stale either way.
         if (syncPointClientId.equals(clientId)) {
             syncPointSessionClient.notifySessionInvalidated(username);
+        }
+        if (ahorraClientId.equals(clientId)) {
+            ahorraSessionClient.notifySessionInvalidated(username);
         }
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }

@@ -625,22 +625,29 @@ public class UserLoginServiceImpl implements UserLoginService {
      * emailVerified may already be true for a reason unrelated to the
      * email flow itself.
      */
+    /**
+     * Login requires only ONE verified contact method, not every contact
+     * method on file - verifying either email or phone is sufficient proof
+     * the account belongs to a reachable person. A blank return means login
+     * may proceed; otherwise the message names what's still needed, scoped
+     * to whichever contact methods are actually present on the account.
+     */
     private String describeUnverifiedContactMethods(User user) {
         boolean hasEmail = user.getEmail() != null && !user.getEmail().isBlank();
         boolean hasPhone = user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank();
 
-        boolean emailUnverified = hasEmail && !user.isEmailVerified();
-        boolean phoneUnverified = hasPhone && !user.isPhoneVerified();
+        boolean emailVerified = hasEmail && user.isEmailVerified();
+        boolean phoneVerified = hasPhone && user.isPhoneVerified();
 
-        if (emailUnverified && phoneUnverified) {
-            return "Please verify your email and phone number before logging in.";
+        if (!hasEmail && !hasPhone) {
+            return null;
         }
-        if (emailUnverified) {
-            return "Please verify your email before logging in.";
+        if (emailVerified || phoneVerified) {
+            return null;
         }
-        if (phoneUnverified) {
-            return "Please verify your phone number before logging in.";
+        if (hasEmail && hasPhone) {
+            return "Please verify your email or phone number before logging in.";
         }
-        return null;
+        return hasEmail ? "Please verify your email before logging in." : "Please verify your phone number before logging in.";
     }
 }

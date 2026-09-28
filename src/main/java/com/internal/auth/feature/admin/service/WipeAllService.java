@@ -96,6 +96,14 @@ public class WipeAllService {
             return new WipeAllResponse(false, steps);
         }
 
+        boolean ahorraOk = attemptStep(steps, "ahorra", () -> {
+            Map<String, Object> result = downstreamAppWipeClient.wipeAhorra();
+            return toLongMap(result);
+        });
+        if (!ahorraOk) {
+            return new WipeAllResponse(false, steps);
+        }
+
         return new WipeAllResponse(true, steps);
     }
 

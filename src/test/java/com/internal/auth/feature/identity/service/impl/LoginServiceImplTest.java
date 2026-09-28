@@ -334,22 +334,24 @@ class LoginServiceImplTest {
 
         assertThatThrownBy(() -> service.login(loginRequest("alice", "Passw0rd!"), CLIENT_APP_ID))
                 .isInstanceOfSatisfying(AccountNotVerifiedException.class,
-                        ex -> assertThat(ex.getMessage()).isEqualTo("Please verify your email and phone number before logging in."));
+                        ex -> assertThat(ex.getMessage()).isEqualTo("Please verify your email or phone number before logging in."));
     }
 
     @Test
-    void login_currentBehavior_verifiedEmailWithUnverifiedPhone_onlyPhoneIsFlagged() {
-        // Proves the two flags are evaluated independently - a verified
-        // email doesn't mask an unverified phone or vice versa.
+    void login_verifiedEmailWithUnverifiedPhone_loginSucceeds() {
+        // Login requires only ONE verified contact method, not every one
+        // present on the account - a verified email is sufficient even
+        // though phone is still unverified.
         User user = activeVerifiedUser();
         user.setEmailVerified(true);
         user.setPhoneVerified(false);
         when(userRepository.findByUsernameAndClientApplicationId("alice", CLIENT_APP_ID)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("Passw0rd!", "hashed-pw")).thenReturn(true);
+        stubSuccessfulMinting(user, new PlainToken("tok", Instant.now(), Instant.now().plusSeconds(60)));
 
-        assertThatThrownBy(() -> service.login(loginRequest("alice", "Passw0rd!"), CLIENT_APP_ID))
-                .isInstanceOfSatisfying(AccountNotVerifiedException.class,
-                        ex -> assertThat(ex.getMessage()).isEqualTo("Please verify your phone number before logging in."));
+        LoginResponse response = service.login(loginRequest("alice", "Passw0rd!"), CLIENT_APP_ID);
+
+        assertThat(response.getMessage()).isEqualTo("Login successful.");
     }
 
     @Test
