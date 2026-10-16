@@ -4,7 +4,9 @@ import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
 import com.internal.auth.common.constant.AppConstant;
 import com.internal.auth.common.util.RateLimiterService;
+import com.internal.auth.feature.identity.dto.request.ChangePasswordRequest;
 import com.internal.auth.feature.identity.dto.request.LoginRequest;
+import com.internal.auth.feature.passwordreset.service.PasswordChangeService;
 import com.internal.auth.common.exception.BadRequestException;
 import com.internal.auth.feature.identity.dto.request.RefreshTokenRequest;
 import com.internal.auth.feature.identity.dto.request.SessionStatusRequest;
@@ -52,6 +54,33 @@ public class LoginController {
     private final ClientApplicationService clientApplicationService;
     private final RateLimiterService rateLimiterService;
     private final SessionManagementService sessionManagementService;
+    private final PasswordChangeService passwordChangeService;
+
+    /**
+     * Step 17g (B-02): a signed-in user changes their own password. The calling app proves who it is
+     * with its Basic client credentials and names the user, as /session-status does. A wrong current
+     * password is a 400 "Incorrect password.", never a 401 (callers read 401 as "session over"). The
+     * user's session is not ended; see PasswordChangeService. The login's per-account rate limit
+     * applies, so the current password cannot be guessed through this door either.
+     */
+    @PostMapping("/change-password")
+    public ResponseEntity<InternalAuthApiResponse<Void>> changePassword(
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
+            @RequestBody ChangePasswordRequest request,
+            HttpServletRequest httpRequest) {
+        rateLimiterService.checkRateLimit(AppConstant.LOGIN_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_LOGIN_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_RATE_LIMIT_DURATION_MINUTES));
+        ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
+        if (isBlank(request.getUsername()) || isBlank(request.getCurrentPassword()) || isBlank(request.getNewPassword())) {
+            throw new BadRequestException("username, currentPassword and newPassword are required");
+        }
+        checkAccountRateLimit(client.getId(), request.getUsername());
+        passwordChangeService.changePassword(client.getId(), request);
+        return ResponseEntity.ok(InternalAuthApiResponse.<Void>success("Password changed", null));
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
 
     @PostMapping("/login")
     public ResponseEntity<InternalAuthApiResponse<LoginResponse>> login(
