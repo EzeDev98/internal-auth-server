@@ -87,7 +87,7 @@ class UserSessionControllerIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.data.status").value(200))
                 .andExpect(jsonPath("$.data.message").value("Session successfully invalidated for user " + target.getUsername()));
 
-        assertThat(userSessionRepository.findByUserIdAndIsActiveTrue(target.getId())).isEmpty();
+        assertThat(userSessionRepository.findAllByUserIdAndIsActiveTrue(target.getId())).isEmpty();
     }
 
     @Test

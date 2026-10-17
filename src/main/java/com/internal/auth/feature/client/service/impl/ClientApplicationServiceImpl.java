@@ -104,6 +104,7 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         client.setGrantTypes(nullSafe(request.getGrantTypes()));
         applyRefreshTokenSettings(client, request.getRefreshTokenRotationEnabled(), request.getRefreshTokenTtlDays(), request.getRefreshTokenMaxLifetimeDays());
         client.setRevokePriorSessionsOnLogin(request.getRevokePriorSessionsOnLogin() == null || request.getRevokePriorSessionsOnLogin());
+        applySessionLimit(client, request.getMaxActiveSessions());
         // enabled defaults to true on the entity itself.
 
         ClientApplication saved;
@@ -339,6 +340,7 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         if (request.getRevokePriorSessionsOnLogin() != null) {
             client.setRevokePriorSessionsOnLogin(request.getRevokePriorSessionsOnLogin());
         }
+        applySessionLimit(client, request.getMaxActiveSessions());
 
         ClientApplication saved = clientApplicationRepository.save(client);
         log.info("Client application updated, id={}, clientId={}", saved.getId(), saved.getClientId());
@@ -422,6 +424,7 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
                 + ", refreshTokenTtlDays=" + client.getRefreshTokenTtlDays()
                 + ", refreshTokenMaxLifetimeDays=" + client.getRefreshTokenMaxLifetimeDays()
                 + ", revokePriorSessionsOnLogin=" + client.isRevokePriorSessionsOnLogin()
+                + ", maxActiveSessions=" + client.getMaxActiveSessions()
                 + ", grantTypes=" + new java.util.TreeSet<>(client.getGrantTypes());
     }
 
@@ -464,7 +467,25 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
                 client.isRefreshTokenRotationEnabled(),
                 client.getRefreshTokenTtlDays(),
                 client.getRefreshTokenMaxLifetimeDays(),
-                client.isRevokePriorSessionsOnLogin());
+                client.isRevokePriorSessionsOnLogin(),
+                client.getMaxActiveSessions());
+    }
+
+    /**
+     * Step 17h (B-14): how many devices one user may keep signed in. null leaves the limit as it is.
+     * Checked after revokePriorSessionsOnLogin is applied, because more than one device only works
+     * when a sign-in does not end the others.
+     */
+    private void applySessionLimit(ClientApplication client, Integer maxActiveSessions) {
+        if (maxActiveSessions != null) {
+            if (maxActiveSessions < 1 || maxActiveSessions > MAX_ACTIVE_SESSIONS_CEILING) {
+                throw new BadRequestException("maxActiveSessions must be between 1 and " + MAX_ACTIVE_SESSIONS_CEILING);
+            }
+            client.setMaxActiveSessions(maxActiveSessions);
+        }
+        if (client.getMaxActiveSessions() > 1 && client.isRevokePriorSessionsOnLogin()) {
+            throw new BadRequestException("Turn off revokePriorSessionsOnLogin before allowing more than one session");
+        }
     }
 
     // Admin-console-only reveal: decrypts clientSecretEncrypted purely for

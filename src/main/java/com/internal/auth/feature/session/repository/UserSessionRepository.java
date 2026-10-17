@@ -7,17 +7,20 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
  * Step 11B: findByPhoneNumberAndIsActiveTrue/findByPhoneNumber removed -
  * phoneNumber is no longer a lookup key (see UserSession's class Javadoc).
- * findByUserIdAndIsActiveTrue replaces them as the one active-session
- * lookup, since userId is always present.
+ * userId is the active-session lookup key, since it is always present.
+ *
+ * Step 17h: a user may hold several active sessions (one per device, up to
+ * the client's max_active_sessions), so the active lookup returns a list.
  */
 public interface UserSessionRepository extends JpaRepository<UserSession, Long> {
     Optional<UserSession> findByTokenHash(String tokenHash);
-    Optional<UserSession> findByUserIdAndIsActiveTrue(Long userId);
+    List<UserSession> findAllByUserIdAndIsActiveTrue(Long userId);
 
     /**
      * Step 2E (React Admin Client plan v4): backs GET

@@ -35,6 +35,14 @@ public interface SessionManagementService {
      * both null.
      */
     void createSession(Long userId, String phoneNumber, String token, String ipAddress, String userAgent);
+
+    /**
+     * Step 17h (B-14): a sign-in. authorizationId is the oauth2_authorization row (refresh token) minted
+     * with this token, so this one device can later be signed out on its own. When the client allows
+     * several devices and this sign-in goes past the limit, the device used least recently is signed out.
+     * The overloads above pass null: a client limited to several devices records sessions only here.
+     */
+    void createSession(Long userId, String phoneNumber, String token, String ipAddress, String userAgent, String authorizationId);
     void invalidateSession(String token);
 
     /**
@@ -65,9 +73,24 @@ public interface SessionManagementService {
      * page rather than an error.
      */
     PagedAdminSessionsResponse listSessions(String username, Long clientApplicationId, String ipAddress, String device, Boolean active, Pageable pageable);
-    void updateSessionOnRefresh(Long userId, String newToken);
+    /**
+     * Step 17h: moves the session that was using previousAccessToken onto newToken and its (possibly new)
+     * authorization, and records the refresh as activity. Falls back to the user's only active session
+     * when previousAccessToken is unknown.
+     */
+    void updateSessionOnRefresh(Long userId, String previousAccessToken, String newToken, String authorizationId);
 
-    /** The caller's own active session(s), found by the token they presented. */
+    /**
+     * Step 17h (B-14): every device the caller's account is signed in on, one per session, with
+     * current = true for the session whose token made the request. Sessions whose refresh token has
+     * ended are closed on the way and left out.
+     */
     java.util.List<OwnSessionResponse> listOwnSessions(String token);
+
+    /** Step 17h: signs one of the caller's own sessions out, revoking its refresh token. 404 if it is not theirs. */
+    void revokeOwnSession(String token, Long sessionId);
+
+    /** Step 17h: signs out every session of the caller's account except the one making the request. Returns how many. */
+    int revokeOtherSessions(String token);
     boolean hasActiveSession(Long userId);
 }

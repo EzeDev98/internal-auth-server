@@ -29,6 +29,18 @@ public class AppConstant {
 
     public static final String TTL_EXPIRED = "TTL_EXPIRED";
 
+    /** Step 17h: the session's refresh token was deleted or ran out, so the device can no longer refresh. */
+    public static final String REFRESH_TOKEN_ENDED = "REFRESH_TOKEN_ENDED";
+
+    /** Step 17h: a sign-in past the client's device limit signed out the device used least recently. */
+    public static final String SESSION_LIMIT_REACHED = "SESSION_LIMIT_REACHED";
+
+    /** Step 17h: the user signed this device out from another of their devices. */
+    public static final String SIGNED_OUT_FROM_ANOTHER_DEVICE = "SIGNED_OUT_FROM_ANOTHER_DEVICE";
+
+    /** Step 17h: the highest per-client device limit an admin may set (client_applications.max_active_sessions). */
+    public static final int MAX_ACTIVE_SESSIONS_CEILING = 20;
+
     public static final String PASSWORD_RESET_COOLDOWN_KEY_PREFIX = "password-reset:otp-cooldown:";
 
     public static final String GENERIC_REQUEST_MESSAGE = "A verification code has been sent.";

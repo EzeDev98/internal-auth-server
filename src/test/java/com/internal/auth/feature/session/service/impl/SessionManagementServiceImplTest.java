@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static com.internal.auth.common.constant.AppConstant.ADMIN_ACTION;
@@ -47,7 +48,7 @@ class SessionManagementServiceImplTest {
 
     @Test
     void createSession_noExistingActiveSession_savesANewActiveSession() {
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(1L)).thenReturn(Optional.empty());
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(1L)).thenReturn(List.of());
         when(tokenHasher.sha256Hex("raw-token")).thenReturn("hashed-token");
 
         service.createSession(1L, "08010000000", "raw-token");
@@ -67,7 +68,7 @@ class SessionManagementServiceImplTest {
         UserSession existing = new UserSession();
         existing.setUserId(1L);
         existing.setActive(true);
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(1L)).thenReturn(Optional.of(existing));
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(1L)).thenReturn(List.of(existing));
         when(tokenHasher.sha256Hex("raw-token")).thenReturn("hashed-token");
 
         service.createSession(1L, "08010000000", "raw-token");
@@ -90,7 +91,7 @@ class SessionManagementServiceImplTest {
         existing.setUserId(1L);
         existing.setActive(true);
         existing.setTokenHash("hashed-token");
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(1L)).thenReturn(Optional.of(existing));
+        when(userSessionRepository.findByTokenHash("hashed-token")).thenReturn(Optional.of(existing));
         when(tokenHasher.sha256Hex("raw-token")).thenReturn("hashed-token");
 
         service.createSession(1L, "08010000000", "raw-token");
@@ -129,7 +130,7 @@ class SessionManagementServiceImplTest {
         UserSession session = new UserSession();
         session.setUserId(3L);
         session.setActive(true);
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(3L)).thenReturn(Optional.of(session));
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(3L)).thenReturn(List.of(session));
 
         service.invalidateActiveSessionForUser(3L);
 
@@ -139,7 +140,7 @@ class SessionManagementServiceImplTest {
 
     @Test
     void invalidateActiveSessionForUser_noActiveSession_doesNothing() {
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(3L)).thenReturn(Optional.empty());
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(3L)).thenReturn(List.of());
 
         service.invalidateActiveSessionForUser(3L);
 
@@ -153,7 +154,7 @@ class SessionManagementServiceImplTest {
         user.setInternalAuthUserId("alice");
         user.setClientApplicationId(9L);
         when(userRepository.findById(3L)).thenReturn(Optional.of(user));
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(3L)).thenReturn(Optional.empty());
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(3L)).thenReturn(List.of());
 
         service.invalidateActiveSessionForUser(3L);
 
@@ -164,7 +165,7 @@ class SessionManagementServiceImplTest {
     @Test
     void invalidateActiveSessionForUser_unknownUser_deletesNoAuthorizations() {
         when(userRepository.findById(3L)).thenReturn(Optional.empty());
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(3L)).thenReturn(Optional.empty());
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(3L)).thenReturn(List.of());
 
         service.invalidateActiveSessionForUser(3L);
 
@@ -178,7 +179,7 @@ class SessionManagementServiceImplTest {
         user.setInternalAuthUserId("bob");
         user.setClientApplicationId(9L);
         when(userRepository.findByUsernameAndClientApplicationId("bob", 9L)).thenReturn(Optional.of(user));
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(4L)).thenReturn(Optional.empty());
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(4L)).thenReturn(List.of());
 
         InvalidatedSessionResponse response = service.invalidateUserSessionByAdmin("bob", 9L);
 
@@ -194,7 +195,7 @@ class SessionManagementServiceImplTest {
         InvalidatedSessionResponse response = service.invalidateUserSessionByAdmin("ghost", 9L);
 
         assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_NOT_FOUND);
-        verify(userSessionRepository, never()).findByUserIdAndIsActiveTrue(any());
+        verify(userSessionRepository, never()).findAllByUserIdAndIsActiveTrue(any());
     }
 
     @Test
@@ -202,7 +203,7 @@ class SessionManagementServiceImplTest {
         User user = UserTestDataBuilder.aUser().withUsername("bob").build();
         user.setId(99L);
         when(userRepository.findByUsernameAndClientApplicationId("bob", 9L)).thenReturn(Optional.of(user));
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(99L)).thenReturn(Optional.empty());
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(99L)).thenReturn(List.of());
 
         InvalidatedSessionResponse response = service.invalidateUserSessionByAdmin("bob", 9L);
 
@@ -218,7 +219,7 @@ class SessionManagementServiceImplTest {
         session.setUserId(99L);
         session.setActive(true);
         when(userRepository.findByUsernameAndClientApplicationId("bob", 9L)).thenReturn(Optional.of(user));
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(99L)).thenReturn(Optional.of(session));
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(99L)).thenReturn(List.of(session));
 
         InvalidatedSessionResponse response = service.invalidateUserSessionByAdmin("bob", 9L);
 
@@ -234,21 +235,23 @@ class SessionManagementServiceImplTest {
         session.setTokenHash("old-hash");
         LocalDateTime originalCreatedAt = LocalDateTime.now().minusDays(1);
         session.setCreatedAt(originalCreatedAt);
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(5L)).thenReturn(Optional.of(session));
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(5L)).thenReturn(List.of(session));
         when(tokenHasher.sha256Hex("new-token")).thenReturn("new-hash");
 
-        service.updateSessionOnRefresh(5L, "new-token");
+        service.updateSessionOnRefresh(5L, null, "new-token", "auth-1");
 
         assertThat(session.getTokenHash()).isEqualTo("new-hash");
         assertThat(session.getCreatedAt()).isAfter(originalCreatedAt);
+        assertThat(session.getAuthorizationId()).isEqualTo("auth-1");
+        assertThat(session.getLastActiveAt()).isNotNull();
         verify(userSessionRepository).save(session);
     }
 
     @Test
     void updateSessionOnRefresh_noActiveSession_doesNothing() {
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(5L)).thenReturn(Optional.empty());
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(5L)).thenReturn(List.of());
 
-        service.updateSessionOnRefresh(5L, "new-token");
+        service.updateSessionOnRefresh(5L, null, "new-token", null);
 
         verify(userSessionRepository, never()).save(any());
     }
@@ -258,7 +261,7 @@ class SessionManagementServiceImplTest {
         UserSession session = new UserSession();
         session.setUserId(6L);
         session.setCreatedAt(LocalDateTime.now().minusDays(1));
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(6L)).thenReturn(Optional.of(session));
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(6L)).thenReturn(List.of(session));
 
         boolean result = service.hasActiveSession(6L);
 
@@ -271,7 +274,7 @@ class SessionManagementServiceImplTest {
         UserSession session = new UserSession();
         session.setUserId(6L);
         session.setCreatedAt(LocalDateTime.now().minusDays(SESSION_TTL_DAYS + 1));
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(6L)).thenReturn(Optional.of(session));
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(6L)).thenReturn(List.of(session));
 
         boolean result = service.hasActiveSession(6L);
 
@@ -282,7 +285,7 @@ class SessionManagementServiceImplTest {
 
     @Test
     void hasActiveSession_noSessionAtAll_returnsFalse() {
-        when(userSessionRepository.findByUserIdAndIsActiveTrue(6L)).thenReturn(Optional.empty());
+        when(userSessionRepository.findAllByUserIdAndIsActiveTrue(6L)).thenReturn(List.of());
 
         boolean result = service.hasActiveSession(6L);
 

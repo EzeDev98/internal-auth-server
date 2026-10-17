@@ -217,7 +217,7 @@ public class UserLoginServiceImpl implements UserLoginService {
         }
         MintedTokens tokens = mintTokens(user, clientApplicationId);
 
-        sessionManagementService.createSession(user.getId(), user.getPhoneNumber(), tokens.accessToken(), ipAddress, userAgent);
+        sessionManagementService.createSession(user.getId(), user.getPhoneNumber(), tokens.accessToken(), ipAddress, userAgent, tokens.authorizationId());
 
         return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false,
                 tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn(), tokens.refreshExpiresIn());
@@ -249,7 +249,7 @@ public class UserLoginServiceImpl implements UserLoginService {
             revokePriorAuthorizations(user.getInternalAuthUserId(), clientApplicationId);
         }
         MintedTokens tokens = mintTokens(user, clientApplicationId);
-        sessionManagementService.createSession(user.getId(), user.getPhoneNumber(), tokens.accessToken(), ipAddress, userAgent);
+        sessionManagementService.createSession(user.getId(), user.getPhoneNumber(), tokens.accessToken(), ipAddress, userAgent, tokens.authorizationId());
         return new LoginResponse(user.getId(), user.getUsername(), "Login successful.", false,
                 tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn(), tokens.refreshExpiresIn());
     }
@@ -307,6 +307,9 @@ public class UserLoginServiceImpl implements UserLoginService {
 
         ClientApplication client = clientApplicationService.getById(clientApplicationId);
 
+        // Step 17h: the access token being replaced identifies which device's session moves to the new token.
+        String previousAccessToken = authorization.getAccessToken() == null ? null : authorization.getAccessToken().getToken().getTokenValue();
+
         MintedTokens tokens;
         if (client.isRefreshTokenRotationEnabled()) {
             // Rotation (TokenSettings.reuseRefreshTokens(false)): the spent
@@ -343,7 +346,7 @@ public class UserLoginServiceImpl implements UserLoginService {
         // #invalidateSession, keyed by token hash) still finds it - without
         // this, the session row would keep pointing at the now-defunct
         // pre-refresh access token forever.
-        sessionManagementService.updateSessionOnRefresh(user.getId(), tokens.accessToken());
+        sessionManagementService.updateSessionOnRefresh(user.getId(), previousAccessToken, tokens.accessToken(), tokens.authorizationId());
 
         return new LoginResponse(user.getId(), user.getUsername(), "Token refreshed.", false,
                 tokens.accessToken(), tokens.refreshToken(), tokens.expiresIn(), tokens.refreshExpiresIn());
@@ -418,7 +421,8 @@ public class UserLoginServiceImpl implements UserLoginService {
             authorizationBuilder.attribute(SESSION_STARTED_AT_ATTRIBUTE, now.toString());
         }
 
-        authorizationService.save(authorizationBuilder.build());
+        OAuth2Authorization renewedAuthorization = authorizationBuilder.build();
+        authorizationService.save(renewedAuthorization);
 
         Long expiresIn = accessToken.getExpiresAt() == null ? null
                 : Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds();
@@ -428,7 +432,8 @@ public class UserLoginServiceImpl implements UserLoginService {
                 accessToken.getTokenValue(),
                 renewedRefreshToken.getTokenValue(),
                 expiresIn,
-                refreshExpiresIn);
+                refreshExpiresIn,
+                renewedAuthorization.getId());
     }
 
     /** Hard end of a persistent session (login time + client's max lifetime), or null when the client has no cap. */
@@ -595,7 +600,8 @@ public class UserLoginServiceImpl implements UserLoginService {
             }
         }
 
-        authorizationService.save(authorizationBuilder.build());
+        OAuth2Authorization authorization = authorizationBuilder.build();
+        authorizationService.save(authorization);
 
         Long expiresIn = accessToken.getExpiresAt() == null ? null
                 : Duration.between(accessToken.getIssuedAt(), accessToken.getExpiresAt()).getSeconds();
@@ -606,11 +612,15 @@ public class UserLoginServiceImpl implements UserLoginService {
                 accessToken.getTokenValue(),
                 refreshToken == null ? null : refreshToken.getTokenValue(),
                 expiresIn,
-                refreshExpiresIn);
+                refreshExpiresIn,
+                authorization.getId());
     }
 
-    /** Step 15B - small carrier so mintTokens can return both minted tokens plus their TTLs in seconds without a 4-arg tuple at every call site. */
-    private record MintedTokens(String accessToken, String refreshToken, Long expiresIn, Long refreshExpiresIn) {}
+    /**
+     * Step 15B - small carrier so mintTokens can return both minted tokens plus their TTLs in seconds.
+     * Step 17h: authorizationId is the oauth2_authorization row they live in, one per signed-in device.
+     */
+    private record MintedTokens(String accessToken, String refreshToken, Long expiresIn, Long refreshExpiresIn, String authorizationId) {}
 
     /**
      * Strict per-field gate: blocks login if ANY contact method the user

@@ -74,4 +74,23 @@ public class UserSession {
     @Column(name = "user_agent", length = 500)
     private String userAgent;
 
+    /**
+     * Step 17h (B-14): "Mac, Chrome", parsed from userAgent once, when the session is created
+     * (DeviceLabelParser). Null on rows created before V30; those are labelled when read.
+     */
+    @Column(name = "device_label", length = 100)
+    private String deviceLabel;
+
+    /** Step 17h: set at sign-in and on every token refresh. Null on rows created before V30. */
+    @Column(name = "last_active_at")
+    private LocalDateTime lastActiveAt;
+
+    /**
+     * Step 17h: the oauth2_authorization row (refresh token) this session was issued with, replaced on
+     * every refresh. Signing one device out deletes exactly this row, so the others keep working. Null
+     * on rows created before V30 and on sessions backfilled from a request (JwtSessionTrackingFilter).
+     */
+    @Column(name = "authorization_id", length = 100)
+    private String authorizationId;
+
 }

@@ -165,6 +165,15 @@ public class ClientApplication {
     @Column(name = "revoke_prior_sessions_on_login", nullable = false)
     private boolean revokePriorSessionsOnLogin = true;
 
+    /**
+     * Step 17h (B-14): how many devices one user may keep signed in to this client at once. 1 (default)
+     * keeps the single-session behaviour above. Above 1, a sign-in past the limit signs out the device
+     * used least recently (SessionManagementServiceImpl). More than 1 requires
+     * revokePriorSessionsOnLogin = false, or every sign-in would end the other devices anyway.
+     */
+    @Column(name = "max_active_sessions", nullable = false)
+    private int maxActiveSessions = 1;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

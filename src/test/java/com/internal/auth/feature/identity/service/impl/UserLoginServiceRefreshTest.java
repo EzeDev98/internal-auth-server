@@ -141,7 +141,7 @@ class UserLoginServiceRefreshTest {
         OAuth2RefreshToken saved = savedAuthorization().getRefreshToken().getToken();
         assertThat(saved.getTokenValue()).isEqualTo("refresh-1");
         assertThat(saved.getExpiresAt()).isBetween(before.plus(Duration.ofDays(60)), after.plus(Duration.ofDays(60)));
-        verify(sessionManagementService).updateSessionOnRefresh(1L, "new-access");
+        verify(sessionManagementService).updateSessionOnRefresh(eq(1L), any(), eq("new-access"), any());
     }
 
     @Test

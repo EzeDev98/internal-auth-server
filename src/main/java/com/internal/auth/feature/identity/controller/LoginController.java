@@ -90,7 +90,7 @@ public class LoginController {
         rateLimiterService.checkRateLimit(AppConstant.LOGIN_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_LOGIN_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_RATE_LIMIT_DURATION_MINUTES));
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
         checkAccountRateLimit(client.getId(), request.getUsername());
-        LoginResponse response = loginService.login(request, client.getId(), httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
+        LoginResponse response = loginService.login(request, client.getId(), httpRequest.getRemoteAddr(), deviceUserAgent(request, httpRequest));
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 
@@ -165,5 +165,14 @@ public class LoginController {
         }
         boolean active = sessionManagementService.hasLiveRefreshToken(request.getUsername().trim(), client.getId());
         return ResponseEntity.ok(InternalAuthApiResponse.success("Session status", new SessionStatusResponse(active)));
+    }
+
+    /**
+     * Step 17h (B-14): the User-Agent the session is labelled with. A client that signs people in from its
+     * own server sends the person's browser string in the body; otherwise the request's own header is used.
+     */
+    private static String deviceUserAgent(LoginRequest request, HttpServletRequest httpRequest) {
+        String forwarded = request.getUserAgent();
+        return forwarded != null && !forwarded.isBlank() ? forwarded : httpRequest.getHeader(HttpHeaders.USER_AGENT);
     }
 }

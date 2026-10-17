@@ -31,4 +31,6 @@ public class UpdateClientApplicationRequest {
     private Integer refreshTokenMaxLifetimeDays;
     private Boolean revokePriorSessionsOnLogin;
     private Set<String> grantTypes;
+    /** Step 17h: devices one user may keep signed in. null leaves it unchanged. */
+    private Integer maxActiveSessions;
 }

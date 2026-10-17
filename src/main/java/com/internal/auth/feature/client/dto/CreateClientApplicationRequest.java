@@ -36,9 +36,12 @@ public class CreateClientApplicationRequest {
     /** null = default (true: a new login revokes every other session for this user+client). false = allow concurrent devices/sessions. */
     private Boolean revokePriorSessionsOnLogin;
 
+    /** null = default (1: one session per user). Above 1 needs revokePriorSessionsOnLogin = false. */
+    private Integer maxActiveSessions;
+
     /** Pre-persistent-refresh-token constructor, kept so existing callers/tests compile unchanged. */
     public CreateClientApplicationRequest(String clientId, String name, String description,
                                           Set<String> redirectUris, Set<String> scopes, Set<String> grantTypes) {
-        this(clientId, name, description, redirectUris, scopes, grantTypes, null, null, null, null);
+        this(clientId, name, description, redirectUris, scopes, grantTypes, null, null, null, null, null);
     }
 }

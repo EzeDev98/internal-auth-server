@@ -43,4 +43,5 @@ public class ClientApplicationDetailResponse {
     private Integer refreshTokenTtlDays;
     private Integer refreshTokenMaxLifetimeDays;
     private boolean revokePriorSessionsOnLogin;
+    private int maxActiveSessions;
 }
