@@ -5,18 +5,7 @@ import org.springframework.http.HttpStatus;
 
 import java.util.Map;
 
-/**
- * Single unified exception for the Permission module.
- *
- * <pre>{@code
- * throw PermissionException.roleNotFound("BUYER");
- * throw PermissionException.groupNotFound("WealthMarket-Buyers");
- * throw PermissionException.emptyField("Username and role name are mandatory");
- * throw PermissionException.operationFailed("Unexpected error during role creation", cause);
- * throw PermissionException.rollbackFailed("Manual intervention required", cause);
- * throw PermissionException.of(PermissionErrorCode.USER_ROLE_PERSISTENCE_FAILED, "detail");
- * }</pre>
- */
+/** Single exception type for all permission module failures. */
 @Getter
 public class PermissionException extends RuntimeException {
 
@@ -61,8 +50,6 @@ public class PermissionException extends RuntimeException {
         this.metadata = metadata;
     }
 
-    // ── Generic factories ─────────────────────────────────────────────────────
-
     public static PermissionException of(PermissionErrorCode code) {
         return new PermissionException(code);
     }
@@ -79,8 +66,6 @@ public class PermissionException extends RuntimeException {
     public static PermissionException of(PermissionErrorCode code, Throwable cause) {
         return new PermissionException(code, cause);
     }
-
-    // ── Resource not found ────────────────────────────────────────────────────
 
     public static PermissionException roleNotFound(String detail) {
         return new PermissionException(PermissionErrorCode.ROLE_NOT_FOUND, detail);
@@ -114,8 +99,6 @@ public class PermissionException extends RuntimeException {
         return new PermissionException(PermissionErrorCode.GROUP_NOT_FOUND, detail);
     }
 
-    // ── Conflict / duplicate ──────────────────────────────────────────────────
-
     public static PermissionException alreadyExists(String detail) {
         return new PermissionException(PermissionErrorCode.ALREADY_EXISTS, detail);
     }
@@ -124,8 +107,6 @@ public class PermissionException extends RuntimeException {
     public static PermissionException duplicateRoleAssignment(String detail) {
         return new PermissionException(PermissionErrorCode.DUPLICATE_ROLE_ASSIGNMENT, detail);
     }
-
-    // ── Business rule violations / invalid input ──────────────────────────────
 
     public static PermissionException emptyField(String detail) {
         return new PermissionException(PermissionErrorCode.EMPTY_FIELD, detail);
@@ -143,10 +124,6 @@ public class PermissionException extends RuntimeException {
         return new PermissionException(PermissionErrorCode.USER_NOT_ADDED_TO_GROUP, detail);
     }
 
-    // ── External integration ──────────────────────────────────────
-
-
-
     public static PermissionException operationFailed(String detail) {
         return new PermissionException(PermissionErrorCode.PERMISSION_OPERATION_FAILED, detail);
     }
@@ -162,8 +139,6 @@ public class PermissionException extends RuntimeException {
     public static PermissionException roleAssignmentVerificationFailed(String detail) {
         return new PermissionException(PermissionErrorCode.ROLE_ASSIGNMENT_VERIFICATION_FAILED, detail);
     }
-
-    // ── Persistence / database ────────────────────────────────────────────────
 
     public static PermissionException rolePersistenceFailed(String detail) {
         return new PermissionException(PermissionErrorCode.ROLE_PERSISTENCE_FAILED, detail);
@@ -200,8 +175,6 @@ public class PermissionException extends RuntimeException {
     public static PermissionException rollbackFailed(String detail, Throwable cause) {
         return new PermissionException(PermissionErrorCode.ROLLBACK_FAILED, detail, cause);
     }
-
-    // ── System / infrastructure ───────────────────────────────────────────────
 
     public static PermissionException internalError(String detail) {
         return new PermissionException(PermissionErrorCode.INTERNAL_ERROR, detail);

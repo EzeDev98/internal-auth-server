@@ -1,9 +1,4 @@
--- Step 10C: email_verification_tokens backs EmailVerificationToken
--- (feature.identity.model), the token used to verify a User's email
--- address via a clicked/submitted link. Same shape as password_reset_tokens
--- - hash-only storage, single-use, expiring - since it's the same kind of
--- credential (a ResettableToken) doing a different job.
-
+-- Adds the email verification token table.
 CREATE TABLE email_verification_tokens (
     id         BIGSERIAL PRIMARY KEY,
     user_id    BIGINT NOT NULL,

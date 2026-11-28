@@ -2,6 +2,7 @@ package com.internal.auth.common.response;
 
 import lombok.Data;
 
+/** Generic response holder with status code, description, data and errors. */
 @Data
 public class BaseResponse {
 

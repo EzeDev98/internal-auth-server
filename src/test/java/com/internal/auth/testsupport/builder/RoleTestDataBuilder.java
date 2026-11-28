@@ -5,12 +5,7 @@ import com.internal.auth.feature.rbac.model.Role;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Roles are intentionally global across tenants in this app (a deliberate
- * product decision - see Step 14C of the test roadmap), so this builder
- * takes no clientApplicationId - Role#clientApplication exists on the
- * entity but is unused by any current service or controller.
- */
+/** Test data builder for Role. */
 public class RoleTestDataBuilder {
 
     private static final AtomicLong COUNTER = new AtomicLong();
@@ -26,7 +21,6 @@ public class RoleTestDataBuilder {
         return new RoleTestDataBuilder();
     }
 
-    /** The literal "create-admin" role - see AppConstant.ADMIN_ROLE / Roles.HAS_ADMIN. */
     public static RoleTestDataBuilder theAdminRole() {
         return new RoleTestDataBuilder()
                 .withRoleName("create-admin")

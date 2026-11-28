@@ -11,21 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
-/**
- * Represents a single password-reset OTP request lifecycle for a user.
- * The raw OTP is never persisted — only a secure hash of it, consistent
- * with how the rest of the application avoids storing sensitive secrets
- * in plaintext (see User.password, which is BCrypt-hashed).
- *
- * clientApplicationId (multi-tenant redesign, OTP/token flows step - see
- * V9 migration): phoneNumber alone is no longer a safe lookup key once the
- * same phone number can belong to accounts in different client
- * applications - PasswordResetOtpRepository's
- * findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc
- * scopes by both. Set by the caller alongside userId (OtpResetEngine's
- * populateNewOtp only fills the fields common to every ResettableOtp -
- * this one is caller-set, same reasoning as userId already was).
- */
+/** OTP issued for a password reset request. */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -44,7 +30,6 @@ public class PasswordResetOtp implements ResettableOtp {
     @Column(name = "client_application_id", nullable = false)
     private Long clientApplicationId;
 
-    // Nullable: an email-based reset (V29) is keyed by email instead.
     @Column(name = "phone_number")
     private String phoneNumber;
 

@@ -1,19 +1,4 @@
--- Step 3 (durable OAuth2AuthorizationService): replaces
--- AuthorizationServerConfig's previous InMemoryOAuth2AuthorizationService
--- (every minted token's authorization record lived only in that one JVM's
--- heap - wiped on restart, not shared across instances/behind a load
--- balancer) with JdbcOAuth2AuthorizationService. Column set matches Spring
--- Security's own reference schema exactly
--- (org/springframework/security/oauth2/server/authorization/oauth2-authorization-schema.sql),
--- translated to PostgreSQL types (BYTEA instead of BLOB). No FK on
--- registered_client_id on purpose, matching the library's own schema -
--- RegisteredClientRepository is a separate abstraction (here,
--- ClientApplicationRegisteredClientRepository over client_applications) that
--- this table deliberately doesn't assume anything about beyond the id
--- string it stores.
---
--- Dev gets the equivalent table applied via spring.sql.init.* instead (see
--- application-dev.properties) - Flyway doesn't run there.
+-- Adds the OAuth2 authorization table.
 CREATE TABLE oauth2_authorization (
     id                             VARCHAR(100) NOT NULL,
     registered_client_id           VARCHAR(100) NOT NULL,

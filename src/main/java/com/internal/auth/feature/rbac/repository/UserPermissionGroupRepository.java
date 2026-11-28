@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
+/** Repository for user to permission group mappings. */
 public interface UserPermissionGroupRepository extends JpaRepository<UserPermissionGroup, Long> {
     boolean existsByUserUsernameAndPermissionGroupGroupName(String username, String groupName);
     Optional<UserPermissionGroup> findByUserUsernameAndPermissionGroupGroupName(String username, String groupName);
@@ -27,12 +28,6 @@ public interface UserPermissionGroupRepository extends JpaRepository<UserPermiss
     @Query("DELETE FROM UserPermissionGroup upg WHERE upg.subPermissionGroup.parentGroup = :parentGroup")
     void deleteAllByParentGroup(@Param("parentGroup") PermissionGroup parentGroup);
 
-    /**
-     * Step 2D (React Admin Client plan v4): backs deleteSubGroup - removes
-     * only the UserPermissionGroup rows tied to one specific subgroup, as
-     * opposed to deleteAllByParentGroup above (every subgroup under a
-     * parent, used when the whole parent group is deleted).
-     */
     void deleteAllBySubPermissionGroup(SubPermissionGroup subPermissionGroup);
 
     List<UserPermissionGroup> findAllByUser(User user);
@@ -43,6 +38,5 @@ public interface UserPermissionGroupRepository extends JpaRepository<UserPermiss
             "WHERE userPermissionGroup.user.username = :username")
     List<PermissionGroup> findPermissionGroupsByUsername(String username);
 
-    /** Backs TenantDataWipeService - batch equivalent of deleteAllByUser_Id above. */
     long deleteAllByUser_IdIn(List<Long> userIds);
 }

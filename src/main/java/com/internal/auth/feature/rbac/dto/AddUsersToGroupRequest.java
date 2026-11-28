@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.util.List;
 
+/** Request body for adding several users to a group. */
 @Getter
 @Setter
 @AllArgsConstructor

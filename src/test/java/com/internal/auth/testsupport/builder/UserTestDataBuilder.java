@@ -4,26 +4,7 @@ import com.internal.auth.feature.identity.model.User;
 
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Fluent test-data builder for User. Entities in this codebase use plain
- * Lombok @Getter/@Setter (no @Builder), so this is hand-written rather than
- * generated - see IntegrationTestBase for the shared Postgres a built User
- * gets persisted into (via UserRepository, not this class).
- *
- * Defaults produce a valid, enabled, phone-verified local account scoped to
- * clientApplicationId=1L - override whatever a specific test cares about.
- * username/phoneNumber/email are unique only per client_application_id (see
- * User's class javadoc / the V8 migration), so the defaults include a
- * per-JVM-run counter to avoid collisions between tests that don't
- * override them.
- *
- * The default password hash is a real, valid-format BCrypt hash of the
- * literal string "not-a-real-password" - safe to embed (it protects
- * nothing), and valid enough that PasswordEncoder#matches(...) against it
- * returns false cleanly instead of throwing on a malformed hash. Tests that
- * need a specific known password to actually authenticate with must inject
- * the real PasswordEncoder bean and call withPasswordHash(encoder.encode(...)).
- */
+/** Test data builder for User. */
 public class UserTestDataBuilder {
 
     private static final AtomicLong COUNTER = new AtomicLong();
@@ -38,7 +19,6 @@ public class UserTestDataBuilder {
     private boolean enabled = true;
     private boolean emailVerified = false;
     private boolean phoneVerified = true;
-    private boolean mfaEnabled = false;
 
     private UserTestDataBuilder() {
         long n = COUNTER.incrementAndGet();
@@ -70,7 +50,6 @@ public class UserTestDataBuilder {
         return this;
     }
 
-    /** Pass an already-BCrypt-hashed value - this builder never hashes for you. */
     public UserTestDataBuilder withPasswordHash(String bcryptHash) {
         this.password = bcryptHash;
         return this;
@@ -91,11 +70,6 @@ public class UserTestDataBuilder {
         return this;
     }
 
-    public UserTestDataBuilder withMfaEnabled(boolean enabled) {
-        this.mfaEnabled = enabled;
-        return this;
-    }
-
     public User build() {
         User user = new User();
         user.setClientApplicationId(clientApplicationId);
@@ -106,7 +80,6 @@ public class UserTestDataBuilder {
         user.setEnabled(enabled);
         user.setEmailVerified(emailVerified);
         user.setPhoneVerified(phoneVerified);
-        user.setMfaEnabled(mfaEnabled);
         return user;
     }
 }

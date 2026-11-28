@@ -6,6 +6,7 @@ import com.internal.auth.feature.rbac.response.UserSubPermissionGroupResponse;
 
 import java.util.List;
 
+/** Operations for managing users' group memberships. */
 public interface UserPermissionGroupService {
     RemoveUserResponse removeUserFromPermissionGroup(String username, String groupName);
     UserPermissionGroupResponse addUserToGroup(String username, String groupName);

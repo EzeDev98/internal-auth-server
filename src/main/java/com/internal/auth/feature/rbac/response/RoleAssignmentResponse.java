@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Result of assigning a role. */
 @Getter
 @Setter
 @NoArgsConstructor

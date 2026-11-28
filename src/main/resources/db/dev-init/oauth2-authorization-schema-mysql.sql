@@ -1,11 +1,4 @@
--- Step 3 (durable OAuth2AuthorizationService): dev-only idempotent copy of
--- the standard oauth2_authorization schema JdbcOAuth2AuthorizationService
--- expects (same column set as Spring Security's own reference schema,
--- org/springframework/security/oauth2/server/authorization/oauth2-authorization-schema.sql).
--- Dev has no Flyway (see application-dev.properties), so this is applied via
--- spring.sql.init.* instead; prod gets the equivalent table from
--- V21__oauth2_authorization.sql. IF NOT EXISTS makes this safe to re-run on
--- every dev restart.
+-- Dev-only oauth2_authorization table, applied on every dev startup.
 CREATE TABLE IF NOT EXISTS oauth2_authorization (
     id                             VARCHAR(100) NOT NULL,
     registered_client_id           VARCHAR(100) NOT NULL,

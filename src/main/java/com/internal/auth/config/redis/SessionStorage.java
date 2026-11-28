@@ -7,15 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 
-/**
- * Step 11C: rebuilt on RedissonClient - the single Redis client this app
- * now uses everywhere (see RedissonConfig) - instead of a separate Spring
- * Data Redis / Lettuce RedisTemplate stack (RedisClientConnection /
- * RedisClientConfiguration, both removed). Same public method shapes as
- * before, so JwtSessionTrackingFilter (the only caller) needed no changes;
- * just backed by RBucket instead of RedisTemplate.opsForValue(), the same
- * primitive OtpResetEngine's cooldown buckets already use.
- */
+/** Redisson-backed key-value cache used for session and OTP bookkeeping. */
 @Service
 @Slf4j
 public class SessionStorage {

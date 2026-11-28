@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** Endpoints for logging out and ending sessions. */
 @AllArgsConstructor
 @RestController
 @RequestMapping("${app.title}")
@@ -45,14 +46,12 @@ public class LogoutControl {
         return ResponseEntity.ok(InternalAuthApiResponse.success(sessionManagementService.listOwnSessions(tokenFrom(authHeader))));
     }
 
-    /** Step 17h (B-14): signs out every other device on the caller's account; the caller stays signed in. */
     @DeleteMapping("/session/others")
     public ResponseEntity<InternalAuthApiResponse<SignedOutSessionsResponse>> logoutOthers(@RequestHeader("Authorization") String authHeader) {
         int signedOut = sessionManagementService.revokeOtherSessions(tokenFrom(authHeader));
         return ResponseEntity.ok(InternalAuthApiResponse.success("Signed out of other devices", new SignedOutSessionsResponse(signedOut)));
     }
 
-    /** Step 17h (B-14): signs out one of the caller's own devices. 404 when the session is not theirs or has ended. */
     @DeleteMapping("/session/{sessionId}")
     public ResponseEntity<InternalAuthApiResponse<Void>> revokeOwnSession(@RequestHeader("Authorization") String authHeader,
                                                                          @PathVariable Long sessionId) {

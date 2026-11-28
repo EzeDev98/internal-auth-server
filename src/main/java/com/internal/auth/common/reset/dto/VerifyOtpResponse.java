@@ -5,12 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * The resetToken returned here is a short-lived, single-use,
- * password-reset-only authorization token — distinct from Keycloak
- * access/refresh tokens and normal session tokens. It grants no
- * application access beyond the /password-reset/complete call.
- */
+/** Response carrying the short-lived reset token issued after OTP verification. */
 @Getter
 @Setter
 @AllArgsConstructor

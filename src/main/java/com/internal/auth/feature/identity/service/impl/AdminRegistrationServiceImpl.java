@@ -32,37 +32,7 @@ import java.util.UUID;
 import static com.internal.auth.common.constant.AppConstant.ADMIN_ROLE;
 import static com.internal.auth.common.constant.AppConstant.ADMIN_ROLE_DESCRIPTION;
 
-/**
- * Admin bootstrap registration - the equivalent of standing up Keycloak's
- * master realm admin, minus the seeding stress. Reuses RegistrationServiceImpl's
- * exact validation/uniqueness/save pattern (see that class for the shared
- * rationale on conflict-message wording and the DataIntegrityViolationException
- * backstop), with three deliberate differences:
- *
- * <p><b>Self-limiting bootstrap gate:</b> POST /api/v1/admin/register is
- * permitAll in WebSecurityConfig (there is, by definition, no bearer token
- * to present for the very first admin) - so the gate is enforced here in
- * code instead of @PreAuthorize. Open with no auth at all only until the
- * first create-admin user exists; once one does, the caller must already be
- * an authenticated admin (AuthenticationHelper#isAdmin) to create another.
- *
- * <p><b>Pre-verified contact info:</b> whichever of phoneNumber/email is
- * supplied is marked verified immediately rather than routed through
- * EmailVerificationService/PhoneVerificationService - an admin account is
- * created by (or, for the first one, in place of) someone with server
- * access, not through public self-service, and this avoids
- * LoginServiceImpl's describeUnverifiedContactMethods gate blocking the
- * admin's very first login.
- *
- * <p><b>Non-soft-fail role assignment:</b> RegistrationServiceImpl's default-
- * role wiring logs and moves on if UserService#addUserToDefaultPermissionGroup
- * doesn't return 201, because a regular user missing their default role is
- * recoverable later by an admin. That's not true here - an "admin" account
- * that silently ends up without the create-admin role would be a broken
- * account nobody could fix (no admin would exist yet to grant it) - so a
- * failure here throws and, being @Transactional, rolls back the whole
- * registration instead.
- */
+/** Registers the first admin and authenticates admins. */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -82,11 +52,6 @@ public class AdminRegistrationServiceImpl implements AdminRegistrationService {
     public AdminRegisterResponse register(AdminRegisterRequest request, Long adminClientApplicationId) {
 
         if (!authenticationHelper.isAdmin()) {
-            // Step 5 (TOCTOU fix): lock the create-admin Role row for the rest
-            // of this transaction before checking "does an admin already
-            // exist" - closes the window where two concurrent unauthenticated
-            // calls could both observe "not yet" and both succeed as the
-            // first admin. See RolesRepository#findByRoleNameForUpdate.
             ensureAdminRoleRowExists();
             rolesRepository.findByRoleNameForUpdate(ADMIN_ROLE);
             if (userRolesRepository.existsByRoleRoleName(ADMIN_ROLE)) {
@@ -149,15 +114,6 @@ public class AdminRegistrationServiceImpl implements AdminRegistrationService {
         return (value == null || value.isBlank()) ? null : value.trim();
     }
 
-    /**
-     * Step 5 (admin bootstrap race fix): guarantees the create-admin Role
-     * row exists purely so findByRoleNameForUpdate always has a row to lock
-     * on, even before any admin has ever been created. Same lazy,
-     * race-safe get-or-create pattern as
-     * ClientApplicationService#getOrCreateInternalAdminClient - existence of
-     * this row carries no authorization meaning by itself, only whether a
-     * user currently holds it does.
-     */
     private void ensureAdminRoleRowExists() {
         if (rolesRepository.existsByRoleName(ADMIN_ROLE)) {
             return;
@@ -169,9 +125,6 @@ public class AdminRegistrationServiceImpl implements AdminRegistrationService {
         try {
             rolesRepository.save(role);
         } catch (DataIntegrityViolationException e) {
-            // Lost a create-vs-create race (V20's unique constraint on
-            // role_name) - fine, the row exists now regardless of who
-            // created it.
             log.debug("Admin role row creation lost a uniqueness race at save-time - role already exists");
         }
     }

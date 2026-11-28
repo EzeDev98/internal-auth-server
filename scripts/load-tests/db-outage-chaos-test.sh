@@ -1,36 +1,6 @@
 #!/usr/bin/env bash
+# Chaos test that stops Postgres during traffic and checks the service recovers.
 set -uo pipefail
-
-# Step 19C: basic chaos test. Kills Postgres mid-traffic (via `docker
-# compose stop`, run from the repo root so it resolves compose.yaml's
-# `postgres` service directly - no need to guess a container name) and
-# confirms the app degrades to 503s rather than hanging or crashing,
-# then confirms it recovers cleanly once Postgres comes back.
-#
-# This targets the Step 19C fix: GlobalExceptionHandler.handleDataAccessException
-# now maps any DataAccessException that escapes uncaught (connection pool
-# exhaustion, CannotCreateTransactionException, etc.) to 503 instead of
-# a generic 500. Every OTHER DataAccessException this app throws is
-# already caught and converted inside its own service method before
-# reaching that handler, so this chaos scenario is the one thing that
-# actually exercises it.
-#
-# HikariCP's default connection-timeout is 30s (no override in this
-# repo's application-prod.properties), so OUTAGE_SECONDS must exceed
-# that or every in-flight/pooled request could still succeed and this
-# test would prove nothing.
-#
-# Requires: the app running against THIS repo's docker-compose Postgres
-# (not the host MySQL local dev normally uses - see compose.yaml's
-# comment on why that service is `org.springframework.boot.ignore`'d),
-# and a login-capable client + user (same convention as
-# login-load-test.js / signing-key-rotation-load-test.js).
-#
-# Run from the repo root (so `docker compose` finds compose.yaml):
-#   BASE_URL=http://localhost:8080 \
-#   CLIENT_ID=... CLIENT_SECRET=... \
-#   LOGIN_USERNAME=... LOGIN_PASSWORD=... \
-#   ./scripts/load-tests/db-outage-chaos-test.sh
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
 CLIENT_ID="${CLIENT_ID:?must be set}"
@@ -38,10 +8,10 @@ CLIENT_SECRET="${CLIENT_SECRET:?must be set}"
 LOGIN_USERNAME="${LOGIN_USERNAME:?must be set}"
 LOGIN_PASSWORD="${LOGIN_PASSWORD:?must be set}"
 
-OUTAGE_SECONDS="${OUTAGE_SECONDS:-45}"        # must exceed Hikari's 30s connection-timeout
+OUTAGE_SECONDS="${OUTAGE_SECONDS:-45}"
 POLL_INTERVAL_SECONDS="${POLL_INTERVAL_SECONDS:-3}"
 RECOVERY_TIMEOUT_SECONDS="${RECOVERY_TIMEOUT_SECONDS:-60}"
-MAX_ACCEPTABLE_LATENCY_SECONDS="${MAX_ACCEPTABLE_LATENCY_SECONDS:-32}" # "hanging" threshold
+MAX_ACCEPTABLE_LATENCY_SECONDS="${MAX_ACCEPTABLE_LATENCY_SECONDS:-32}"
 
 AUTH_HEADER="Authorization: Basic $(printf '%s' "${CLIENT_ID}:${CLIENT_SECRET}" | base64)"
 LOGIN_URL="${BASE_URL}/api/v1/auth/login"
@@ -58,7 +28,7 @@ call_login() {
         -d "${LOGIN_BODY}"
 }
 
-echo "== Step 19C chaos test: Postgres outage against ${BASE_URL} =="
+echo "== Chaos test: Postgres outage against ${BASE_URL} =="
 
 echo "-- Warm-up: confirming baseline 200s before the outage --"
 for _ in 1 2 3; do

@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Result of invalidating a session. */
 @Getter
 @Setter
 @AllArgsConstructor

@@ -27,14 +27,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 8B. Uses the real SecretEncryptionService (not a mock) - the point
- * of the "encrypted persistence round trip" and "JWKSet cache correctness"
- * items is that the actual encrypt/decrypt and PEM/JWK plumbing works, not
- * just that some method was called - so only SigningKeyRepository is
- * mocked. Same test-only AES key SecretEncryptionServiceTest and
- * application-test.properties already use.
- */
+/** Unit tests for SigningKeyServiceImpl. */
 class SigningKeyServiceImplTest {
 
     private static final String TEST_ENCRYPTION_KEY = "iak3c/+SZanL/YrmpeN6g+bPWpaiOWm6VMng3kZ9Jlk=";
@@ -192,9 +185,6 @@ class SigningKeyServiceImplTest {
 
     @Test
     void jwkSet_noLongerIncludesAKey_onceItHasBeenRetiredPastTheGracePeriod() {
-        // findByStatus(ACTIVE) simply never returns a RETIRED row - this is
-        // what actually makes a token still bearing that kid fail
-        // verification once the grace period has elapsed.
         SigningKey stillCurrent = SigningKeyTestDataBuilder.aSigningKey()
                 .withKid("new-kid")
                 .asCurrent()
@@ -218,7 +208,6 @@ class SigningKeyServiceImplTest {
         }
     }
 
-    /** Mirrors SigningKeyServiceImpl's own private encodeToPemBase64 exactly, so a test fixture is indistinguishable from a real one. */
     private static String toPemBase64(KeyPair keyPair) {
         String base64Der = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
         StringBuilder pem = new StringBuilder();

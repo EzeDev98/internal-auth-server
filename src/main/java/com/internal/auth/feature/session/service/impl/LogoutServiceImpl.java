@@ -16,6 +16,7 @@ import org.springframework.security.oauth2.server.authorization.OAuth2Authorizat
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.stereotype.Service;
 
+/** Logs users out and ends their sessions. */
 @Service
 public class LogoutServiceImpl implements LogoutService {
 
@@ -43,23 +44,6 @@ public class LogoutServiceImpl implements LogoutService {
         }
 
         try {
-
-            // Step 15D: revoke the OAuth2Authorization record this access
-            // token belongs to - and with it, whatever refresh token
-            // mintTokens() minted alongside it on the same row - BEFORE
-            // the UserSession check below, and regardless of whether that
-            // check finds anything. Without this, "logout" only ever
-            // deleted the bookkeeping UserSession row; the actual
-            // credential this session was built on - specifically its
-            // refresh token - stayed fully valid until its own TTL
-            // expired, so a client (or anyone holding a copy of that
-            // refresh token) could mint a brand new access token
-            // immediately after "logging out", making logout not actually
-            // end the session. Best-effort and null-safe: a Keycloak-
-            // issued legacy token was never persisted in this table to
-            // begin with, so findByToken correctly returns null for one
-            // and logout proceeds via the UserSession path exactly as it
-            // did before this change.
             OAuth2Authorization authorization = authorizationService.findByToken(token, OAuth2TokenType.ACCESS_TOKEN);
             if (authorization != null) {
                 authorizationService.remove(authorization);
@@ -82,10 +66,6 @@ public class LogoutServiceImpl implements LogoutService {
         }
     }
 
-    /**
-     * "Sign out everywhere". Unlike logout(), failures are thrown rather than
-     * folded into a 200 body, so the caller sees a real HTTP error.
-     */
     @Transactional
     @Override
     public LogoutResponse logoutAll(String token) {

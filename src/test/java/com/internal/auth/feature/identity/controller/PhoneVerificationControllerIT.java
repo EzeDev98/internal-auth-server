@@ -25,14 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 12A (PhoneVerificationController slice). Both /verify-phone and
- * /resend-phone-verification require the same HTTP Basic client-credential
- * header (see the controller's own class Javadoc). The real OTP row for
- * the happy path is built with OtpResetEngine.populateNewOtp - the exact
- * production code path PhoneVerificationServiceImpl itself uses - so the
- * raw OTP submitted here really does have to match its stored hash.
- */
+/** Integration tests for PhoneVerificationController. */
 class PhoneVerificationControllerIT extends IntegrationTestBase {
 
     @Autowired

@@ -11,6 +11,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Unit tests for SelfIssuedJwtRolesConverter. */
 class SelfIssuedJwtRolesConverterTest {
 
     private final SelfIssuedJwtRolesConverter converter = new SelfIssuedJwtRolesConverter();
@@ -47,9 +48,6 @@ class SelfIssuedJwtRolesConverterTest {
 
     @Test
     void convert_duplicateRoleNamesAreNotDoubleCounted() {
-        // extractAuthorities collects into a Set - confirm that's real, not
-        // incidental: a caller relying on hasRole(...) doesn't care, but one
-        // iterating getAuthorities() by count would.
         Jwt jwt = jwtWithRoles(List.of("admin", "ADMIN", "Admin"));
 
         var token = converter.convert(jwt);

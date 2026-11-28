@@ -1,12 +1,2 @@
--- Client secret persistent reveal (admin console parity with Keycloak's
--- Credentials tab). client_secret_hash (V4) stays the only value ever
--- used to authenticate a client - this column is purely additive, so the
--- secret can also be shown/copied from the admin console any time, not
--- just once at creation/rotation. Encrypted (not hashed) with the same
--- AES-256-GCM key already protecting signing_key.encrypted_private_key
--- (see SecretEncryptionService) - reversible on purpose, since the whole
--- point is to decrypt it back for display. Nullable: existing clients
--- created before this column existed have no recoverable secret (only
--- its one-way hash was ever stored) - regenerating is still their only
--- path to a viewable secret, same as before this change.
+-- Adds the encrypted client secret column.
 ALTER TABLE client_applications ADD COLUMN client_secret_encrypted TEXT;

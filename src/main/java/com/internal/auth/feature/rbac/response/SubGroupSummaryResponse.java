@@ -7,10 +7,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-/**
- * List-row shape for GET ${app.title}/groups/{id}/subgroups (Step 2D,
- * React Admin Client plan v4).
- */
+/** List row for a sub-group. */
 @Getter
 @Setter
 @NoArgsConstructor

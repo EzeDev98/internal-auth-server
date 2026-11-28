@@ -5,14 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Request body for POST ${app.title}/users (Step 2G). Same shape as
- * RegisterRequest/AdminRegisterRequest (phoneNumber/email both optional
- * individually, at least one required - see
- * RegistrationValidator#validateContactInfoPresent) - kept as its own type
- * rather than reused so this admin-create flow can evolve independently of
- * self-registration and the admin-bootstrap flow.
- */
+/** Request body for an admin creating a user. */
 @Getter
 @Setter
 @NoArgsConstructor

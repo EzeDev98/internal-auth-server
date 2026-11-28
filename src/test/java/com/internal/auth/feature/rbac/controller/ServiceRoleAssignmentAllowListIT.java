@@ -26,34 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.junit.jupiter.api.Tag;
 
-/**
- * Step 13B: POST /service/users/{username}/roles's own fail-closed
- * app.service-role-assignment.allowed-roles gate (Stage 1 assessment,
- * "Immediate Next Steps" #3 - see PermissionController's own class Javadoc
- * and constructor: this endpoint used to let any caller holding the admin
- * authority grant ANY role, including an admin-tier one, to any user; now
- * nothing is assignable unless an operator explicitly lists it).
- *
- * Deliberately does NOT override app.service-role-assignment.allowed-roles
- * (no @DynamicPropertySource here, unlike PermissionControllerAdminHappyPathIT) -
- * this class exercises the real production default straight from
- * application.properties (empty), so "even a genuinely admin-authenticated,
- * otherwise-valid request is rejected" is proven against the actual shipped
- * configuration, not a property this test class introduced. The caller here
- * carries a real create-admin token (passes @PreAuthorize(Roles.HAS_ADMIN)
- * cleanly), so the 403 below can only come from the allow-list check inside
- * the method body itself - there's nothing else left in the chain that
- * could produce it for an admin caller.
- *
- * The allow-listed success case (an operator-configured role IS permitted)
- * is already covered by PermissionControllerAdminHappyPathIT's
- * assignRoleToUserForServiceToService test (Step 13A), which sets
- * app.service-role-assignment.allowed-roles via its own
- * @DynamicPropertySource - not repeated here as a separate test class/
- * Spring context, since a single @DynamicPropertySource value is fixed for
- * a whole test class and can't represent both "empty" and "allow-listed"
- * in one context.
- */
+/** Verifies the service role assignment allow-list. */
 @Tag("security-boundary")
 class ServiceRoleAssignmentAllowListIT extends IntegrationTestBase {
 

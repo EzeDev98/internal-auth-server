@@ -4,19 +4,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-/**
- * Step 17h (B-14): a short name for the device behind a User-Agent, for a "devices signed in"
- * screen: "Mac, Chrome", "iPhone, Safari", "Windows PC, Edge". A User-Agent cannot tell a MacBook
- * from an iMac, so the label never claims more than the string says. Computed once, when the
- * session is created, and stored in user_sessions.device_label.
- */
+/** Builds a short device label from a User-Agent header. */
 public final class DeviceLabelParser {
 
     public static final String UNKNOWN_DEVICE = "Unknown device";
 
     private static final String SEPARATOR = ", ";
 
-    /* Order matters: an iPhone string also says "Mac OS X", an Android one also says "Linux". */
     private static final List<Map.Entry<Pattern, String>> PLATFORMS = List.of(
             Map.entry(Pattern.compile("iPhone"), "iPhone"),
             Map.entry(Pattern.compile("iPad"), "iPad"),
@@ -26,7 +20,6 @@ public final class DeviceLabelParser {
             Map.entry(Pattern.compile("Macintosh|Mac OS X"), "Mac"),
             Map.entry(Pattern.compile("Linux"), "Linux"));
 
-    /* Edge and Opera also say "Chrome", and Chrome also says "Safari", so the specific ones come first. */
     private static final List<Map.Entry<Pattern, String>> BROWSERS = List.of(
             Map.entry(Pattern.compile("Edg(A|iOS)?/"), "Edge"),
             Map.entry(Pattern.compile("OPR/"), "Opera"),
@@ -37,7 +30,6 @@ public final class DeviceLabelParser {
     private DeviceLabelParser() {
     }
 
-    /** "Mac, Chrome"; one part when only one is known; {@link #UNKNOWN_DEVICE} when neither is. */
     public static String label(String userAgent) {
         if (userAgent == null || userAgent.isBlank()) {
             return UNKNOWN_DEVICE;

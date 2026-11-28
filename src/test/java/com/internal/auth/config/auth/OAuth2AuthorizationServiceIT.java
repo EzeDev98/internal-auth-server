@@ -21,16 +21,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Step 9E. AuthorizationServerConfig's own javadoc on the
- * authorizationService() bean explains exactly why this matters: a wrong
- * ObjectMapper module registration on JdbcOAuth2AuthorizationService
- * "compiles fine but throws at runtime the first time a real authorization
- * round-trips through the database" - not something a mocked collaborator
- * can ever catch. This exercises the real bean, against real Postgres
- * (V21's oauth2_authorization table), saving and reading an authorization
- * back through both findById and findByToken.
- */
+/** Verifies OAuth2 authorizations are persisted to the database. */
 class OAuth2AuthorizationServiceIT extends IntegrationTestBase {
 
     @Autowired

@@ -7,12 +7,7 @@ import lombok.Setter;
 
 import java.util.List;
 
-/**
- * Pagination envelope for GET ${app.title}/client-applications (Step 2B,
- * React Admin Client plan v4) - same hand-rolled shape as
- * PagedUsersResponse (Step 2A) rather than serializing Spring Data's Page
- * directly.
- */
+/** Paged list of client applications. */
 @Getter
 @Setter
 @NoArgsConstructor

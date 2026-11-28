@@ -15,23 +15,7 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Step 3C - a static, textual guard against the specific regression this
- * app's credential-storage policy exists to prevent: comparing a
- * password / OTP / client-secret hash with .equals() instead of going
- * through PasswordEncoder#matches(...) (see TokenHasher's javadoc for the
- * full rationale of what belongs behind BCrypt vs SHA-256).
- *
- * <p>This is deliberately a blunt textual scan, not a real static-analysis
- * tool - it exists to fail loudly the day someone pastes in a .equals()
- * check against one of these fields, not to catch every conceivable
- * disguised variant. {@link #ALLOWED_LINES} is the one known, reviewed
- * exception found when this test was written: comparing two plaintext
- * user-input fields (new-password vs confirm-password) for equality is not
- * a credential lookup and has nothing to do with this policy. Widen that
- * set only after checking why a new match showed up - not to silence a
- * genuine regression.
- */
+/** Fails when a credential hash is compared with equals instead of a password encoder. */
 class CredentialEqualityGuardTest {
 
     private static final Path MAIN_SOURCE_ROOT = Paths.get("src", "main", "java");

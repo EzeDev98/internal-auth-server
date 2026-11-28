@@ -12,7 +12,6 @@ import com.internal.auth.feature.identity.dto.request.RefreshTokenRequest;
 import com.internal.auth.feature.identity.dto.request.SessionStatusRequest;
 import com.internal.auth.feature.session.dto.SessionStatusResponse;
 import com.internal.auth.feature.session.service.SessionManagementService;
-import com.internal.auth.feature.identity.dto.request.VerifyLoginOtpRequest;
 import com.internal.auth.feature.identity.dto.response.LoginResponse;
 import com.internal.auth.feature.identity.service.UserLoginService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,23 +29,10 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.Duration;
 
-/**
- * Step 11A/11E. Mapped under the "${app.title}" property, same base as
- * RegistrationController - see that class's javadoc for why this reverted
- * from a hardcoded "/api/v1/auth" literal back to the property (API-contract
- * review, step 1): WebSecurityConfig now builds its own permitAll() matcher
- * paths from the same "app.title" property, so the two can't drift apart
- * regardless of representation.
- *
- * Multi-tenant redesign: both "/login" and "/login/verify-otp" now
- * require the same HTTP Basic client-credential header
- * RegistrationController resolves (see its Javadoc for the full
- * rationale) - "/login/verify-otp"'s login-MFA OTP lookup is scoped by
- * client_application_id now too (see LoginServiceImpl's class Javadoc).
- */
+/** Endpoints for login, token refresh, session status and password change. */
 @RestController
 @RequestMapping("${app.title}/auth")
-@Tag(name = "Login API", description = "Local credential authentication with optional MFA step-up (Stage 3/4 Steps 11A/11E)")
+@Tag(name = "Login API", description = "Local credential authentication")
 @RequiredArgsConstructor
 public class LoginController {
 
@@ -56,13 +42,6 @@ public class LoginController {
     private final SessionManagementService sessionManagementService;
     private final PasswordChangeService passwordChangeService;
 
-    /**
-     * Step 17g (B-02): a signed-in user changes their own password. The calling app proves who it is
-     * with its Basic client credentials and names the user, as /session-status does. A wrong current
-     * password is a 400 "Incorrect password.", never a 401 (callers read 401 as "session over"). The
-     * user's session is not ended; see PasswordChangeService. The login's per-account rate limit
-     * applies, so the current password cannot be guessed through this door either.
-     */
     @PostMapping("/change-password")
     public ResponseEntity<InternalAuthApiResponse<Void>> changePassword(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
@@ -94,18 +73,6 @@ public class LoginController {
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 
-    /**
-     * Step 4 (account-aware rate limiting): the IP-keyed check above stops a
-     * single attacker hammering the endpoint from one address, but does
-     * nothing against a distributed credential-stuffing attack that spreads
-     * the same username's password guesses across many IPs - each IP stays
-     * under its own limit while the account itself gets hit continuously.
-     * Keyed by (client_application_id, username) rather than username
-     * alone, matching the multi-tenant redesign - usernames are only
-     * unique per-tenant, so two different tenants' accounts must not share
-     * a lockout bucket. A blank/missing username is left to loginService's
-     * own validation - nothing meaningful to key a per-account limit on yet.
-     */
     private void checkAccountRateLimit(Long clientApplicationId, String username) {
         if (username == null || username.isBlank()) {
             return;
@@ -115,26 +82,6 @@ public class LoginController {
                 Duration.ofMinutes(AppConstant.LOGIN_ACCOUNT_RATE_LIMIT_DURATION_MINUTES));
     }
 
-    @PostMapping("/login/verify-otp")
-    public ResponseEntity<InternalAuthApiResponse<LoginResponse>> verifyLoginOtp(
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
-            @RequestBody VerifyLoginOtpRequest request,
-            HttpServletRequest httpRequest) {
-        rateLimiterService.checkRateLimit(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_LOGIN_OTP_VERIFY_REQUEST, Duration.ofMinutes(AppConstant.LOGIN_OTP_VERIFY_RATE_LIMIT_DURATION_MINUTES));
-        ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
-        LoginResponse response = loginService.verifyLoginOtp(request, client.getId(), httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
-        return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
-    }
-
-    /**
-     * Step 15C - redeems a refresh token minted by a previous successful
-     * login for a new access token (and a new refresh token - rotation,
-     * see ClientApplicationRegisteredClientRepository's TokenSettings
-     * javadoc). Same HTTP Basic client-credential requirement as
-     * login()/verifyLoginOtp() above - the resolved client_application_id
-     * is what LoginServiceImpl#refreshToken checks the redeemed token
-     * actually belongs to, not just any authenticated client.
-     */
     @PostMapping("/refresh-token")
     public ResponseEntity<InternalAuthApiResponse<LoginResponse>> refreshToken(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
@@ -146,13 +93,6 @@ public class LoginController {
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));
     }
 
-    /**
-     * Server-to-server: tells an integrating app whether one of its own users still holds a live
-     * refresh token here. The app uses it to notice that an admin signed the user out in this
-     * console (which deletes those tokens), so its own "already signed in" record can be released.
-     * Same HTTP Basic client-credential requirement as login(); the user is looked up within the
-     * calling client only.
-     */
     @PostMapping("/session-status")
     public ResponseEntity<InternalAuthApiResponse<SessionStatusResponse>> sessionStatus(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
@@ -167,10 +107,6 @@ public class LoginController {
         return ResponseEntity.ok(InternalAuthApiResponse.success("Session status", new SessionStatusResponse(active)));
     }
 
-    /**
-     * Step 17h (B-14): the User-Agent the session is labelled with. A client that signs people in from its
-     * own server sends the person's browser string in the body; otherwise the request's own header is used.
-     */
     private static String deviceUserAgent(LoginRequest request, HttpServletRequest httpRequest) {
         String forwarded = request.getUserAgent();
         return forwarded != null && !forwarded.isBlank() ? forwarded : httpRequest.getHeader(HttpHeaders.USER_AGENT);

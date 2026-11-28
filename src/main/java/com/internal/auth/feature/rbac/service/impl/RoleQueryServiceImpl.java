@@ -20,31 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/**
- * Step 2C (React Admin Client plan v4). getRoleDetail's response carries
- * three distinct, separately-populated pieces of "what this role is
- * connected to" rather than one unified "permissions" list, because this
- * codebase currently has two unrelated concepts that both use the word
- * "permission":
- *
- * <p>- permissions: Role -> Permission via RolePermissionMapping (Step
- * 13A) - the traditional RBAC sense (actions this role grants). Currently
- * always empty for every role in practice - Step 13A's own Javadoc notes
- * this join is "deliberately not yet wired into ... any controller", i.e.
- * nothing in this codebase currently writes to it. Included anyway since
- * it's the semantically correct field and the join already exists - it
- * starts populating for free once a future step wires up assignment.
- *
- * <p>- permissionGroups: Role -> PermissionGroup/SubPermissionGroup via
- * RolePermissionGroupMapping - despite the name, PermissionGroup is a
- * grouping of USERS (see its class Javadoc), not a set of actions. This is
- * the actually-populated join today (via POST /groups/{groupName}/roles
- * and .../subgroups/{subGroupName}/roles) - "which user-groups have this
- * role", not "what this role can do".
- *
- * <p>- usersInRole: Role -> User via UserRole (POST /users/{username}/roles)
- * - users directly assigned the role, independent of any group membership.
- */
+/** Queries roles with their permissions and users. */
 @Service
 @RequiredArgsConstructor
 public class RoleQueryServiceImpl implements RoleQueryService {

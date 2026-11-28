@@ -7,15 +7,7 @@ import lombok.Setter;
 
 import java.util.Set;
 
-/**
- * Request body for PATCH ${app.title}/client-applications/{clientId}
- * (Step 2B, React Admin Client plan v4). Null fields are left unchanged;
- * redirectUris/scopes are replaced wholesale when non-null (an empty set
- * clears them), not merged - same partial-patch convention as
- * AdminUpdateUserRequest (Step 2A). The secret is not editable here. grantTypes, when
- * non-null, replaces the set wholesale, subject to the safeguards in
- * ClientApplicationServiceImpl#validateGrantTypes.
- */
+/** Request body for updating a client application. */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -31,6 +23,5 @@ public class UpdateClientApplicationRequest {
     private Integer refreshTokenMaxLifetimeDays;
     private Boolean revokePriorSessionsOnLogin;
     private Set<String> grantTypes;
-    /** Step 17h: devices one user may keep signed in. null leaves it unchanged. */
     private Integer maxActiveSessions;
 }

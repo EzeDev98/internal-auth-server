@@ -6,20 +6,7 @@ import org.springframework.http.HttpStatus;
 import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Tag;
 
-/**
- * Step 5B - these deprecated exception classes (kept only for source
- * compatibility - see each class's {@code @deprecated} javadoc pointing at
- * its PermissionException factory replacement) all take an HttpStatus
- * constructor parameter that looks like it controls the response status.
- * It doesn't - every one of them silently discards it and derives the real
- * status from a fixed PermissionErrorCode instead (see each constructor).
- *
- * <p>These tests lock in that real, current behavior - including
- * deliberately passing a DIFFERENT status than the one that actually comes
- * out, to make the "the parameter is ignored" trap impossible to miss - so
- * nobody "fixes" a call site based on the misleading constructor signature
- * before these classes are actually removed.
- */
+/** Unit tests for the deprecated permission exception subclasses. */
 @Tag("security-boundary")
 class DeprecatedPermissionExceptionSubclassesTest {
 
@@ -68,9 +55,6 @@ class DeprecatedPermissionExceptionSubclassesTest {
 
     @Test
     void notFoundException_ignoresPassedStatus_actuallyMapsToGroupNotFound() {
-        // Not a typo: NotFoundException's constructor hardcodes
-        // PermissionErrorCode.GROUP_NOT_FOUND regardless of what this
-        // generically-named class's own name suggests.
         NotFoundException ex = new NotFoundException("not found", HttpStatus.I_AM_A_TEAPOT);
 
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);

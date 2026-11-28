@@ -39,61 +39,18 @@ import java.util.stream.Collectors;
 
 import static com.internal.auth.common.constant.AppConstant.*;
 
-/**
- * Step 11B: session lookups are keyed on userId, not phoneNumber. Was
- * originally phoneNumber-keyed throughout (findByPhoneNumberAndIsActiveTrue)
- * - broke silently for any email-only user (phoneNumber optional since
- * Stage 2) once JwtSessionTrackingFilter started passing a null
- * phoneNumber into createSession, since user_sessions.phone_number was NOT
- * NULL: every authenticated request for such a user hit a swallowed
- * DataIntegrityViolationException inside the filter, so session tracking
- * silently never worked for that user - and separately,
- * PasswordResetServiceImpl's post-reset session invalidation silently
- * no-opped for them too (a real security gap - a password reset should
- * always force logout of the old session). userId is always present (NOT
- * NULL), so it's the correct key regardless of which contact methods a
- * user has. phoneNumber is retained on UserSession as optional,
- * informational-only data, no longer used for lookups.
- *
- * invalidateUserSessionByAdmin takes username (mandatory on every account)
- * rather than phoneNumber, resolving it to a userId via UserRepository -
- * the same reasoning UserSessionController's endpoint follows.
- *
- * This is also the prerequisite for Step 11B's other decision - scoping
- * sessions per (user, application) once Step 12 exists: userId is the
- * anchor a future clientApplicationId column pairs with, not phoneNumber.
- *
- * Multi-tenant redesign, sessions step: findByUserIdAndIsActiveTrue and
- * findByTokenHash were already unambiguous (see SessionManagementService's
- * class Javadoc) - no schema change needed here. The one real fix is
- * invalidateUserSessionByAdmin, which now takes clientApplicationId to
- * scope its username lookup, plus the new invalidateActiveSessionForUser
- * for callers that already have a userId and shouldn't go through an
- * ambiguous username lookup at all.
- *
- * Step 17h (B-14): one session per signed-in device. A client application
- * allows max_active_sessions of them per user (default 1, which keeps the
- * single-session behaviour exactly: a new sign-in replaces the old row).
- * Above 1, a sign-in past the limit signs out the device used least
- * recently: its row is closed and its refresh token (authorization_id)
- * deleted, so the other devices keep working. Each row carries a device
- * label, the last sign-in or refresh time, and the authorization it was
- * issued with. Lookups that used to expect one active row now take the list.
- */
+/** Creates, checks and invalidates user sessions. */
 @Service
 public class SessionManagementServiceImpl implements SessionManagementService {
 
     private static final Logger log = LoggerFactory.getLogger(SessionManagementServiceImpl.class);
     private static final int SINGLE_SESSION = 1;
 
-    // A token counts as live while its refresh token is unexpired, or, for a client that issues no refresh
-    // token, while its access token is.
     private static final String LIVE_AUTHORIZATION_IDS_SQL =
             "SELECT id FROM oauth2_authorization WHERE principal_name = ? AND registered_client_id = ? AND ("
                     + "(refresh_token_value IS NOT NULL AND (refresh_token_expires_at IS NULL OR refresh_token_expires_at > ?)) "
                     + "OR (refresh_token_value IS NULL AND (access_token_expires_at IS NULL OR access_token_expires_at > ?)))";
 
-    // A session recorded before V30 has no authorization_id: its refresh token is the one no active session claims.
     private static final String DELETE_UNCLAIMED_AUTHORIZATIONS_SQL =
             "DELETE FROM oauth2_authorization WHERE principal_name = ? AND registered_client_id = ? AND id NOT IN "
                     + "(SELECT authorization_id FROM user_sessions WHERE user_id = ? AND is_active = TRUE AND authorization_id IS NOT NULL)";
@@ -121,13 +78,6 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         createSession(userId, phoneNumber, token, null, null, null);
     }
 
-    /**
-     * Step 2E (React Admin Client plan v4): same as the three-arg overload
-     * above, plus the caller's IP/User-Agent, captured for the admin
-     * Sessions - List screen this backs. Used by JwtSessionTrackingFilter,
-     * which backfills a row for a token it has not seen; it knows no
-     * authorization, so a client allowing several devices ignores it.
-     */
     @Override
     @Transactional
     public void createSession(Long userId, String phoneNumber, String token, String ipAddress, String userAgent) {
@@ -139,16 +89,12 @@ public class SessionManagementServiceImpl implements SessionManagementService {
     public void createSession(Long userId, String phoneNumber, String token, String ipAddress, String userAgent, String authorizationId) {
         String tokenHash = tokenHasher.sha256Hex(token);
         if (userSessionRepository.findByTokenHash(tokenHash).isPresent()) {
-            // Same token already tracked (sign-in or refresh got there first), or already signed out:
-            // never open a second row for it.
             return;
         }
 
         User user = userRepository.findById(userId).orElse(null);
         int limit = maxActiveSessions(user);
         if (limit > SINGLE_SESSION && authorizationId == null) {
-            // Several devices: a session is recorded at sign-in with its authorization. A request with a token
-            // nobody tracks (one a refresh already replaced) must not appear as another device.
             log.debug("Not backfilling a session for user id {}: client allows {} devices and records them at sign-in", userId, limit);
             return;
         }
@@ -285,12 +231,6 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         return others.size();
     }
 
-    /**
-     * Keeps the session row pointing at the token now in use, so a later logout (keyed by token hash)
-     * still finds it, and records the refresh as activity. Found by the access token being replaced, so
-     * with several devices the right row moves. The row is written on every refresh anyway, so
-     * lastActiveAt changes at most once per access-token lifetime and needs no separate throttle.
-     */
     @Override
     @Transactional
     public void updateSessionOnRefresh(Long userId, String previousAccessToken, String newToken, String authorizationId) {
@@ -318,11 +258,6 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         return !liveSessions(userId, userRepository.findById(userId).orElse(null)).isEmpty();
     }
 
-    /**
-     * The user's sessions that can still be used, most recently active first. Closes the rest on the
-     * way: past the session TTL, or (when the session knows its authorization) whose refresh token was
-     * deleted or ran out.
-     */
     private List<UserSession> liveSessions(Long userId, User user) {
         List<UserSession> active = userSessionRepository.findAllByUserIdAndIsActiveTrue(userId);
         if (active.isEmpty()) {
@@ -347,7 +282,6 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         return live;
     }
 
-    /** Past the client's limit, signs out the devices used least recently. The session just opened always stays. */
     private void signOutBeyondLimit(User user, int limit, UserSession justOpened) {
         List<UserSession> live = liveSessions(justOpened.getUserId(), user);
         int excess = live.size() - limit;
@@ -374,7 +308,6 @@ public class SessionManagementServiceImpl implements SessionManagementService {
                 user.getInternalAuthUserId(), String.valueOf(user.getClientApplicationId()), now, now));
     }
 
-    /** Deletes the refresh token of this one session, so only this device is signed out. */
     private void revokeAuthorization(User user, UserSession session) {
         if (session.getAuthorizationId() != null) {
             jdbcTemplate.update("DELETE FROM oauth2_authorization WHERE id = ?", session.getAuthorizationId());
@@ -393,7 +326,6 @@ public class SessionManagementServiceImpl implements SessionManagementService {
                 .orElseThrow(() -> new BadRequestException("No active session found"));
     }
 
-    /** The single-session fallback for a refresh whose previous access token no row recognises. */
     private Optional<UserSession> onlyActiveSession(Long userId) {
         List<UserSession> active = userSessionRepository.findAllByUserIdAndIsActiveTrue(userId);
         return active.size() == 1 ? Optional.of(active.get(0)) : Optional.empty();
@@ -432,13 +364,6 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         return value.atZone(ZoneId.systemDefault()).toInstant();
     }
 
-    /**
-     * The session row must never expire before the refresh token it tracks,
-     * otherwise a client with a long-lived (persistent) refresh token would
-     * be cut off while its refresh token is still valid. Uses the larger of
-     * the fixed SESSION_TTL_DAYS floor and the client's effective refresh
-     * token TTL (per-client override, else the global default).
-     */
     private long resolveSessionTtlDays(User user) {
         long refreshTtlDays = globalRefreshTokenTtlDays;
         if (user != null && user.getClientApplicationId() != null) {
@@ -450,11 +375,6 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         return Math.max(SESSION_TTL_DAYS, refreshTtlDays);
     }
 
-    /**
-     * Deletes the user's refresh-token authorizations for their own client. Without this, closing the
-     * tracking row does not stop a stored refresh token from minting new access tokens. Access tokens
-     * already issued stay valid until their own short expiry.
-     */
     private void revokeAuthorizations(User user) {
         if (user == null || user.getInternalAuthUserId() == null || user.getClientApplicationId() == null) {
             return;
@@ -508,12 +428,6 @@ public class SessionManagementServiceImpl implements SessionManagementService {
         return new PagedAdminSessionsResponse(content, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
-    // Step 10B: best-effort resolution of the owning client's clientId
-    // string, same pattern and same caveats as AdminUserServiceImpl's own
-    // resolveClientId (Step 7A) - the standalone Sessions - List screen's
-    // Revoke action needs clientId on each row to call DELETE
-    // ${app.title}/users/{username}/sessions, since username alone is
-    // ambiguous across client applications (see User's class Javadoc, V8).
     private String resolveClientId(User user) {
         try {
             return clientApplicationService.getById(user.getClientApplicationId()).getClientId();

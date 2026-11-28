@@ -1,5 +1,6 @@
 package com.internal.auth.config.auth;
 
+/** Role expressions used in method-level security annotations. */
 public final class Roles {
 
     private Roles() {}

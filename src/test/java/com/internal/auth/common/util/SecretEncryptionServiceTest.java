@@ -8,11 +8,8 @@ import java.util.Base64;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/** Unit tests for SecretEncryptionService. */
 class SecretEncryptionServiceTest {
-
-    // Test-only AES-256 keys (32 and 16 random bytes, base64-encoded),
-    // generated the same way the app.secret-encryption-key in
-    // application-test.properties was - never reused for anything real.
     private static final String VALID_KEY = "iak3c/+SZanL/YrmpeN6g+bPWpaiOWm6VMng3kZ9Jlk=";
     private static final String WRONG_LENGTH_KEY = "ZGWro0I8sOPD3kxGxzOjWQ==";
 
@@ -47,9 +44,6 @@ class SecretEncryptionServiceTest {
         String encrypted = service.encrypt("do-not-let-this-be-readable-after-tampering");
 
         byte[] combined = Base64.getDecoder().decode(encrypted);
-        // Flip the last byte - it falls inside the GCM auth tag regardless
-        // of plaintext length, so this must fail the tag check rather than
-        // silently return corrupted plaintext.
         combined[combined.length - 1] ^= 0x01;
         String tampered = Base64.getEncoder().encodeToString(combined);
 
@@ -61,7 +55,6 @@ class SecretEncryptionServiceTest {
     @Test
     void init_withNullKey_failsBoot() {
         SecretEncryptionService service = new SecretEncryptionService();
-        // base64Key defaults to null - simulates the property being unset.
 
         assertThatThrownBy(service::init)
                 .isInstanceOf(IllegalStateException.class)

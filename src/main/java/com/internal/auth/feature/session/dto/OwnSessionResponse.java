@@ -7,13 +7,7 @@ import lombok.Setter;
 
 import java.time.Instant;
 
-/**
- * One of the CALLER's own sessions, as shown on a "devices signed in" screen.
- * Step 17h (B-14): one per signed-in device. deviceLabel is "Mac, Chrome";
- * lastActiveAt is the last sign-in or token refresh; current is true for the
- * session whose token made the request. expiresAt is derived from the
- * session's TTL (see SessionManagementServiceImpl).
- */
+/** One of the caller's own signed-in sessions. */
 @Getter
 @Setter
 @NoArgsConstructor

@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.util.List;
 
+/** Request body for assigning roles in bulk. */
 @Getter
 @Setter
 @AllArgsConstructor

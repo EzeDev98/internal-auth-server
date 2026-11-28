@@ -39,12 +39,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Step 2A (React Admin Client plan v4). Reuses
- * findByUsernameAndClientApplicationId (already added for the multi-tenant
- * redesign) for the single-user lookups - same safe, scoped resolution
- * MfaAdminServiceImpl already relies on.
- */
+/** Lists, views and manages users for admins. */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -65,10 +60,6 @@ public class AdminUserServiceImpl implements AdminUserService {
         String normalizedSearch = (search == null || search.isBlank()) ? null : search.trim();
         Page<User> page = userRepository.searchForAdmin(clientApplicationId, enabled, normalizedSearch, pageable);
 
-        // Batch-resolve every distinct clientApplicationId on this page in
-        // ONE query instead of the old per-row resolveClientId() lookup -
-        // see ClientApplicationService#getClientIdsByIds's javadoc for why
-        // that N+1 pattern was the real cause of this endpoint timing out.
         Set<Long> clientApplicationIds = page.getContent().stream()
                 .map(User::getClientApplicationId)
                 .filter(Objects::nonNull)
@@ -146,10 +137,6 @@ public class AdminUserServiceImpl implements AdminUserService {
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setEnabled(true);
-        // Pre-verified immediately - an admin is creating this account, same
-        // rationale as AdminRegistrationServiceImpl's bootstrap flow. No
-        // role/permission-group assignment here by design; use the existing
-        // role/group endpoints as a deliberate separate follow-up step.
         user.setEmailVerified(email != null);
         user.setPhoneVerified(phoneNumber != null);
 
@@ -176,7 +163,6 @@ public class AdminUserServiceImpl implements AdminUserService {
         });
     }
 
-    /** Notify notare after the IAM change commits; only for notare-tenant users. */
     private void pushToNotare(String internalAuthUserId, Long clientApplicationId, NotareUserEventClient.Event event) {
         if (!notareUserEventClient.isNotareTenant(clientApplicationService.getById(clientApplicationId).getClientId())) {
             return;
@@ -214,8 +200,6 @@ public class AdminUserServiceImpl implements AdminUserService {
         user.setPasswordChangedAt(LocalDateTime.now());
         userRepository.save(user);
 
-        // Same post-reset session invalidation PasswordResetServiceImpl#completeReset
-        // performs - forces a fresh login with the new password.
         sessionManagementService.invalidateActiveSessionForUser(user.getId());
 
         log.info("Admin reset password for user id={}", user.getId());
@@ -225,17 +209,12 @@ public class AdminUserServiceImpl implements AdminUserService {
         return (value == null || value.isBlank()) ? null : value.trim();
     }
 
-    // Step 7A (see UserSummaryResponse's Javadoc on the clientId field),
-    // batch-resolved in listUsers() above instead of a per-row DB call - a
-    // missing entry in clientIdByApplicationId (a stale/orphaned FK) just
-    // resolves to null rather than throwing, same defensive intent the old
-    // per-row try/catch had.
     private UserSummaryResponse toSummary(User user, Map<Long, String> clientIdByApplicationId) {
         String clientId = user.getClientApplicationId() == null ? null : clientIdByApplicationId.get(user.getClientApplicationId());
-        return new UserSummaryResponse(user.getId(), user.getUsername(), user.getPhoneNumber(), user.getEmail(), user.isEnabled(), user.isMfaEnabled(), user.getCreatedAt(), clientId);
+        return new UserSummaryResponse(user.getId(), user.getUsername(), user.getPhoneNumber(), user.getEmail(), user.isEnabled(), user.getCreatedAt(), clientId);
     }
 
     private UserProfileResponse toProfile(User user) {
-        return new UserProfileResponse(user.getId(), user.getUsername(), user.getPhoneNumber(), user.getEmail(), user.isEnabled(), user.isEmailVerified(), user.isPhoneVerified(), user.isMfaEnabled(), user.getCreatedAt());
+        return new UserProfileResponse(user.getId(), user.getUsername(), user.getPhoneNumber(), user.getEmail(), user.isEnabled(), user.isEmailVerified(), user.isPhoneVerified(), user.getCreatedAt());
     }
 }

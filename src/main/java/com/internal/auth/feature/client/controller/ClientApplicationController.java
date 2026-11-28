@@ -31,25 +31,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
 
-/**
- * Step 10D. Unlike RegistrationController/EmailVerificationController
- * (pinned to the literal "/api/v1/auth" path to match WebSecurityConfig's
- * pre-wired permitAll rules), this is an authenticated, admin-only endpoint
- * - there's no permitAll rule for it, so it falls under the default
- * .anyRequest().authenticated(), same as every RBAC endpoint in
- * PermissionController, and uses that same ${app.title} base-path
- * convention and Roles constant rather than a hardcoded path.
- *
- * rotateSecret fixes "no client-secret rotation endpoint - you must
- * create a new client application" (CreateClientApplicationResponse's own
- * Javadoc used to document this as a known gap). Rate-limited the same
- * way SigningKeyController's rotation endpoint is: already
- * @PreAuthorize-gated to admins, so this is abuse-prevention against
- * repeatedly triggering a rotation, not brute-force defense.
- */
+/** Admin endpoints for managing client applications. */
 @RestController
 @RequestMapping("${app.title}/client-applications")
-@Tag(name = "Client Application API", description = "Admin registration and secret rotation for client applications (Stage 3/4 Step 10D)")
+@Tag(name = "Client Application API", description = "Admin registration and secret rotation for client applications")
 @RequiredArgsConstructor
 public class ClientApplicationController {
 

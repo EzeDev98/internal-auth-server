@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 
+/** Returns a uniform JSON response when access is denied. */
 @Component
 public class CustomAccessDenied implements AccessDeniedHandler {
 

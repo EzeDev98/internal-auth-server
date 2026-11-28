@@ -13,17 +13,7 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Step 10C. A cheap, no-database static check on the migration set itself:
- * every file under db/migration must follow the plain V<n>__description.sql
- * naming this project uses throughout (no dotted sub-versions, no
- * repeatable R__ migrations), and the resulting version numbers must form
- * one contiguous run starting at 1 with no gaps and no duplicates. Flyway
- * itself would eventually surface a duplicate version as a startup failure,
- * and would silently tolerate a gap (it only cares about strict ordering,
- * not contiguity) - this test catches both mistakes at build time, before
- * either one reaches a real environment.
- */
+/** Verifies migration file naming and version sequence. */
 class MigrationSequenceIntegrityTest {
 
     private static final Pattern VERSIONED_MIGRATION_FILENAME = Pattern.compile("^V(\\d+)__.+\\.sql$");

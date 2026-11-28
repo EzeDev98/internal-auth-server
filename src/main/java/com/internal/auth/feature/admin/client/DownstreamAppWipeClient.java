@@ -15,27 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Outbound calls to SyncPoint's, Notare's, and Ahorra's own existing admin
- * wipe endpoints, for WipeAllService's cross-service "wipe everything"
- * orchestration (Settings page danger zone). This is the reverse
- * direction of InternalAuthClient in each of those apps' own codebases
- * (which call INTO this app) - internal-auth is the one initiating here,
- * since it's the app meant to be the final authority for a full-environment
- * wipe.
- * <p>
- * Each app's own wipe endpoint keeps working completely unchanged and
- * independently callable exactly as it is today - this class only ever
- * ADDS a caller, it never modifies what any of the three endpoints does.
- * <p>
- * A generous read timeout (60s) is deliberate: these apps are commonly
- * deployed on Render's free tier, which spins a service down after
- * inactivity (see internal-auth-server's own KeepAliveJob) - the first
- * request after a cold start can itself take several seconds before the
- * wipe logic even begins, on top of however long the wipe itself takes.
- * The connect timeout stays short (10s) since an unreachable host should
- * fail fast rather than hang for a minute.
- */
+/** Calls the downstream apps' admin wipe endpoints during a full wipe. */
 @Slf4j
 @Component
 public class DownstreamAppWipeClient {
@@ -68,23 +48,9 @@ public class DownstreamAppWipeClient {
         this.syncPointSecret = syncPointSecret;
         this.notareSecret = notareSecret;
         this.ahorraSecret = ahorraSecret;
-        // Built directly rather than autowired - this app's ApplicationContext
-        // doesn't publish a Jackson ObjectMapper bean (Render deploy log: "No
-        // qualifying bean of type 'ObjectMapper' available"), and this class's
-        // use of it (readTree/convertValue on plain JSON bodies) needs no
-        // app-wide serialization customization anyway.
         this.objectMapper = new ObjectMapper();
     }
 
-    /**
-     * Calls SyncPoint's existing POST /admin/reset/wipe - wipes SyncPoint's
-     * own database AND (via SyncPoint's own existing downstream call)
-     * every internal-auth-server record scoped to its clientApplicationId,
-     * in one round trip. Returns SyncPoint's own reported deleted-row
-     * counts (both its local ones and internal-auth's, nested under
-     * "internalAuthDeletedCounts" - see AdminResetController on
-     * SyncPoint's side) so the admin sees exactly what was removed.
-     */
     @SuppressWarnings("unchecked")
     public Map<String, Object> wipeSyncPoint(boolean includeSystemWallet) {
         if (syncPointSecret == null || syncPointSecret.isBlank()) {
@@ -114,13 +80,6 @@ public class DownstreamAppWipeClient {
         }
     }
 
-    /**
-     * Calls Notare's existing POST /admin/database/wipe - truncates every
-     * table in Notare's own database. Notare has no concept of per-tenant
-     * scoping and no integration with internal-auth-server today (see
-     * WipeAllService's class Javadoc), so unlike SyncPoint there is no
-     * downstream internal-auth call for this to trigger.
-     */
     public void wipeNotare() {
         if (notareSecret == null || notareSecret.isBlank()) {
             throw new DownstreamWipeException("notare.wipe.secret is not configured - refusing to call Notare's wipe endpoint.");
@@ -142,14 +101,6 @@ public class DownstreamAppWipeClient {
         }
     }
 
-    /**
-     * Calls Ahorra's existing POST /admin/reset/wipe - wipes Ahorra's own
-     * database AND (via Ahorra's own existing downstream call) every
-     * internal-auth-server record scoped to its clientApplicationId, in
-     * one round trip - same single-call shape as SyncPoint above. No
-     * includeSystemWallet equivalent: Ahorra has no wallet domain, so its
-     * own WipeRequest only ever takes a confirmation phrase.
-     */
     @SuppressWarnings("unchecked")
     public Map<String, Object> wipeAhorra() {
         if (ahorraSecret == null || ahorraSecret.isBlank()) {
@@ -178,12 +129,6 @@ public class DownstreamAppWipeClient {
         }
     }
 
-    /**
-     * SyncPoint and Ahorra return their own InternalAuthApiResponse-shaped
-     * JSON ({"message": "..."}), Notare returns a plain text body - this
-     * tries JSON first and falls back to the raw body so either shape
-     * yields a readable message instead of a stack trace fragment.
-     */
     private String extractMessage(ClientHttpResponse response) {
         try {
             String raw = StreamUtils.copyToString(response.getBody(), StandardCharsets.UTF_8);
@@ -196,7 +141,6 @@ public class DownstreamAppWipeClient {
                     return parsed.get("message").asText();
                 }
             } catch (Exception ignored) {
-                // Not JSON - fall through to the raw body.
             }
             return raw;
         } catch (Exception e) {

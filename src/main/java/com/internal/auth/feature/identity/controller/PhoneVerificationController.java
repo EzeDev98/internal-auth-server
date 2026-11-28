@@ -24,20 +24,7 @@ import static com.internal.auth.common.constant.AppConstant.MAX_PHONE_VERIFICATI
 import static com.internal.auth.common.constant.AppConstant.PHONE_VERIFICATION_VERIFY_RATE_LIMIT_DURATION_HOURS;
 import static com.internal.auth.common.constant.AppConstant.PHONE_VERIFICATION_VERIFY_RATE_LIMIT_KEY_PREFIX;
 
-/**
- * Self-service phone verification via SMS OTP (fixes the
- * previously-permanent phone-only-account login gate). Mapped to the
- * literal "/api/v1/auth" base path, not ${app.title}, same reason as
- * RegistrationController - WebSecurityConfig permits these exact
- * hardcoded paths without a bearer token, and a phone-only user hitting
- * this gate by definition has no token yet.
- *
- * Both endpoints require the same HTTP Basic client-credential header
- * RegistrationController/PasswordResetController resolve - a phone number
- * can be ambiguous across client applications (multi-tenant redesign),
- * unlike email verification's /activate which resolves via an unambiguous
- * token hash.
- */
+/** Endpoints for verifying a phone number by SMS OTP. */
 @RestController
 @RequestMapping("${app.title}/auth")
 @Tag(name = "Phone Verification API", description = "Account phone-number verification via SMS OTP")
@@ -53,9 +40,6 @@ public class PhoneVerificationController {
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
             @RequestBody VerifyOtpRequest request) {
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
-        // Mirrors PasswordResetController's /verify-otp guard - the OTP's
-        // own attemptCount resets on every fresh code request, so this
-        // caps guessing independently of how many OTPs were issued.
         rateLimiterService.checkRateLimit(
                 PHONE_VERIFICATION_VERIFY_RATE_LIMIT_KEY_PREFIX + client.getId() + ":" + request.getPhoneNumber(),
                 MAX_PHONE_VERIFICATION_VERIFY_REQUEST,

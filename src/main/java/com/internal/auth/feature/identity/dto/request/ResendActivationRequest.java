@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Request body for POST /api/v1/auth/resend-activation (Step 10C). */
+/** Request body for resending an activation email. */
 @Getter
 @Setter
 @NoArgsConstructor

@@ -6,7 +6,6 @@ import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.repository.ClientApplicationRepository;
 import com.internal.auth.feature.identity.model.User;
 import com.internal.auth.feature.identity.repository.EmailVerificationTokenRepository;
-import com.internal.auth.feature.identity.repository.LoginMfaOtpRepository;
 import com.internal.auth.feature.identity.repository.PhoneVerificationOtpRepository;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.passwordreset.repository.PasswordResetOtpRepository;
@@ -23,28 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Destructive maintenance: wipes every row belonging to one tenant
- * (ClientApplication), so an integrating app's own admin wipe endpoint
- * (e.g. SyncPoint's {@code /admin/reset/wipe}) can call down into this one
- * and leave both sides clean together.
- * <p>
- * The ClientApplication row itself is NOT deleted - it's the tenant's
- * registration, not its data (same reasoning SyncPoint's own
- * DatabaseResetService uses to preserve system_wallet by default). Only
- * rows scoped to that tenant are removed.
- * <p>
- * Guarded entirely by {@code TenantResetAuthorizer} at the controller -
- * nothing here re-checks the secret/confirmation. Do not wire a second
- * caller to this service without reproducing that guard.
- *
- * <h2>Delete order</h2>
- * Children first, so foreign keys are never violated: RBAC join rows, then
- * every token/OTP table, then the users themselves. Roles/PermissionGroups
- * are left untouched - Role/PermissionGroup's own client-application scope
- * is data-model-only and not enforced anywhere yet, so there's nothing
- * tenant-specific to safely remove from those tables today.
- */
+/** Deletes every row belonging to a single tenant. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -58,7 +36,6 @@ public class TenantDataWipeService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final UserSessionRepository userSessionRepository;
     private final PasswordResetOtpRepository passwordResetOtpRepository;
-    private final LoginMfaOtpRepository loginMfaOtpRepository;
     private final PhoneVerificationOtpRepository phoneVerificationOtpRepository;
     private final AuditLogRepository auditLogRepository;
 
@@ -89,7 +66,6 @@ public class TenantDataWipeService {
         }
 
         counts.put("passwordResetOtps", passwordResetOtpRepository.deleteAllByClientApplicationId(clientApplicationId));
-        counts.put("loginMfaOtps", loginMfaOtpRepository.deleteAllByClientApplicationId(clientApplicationId));
         counts.put("phoneVerificationOtps", phoneVerificationOtpRepository.deleteAllByClientApplicationId(clientApplicationId));
         counts.put("auditLogs", auditLogRepository.deleteAllByClientApplicationId(clientApplicationId));
         counts.put("users", userRepository.deleteAllByClientApplicationId(clientApplicationId));

@@ -19,6 +19,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/** Unit tests for GroupRoleServiceImpl. */
 class GroupRoleServiceImplTest {
 
     private final DtoMapper mapper = mock(DtoMapper.class);
@@ -37,8 +38,6 @@ class GroupRoleServiceImplTest {
         return group;
     }
 
-    // -- assignRoleToGroup --------------------------------------------------
-
     @Test
     void assignRoleToGroup_nullGroupOrRole_throwsEmptyField() {
         assertThatThrownBy(() -> service.assignRoleToGroup(null, "buyer"))
@@ -52,9 +51,6 @@ class GroupRoleServiceImplTest {
 
     @Test
     void assignRoleToGroup_currentBehavior_blankStringIsNotTreatedAsEmpty() {
-        // Only a literal null short-circuits here - unlike almost every
-        // other RBAC entry point, a blank/whitespace string is NOT rejected
-        // up front and instead goes straight to the (mocked) lookups below.
         when(utils.getRole("  ")).thenReturn(role("  "));
         when(utils.getPermissionGroup(" ")).thenReturn(group(" "));
         when(utils.isRoleAndPermissionGroupMappingExisting(any(), any())).thenReturn(false);
@@ -97,14 +93,6 @@ class GroupRoleServiceImplTest {
 
     @Test
     void assignRoleToGroup_currentBehavior_roleNotFoundIsRemappedToRoleNotFound() {
-        // Whichever of the two lookups fails, the caller only ever sees a
-        // ROLE_NOT_FOUND with a generic combined message - the original,
-        // more specific signal is discarded. Split into two tests (each
-        // gets its own fresh mocks) rather than re-stubbing utils.getRole
-        // a second time in one test, since when(mock.call()).thenReturn(x)
-        // has to invoke mock.call() to register the stub - and a call
-        // already stubbed to throw does exactly that before thenReturn()
-        // ever runs.
         when(utils.getRole("buyer")).thenThrow(PermissionException.roleNotFound("no such role"));
 
         assertThatThrownBy(() -> service.assignRoleToGroup("buyers", "buyer"))
@@ -147,8 +135,6 @@ class GroupRoleServiceImplTest {
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(PermissionErrorCode.GROUP_ROLE_MAPPING_FAILED));
     }
 
-    // -- assignRoleToSubGroup -------------------------------------------------
-
     @Test
     void assignRoleToSubGroup_nullGroupOrRole_throwsEmptyField() {
         assertThatThrownBy(() -> service.assignRoleToSubGroup(null, "buyer"))
@@ -174,8 +160,6 @@ class GroupRoleServiceImplTest {
 
     @Test
     void assignRoleToSubGroup_currentBehavior_hasNoAlreadyAssignedGuardUnlikeAssignRoleToGroup() {
-        // Calling this twice with identical arguments never conflicts -
-        // there is no isRoleAndPermissionGroupMappingExisting() check here.
         when(utils.getRole("buyer")).thenReturn(role("buyer"));
         when(utils.getSubPermissionGroupByName("tier1")).thenReturn(new com.internal.auth.feature.rbac.model.SubPermissionGroup());
         when(utils.saveRolePermissionGroupMapping(any())).thenReturn(new RolePermissionGroupMapping());
@@ -188,9 +172,6 @@ class GroupRoleServiceImplTest {
 
     @Test
     void assignRoleToSubGroup_currentBehavior_permissionExceptionFromLookupIsNotCaughtOrRemapped() {
-        // Unlike assignRoleToGroup, there is no catch(PermissionException)
-        // block here at all - a not-found from either lookup propagates
-        // completely unchanged.
         PermissionException notFound = PermissionException.subGroupNotFound("no such subgroup");
         when(utils.getRole("buyer")).thenReturn(role("buyer"));
         when(utils.getSubPermissionGroupByName("tier1")).thenThrow(notFound);

@@ -23,12 +23,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 12A (RegistrationController slice). Happy path plus the HTTP Basic
- * client-credential enforcement RegistrationController's own class Javadoc
- * describes: an unrecognized/missing/wrong clientId+clientSecret is
- * rejected outright (401), it never auto-creates a client application.
- */
+/** Integration tests for RegistrationController. */
 class RegistrationControllerIT extends IntegrationTestBase {
 
     @Autowired

@@ -19,22 +19,7 @@ import static com.internal.auth.testsupport.ApiResponseAssertions.message;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 12C: validation-error paths against RegistrationController - chosen
- * over the other Step 12A-covered controllers since RegistrationServiceImpl
- * exercises the fullest validator chain (RegistrationValidator's
- * username/contact-info/phone/email rules, then ResetValidator's password
- * rule) in one call, in that exact order. Every case here supplies valid
- * HTTP Basic client credentials so the only thing under test is the
- * Step 5 exception shape (GlobalExceptionHandler -> InternalAuthApiResponse
- * envelope with success=false), never the separate 401 client-credential
- * path RegistrationControllerIT already covers.
- *
- * Malformed JSON is deliberately first: @RequestBody argument resolution
- * happens before RegistrationController#register's body ever runs, so
- * HttpMessageNotReadableException fires regardless of which validator rule
- * a well-formed body would have hit next.
- */
+/** Integration tests for registration validation errors. */
 class RegistrationValidationIT extends IntegrationTestBase {
 
     @Autowired

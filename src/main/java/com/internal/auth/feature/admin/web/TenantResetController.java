@@ -20,18 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
-/**
- * Danger-zone endpoint: wipes every row belonging to one tenant
- * (ClientApplication), called by that tenant's own admin wipe endpoint
- * (e.g. SyncPoint's {@code POST /admin/reset/wipe} -> this app's
- * {@code POST /admin/reset/wipe-tenant}), or directly by an operator.
- * <p>
- * Deliberately thin, mirroring SyncPoint's own AdminResetController: it
- * authorizes via {@link TenantResetAuthorizer}, delegates the work to
- * {@link TenantDataWipeService}, and returns the report. The path is opened
- * in {@code WebSecurityConfig} (no JWT required) since the secret is the
- * guard - the same reasoning SyncPoint's own reset endpoint javadoc gives.
- */
+/** Endpoint for wiping a single tenant's data. */
 @Slf4j
 @RestController
 @RequestMapping("${app.title}")
@@ -61,16 +50,6 @@ public class TenantResetController {
         return ResponseEntity.ok(InternalAuthApiResponse.success("Tenant data wiped.", response));
     }
 
-    /**
-     * Settings-page "wipe everything" danger zone: SyncPoint, Notare, and
-     * internal-auth's own data, together - see {@link WipeAllService}'s
-     * class Javadoc for the full reasoning (order, stop-on-first-failure,
-     * why Notare's own internal-auth tenant step is normally a no-op
-     * today). Does not replace or change SyncPoint's own
-     * {@code /admin/reset/wipe} or Notare's own
-     * {@code /admin/database/wipe} - both keep working unchanged, callable
-     * directly, independent of this endpoint.
-     */
     @PostMapping("/admin/reset/wipe-all")
     public ResponseEntity<InternalAuthApiResponse<WipeAllResponse>> wipeAll(
             @RequestHeader(value = "X-Reset-Secret", required = false) String providedSecret,

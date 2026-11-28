@@ -14,18 +14,7 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Step 17B - not a coverage test, a tripwire. AuditAction.LOGIN_SUCCESS is
- * the only value ever wired to a real publish call today (see its own
- * Javadoc). This class exists so that changes, whenever someone adds
- * FAILED_LOGIN / ADMIN_ACTION / ROLE_CHANGE / etc. to the enum and wires it
- * up, do so as a deliberate decision with its own test - not as a
- * one-line addition that quietly ships unaudited (pun intended).
- *
- * Two things get locked in: the enum's shape, and the one place in main
- * source that references it. Widen either only alongside a real test for
- * whatever new action just got wired.
- */
+/** Fails when an audit action is referenced without its own test. */
 class AuditActionCoverageTest {
 
     private static final Path MAIN_SOURCE_ROOT = Paths.get("src", "main", "java");
@@ -49,7 +38,6 @@ class AuditActionCoverageTest {
 
         try (Stream<Path> files = Files.walk(MAIN_SOURCE_ROOT)) {
             files.filter(path -> path.toString().endsWith(".java"))
-                    // AuditAction.java itself declares LOGIN_SUCCESS; that's not a "usage"
                     .filter(path -> !path.getFileName().toString().equals("AuditAction.java"))
                     .forEach(path -> scanFile(path, violations));
         } catch (IOException e) {

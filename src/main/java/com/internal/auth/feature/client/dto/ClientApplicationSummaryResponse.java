@@ -8,10 +8,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-/**
- * List-row shape for GET ${app.title}/client-applications (Step 2B,
- * React Admin Client plan v4) - never includes the secret or its hash.
- */
+/** List row for a client application, without secrets. */
 @Getter
 @Setter
 @NoArgsConstructor

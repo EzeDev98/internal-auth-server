@@ -16,34 +16,7 @@ import java.util.Map;
 
 import static com.internal.auth.common.constant.AppConstant.REQUEST_TIMEOUT;
 
-/**
- * OtpDeliveryService implementation backed by Contiguity's plain Text
- * (SMS) API — https://docs.contiguity.com/products/text.
- *
- * We deliberately use Contiguity's raw text-send endpoint rather than its
- * own OTP-management API: this app already owns OTP generation, hashing,
- * expiry, and attempt-limiting (see OtpService / PasswordResetServiceImpl),
- * so Contiguity is used purely as an SMS transport, keeping exactly one
- * source of truth for OTP verification.
- *
- * Activate by setting app.otp.provider=contiguity and providing
- * contiguity.api-key (see application.properties). Contiguity's free tier
- * includes 500 SMS/month at no cost.
- *
- * Delivery failures are logged but never thrown: a provider outage must not
- * change the response returned by the password-reset "request OTP" endpoint,
- * or it would leak whether a phone number is registered (only registered
- * numbers trigger an actual send attempt). The send() helper below is
- * shared by all three OTP purposes so that behavior stays identical for
- * each - only the message text and sender branding differ.
- *
- * appName (per-call, from ClientApplication.name - the app the OTP's
- * owning user actually belongs to, e.g. "SyncPoint" vs "Notare") is used
- * as the SMS sender label instead of the single global
- * contiguity.sender-app-name property, so a Notare user no longer gets a
- * text branded "SyncPoint". That property is kept as a fallback default
- * for the (should-never-happen) case a caller passes a blank appName.
- */
+/** OTP delivery implementation that sends SMS through the Contiguity API. */
 @Service
 @ConditionalOnProperty(prefix = "app.otp", name = "provider", havingValue = "contiguity")
 public class ContiguityOtpDeliveryService implements OtpDeliveryService {
@@ -59,7 +32,6 @@ public class ContiguityOtpDeliveryService implements OtpDeliveryService {
     @Value("${contiguity.base-url:https://api.contiguity.com}")
     private String baseUrl;
 
-    /** Fallback sender label, used only if a caller passes a blank appName. */
     @Value("${contiguity.sender-app-name:SyncPoint}")
     private String defaultAppName;
 
@@ -71,11 +43,6 @@ public class ContiguityOtpDeliveryService implements OtpDeliveryService {
     @Override
     public void sendPhoneVerificationOtp(String phoneNumber, String otp, String appName) {
         send(phoneNumber, "Your phone verification code is " + otp + ". It expires shortly. Do not share this code with anyone.", "phone verification", appName);
-    }
-
-    @Override
-    public void sendLoginOtp(String phoneNumber, String otp, String appName) {
-        send(phoneNumber, "Your login verification code is " + otp + ". It expires shortly. Do not share this code with anyone.", "login", appName);
     }
 
     private void send(String phoneNumber, String messageBody, String purpose, String appName) {
@@ -124,12 +91,6 @@ public class ContiguityOtpDeliveryService implements OtpDeliveryService {
         }
     }
 
-    /**
-     * Contiguity requires E.164 (e.g. +2348012345678). This app stores
-     * Nigerian numbers without a country code (see the ^\+?[0-9]{11}$
-     * phone-format rule enforced at registration/reset time), so we
-     * default to +234 when no '+' is present.
-     */
     private String toE164(String phoneNumber) {
         if (phoneNumber.startsWith("+")) {
             return phoneNumber;

@@ -29,18 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 12A (PasswordResetController slice). /request and /verify-otp both
- * require the same HTTP Basic client-credential header (see the
- * controller's own class Javadoc); /complete deliberately doesn't - it
- * resolves everything from the reset token's own hash. /request's own raw
- * OTP is never retrievable from its response (app.otp.provider=logging in
- * the test profile only logs it - by design, the same enumeration-resistant
- * behavior production has), so the full verify-otp -> complete chain seeds
- * a known OTP directly via OtpResetEngine.populateNewOtp (the exact
- * production code path PasswordResetServiceImpl itself uses) rather than
- * trying to recover a real one from /request.
- */
+/** Integration tests for PasswordResetController. */
 class PasswordResetControllerIT extends IntegrationTestBase {
 
     @Autowired

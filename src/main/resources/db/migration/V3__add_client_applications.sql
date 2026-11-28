@@ -1,12 +1,4 @@
--- Stage 2 punch-list item 3: client application data model (the "who is
--- calling this service" counterpart to the users table). This is schema
--- only - nothing in the application code creates, reads, or wires these
--- rows into Spring Authorization Server's RegisteredClientRepository yet;
--- that integration is out of scope until Stage 4 per the architecture
--- assessment. client_secret is nullable to allow public (PKCE-only)
--- clients with no secret at all - see ClientApplication.java for the full
--- rationale.
-
+-- Adds the client applications table.
 CREATE TABLE client_applications (
     id            BIGSERIAL PRIMARY KEY,
     client_id     VARCHAR(255) NOT NULL,

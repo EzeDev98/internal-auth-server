@@ -8,6 +8,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+/** Links a role to a permission group. */
 @Getter
 @Setter
 @AllArgsConstructor

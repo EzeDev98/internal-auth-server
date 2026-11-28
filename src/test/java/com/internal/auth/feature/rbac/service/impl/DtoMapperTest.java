@@ -31,23 +31,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-/**
- * Step 6D - field-by-field entity-to-response mapping for every public
- * method on DtoMapper, including the null/empty-input branches that throw.
- *
- * userPermissionGroupRepository is a bare Mockito mock, not stubbed per
- * test - DtoMapper#buildMembershipPaths only needs it to return something
- * for findAllByUser(...), and an unstubbed mock returning null is handled
- * the same as "no memberships" (CollectionUtils.isEmpty(null) is true), so
- * every test below gets membership == "" for free without needing to stub
- * this on a per-test basis.
- */
+/** Unit tests for DtoMapper. */
 class DtoMapperTest {
 
     private final UserPermissionGroupRepository userPermissionGroupRepository = mock(UserPermissionGroupRepository.class);
     private final DtoMapper mapper = new DtoMapper(userPermissionGroupRepository);
-
-    // -- createUserPermissionGroupResponseForSuperGroup -----------------------
 
     @Test
     void createUserPermissionGroupResponseForSuperGroup_nullGroup_throws() {
@@ -89,9 +77,6 @@ class DtoMapperTest {
         assertThat(response.getUserResponses().get(0).getUserId()).isEqualTo(30L);
         assertThat(response.getUserResponses().get(0).getUsername()).isEqualTo(user.getUsername());
         assertThat(response.getUserResponses().get(0).getEmail()).isEqualTo(user.getEmail());
-        // userPermissionGroupRepository is an unstubbed mock here, so
-        // findAllByUser(...) returns null - buildMembershipPaths treats
-        // that the same as "no memberships found".
         assertThat(response.getUserResponses().get(0).getMembership()).isEmpty();
     }
 
@@ -107,8 +92,6 @@ class DtoMapperTest {
         assertThat(response.getRoles()).isEmpty();
     }
 
-    // -- createUserPermissionGroupResponseForSubGroup --------------------------
-
     @Test
     void createUserPermissionGroupResponseForSubGroup_emptyList_throws() {
         assertThatThrownBy(() -> mapper.createUserPermissionGroupResponseForSubGroup(List.of()))
@@ -119,7 +102,6 @@ class DtoMapperTest {
     @Test
     void createUserPermissionGroupResponseForSubGroup_missingSubGroupOnFirstElement_throws() {
         UserPermissionGroup userGroup = new UserPermissionGroup();
-        // subPermissionGroup deliberately left null
 
         assertThatThrownBy(() -> mapper.createUserPermissionGroupResponseForSubGroup(List.of(userGroup)))
                 .isInstanceOfSatisfying(PermissionException.class,
@@ -148,8 +130,6 @@ class DtoMapperTest {
         assertThat(response.getUserResponses()).hasSize(1);
         assertThat(response.getUserResponses().get(0).getUserId()).isEqualTo(50L);
     }
-
-    // -- buildPermissionGroupResponse / buildSubPermissionGroupResponse -------
 
     @Test
     void buildPermissionGroupResponse_mapsFields() {
@@ -185,8 +165,6 @@ class DtoMapperTest {
         assertThat(response.getSuperGroupId()).isEqualTo(70L);
     }
 
-    // -- buildRoleResponse / buildRoleAndPermissionGroupMappingResponse -------
-
     @Test
     void buildRoleResponse_mapsFields() {
         Role role = RoleTestDataBuilder.aRole().withRoleName("admin").withDescription("Full access").build();
@@ -197,7 +175,6 @@ class DtoMapperTest {
         assertThat(response.getRoleId()).isEqualTo(80L);
         assertThat(response.getRoleName()).isEqualTo("admin");
         assertThat(response.getDescription()).isEqualTo("Full access");
-        // buildRoleResponse never sets statusCode - it defaults to 0.
         assertThat(response.getStatusCode()).isZero();
     }
 
@@ -218,8 +195,6 @@ class DtoMapperTest {
         assertThat(response.getGroupName()).isEqualTo("buyers");
     }
 
-    // -- buildUserRole -----------------------------------------------------------
-
     @Test
     void buildUserRole_mapsFields() {
         User user = UserTestDataBuilder.aUser().build();
@@ -238,8 +213,6 @@ class DtoMapperTest {
         assertThat(response.getUserId()).isEqualTo(100L);
         assertThat(response.getRoleId()).isEqualTo(101L);
     }
-
-    // -- buildUserPermissionGroup(s) ----------------------------------------------
 
     @Test
     void buildUserPermissionGroup_nullGroup_throws() {
@@ -298,8 +271,6 @@ class DtoMapperTest {
         assertThat(responses.get(1).getId()).isEqualTo(121L);
     }
 
-    // -- buildUserSubPermissionGroup -------------------------------------------
-
     @Test
     void buildUserSubPermissionGroup_nullGroup_throws() {
         assertThatThrownBy(() -> mapper.buildUserSubPermissionGroup(null))
@@ -329,8 +300,6 @@ class DtoMapperTest {
         assertThat(response.getGroupId()).isEqualTo(131L);
         assertThat(response.getSubGroupId()).isEqualTo(132L);
     }
-
-    // -- buildUserGroupsResponse / buildUserRoleResponse -----------------------
 
     @Test
     void buildUserGroupsResponse_emptyList_returnsEmptyList() {

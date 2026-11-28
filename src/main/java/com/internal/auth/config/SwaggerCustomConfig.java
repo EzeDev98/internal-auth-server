@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.Collections;
 
+/** Configures the OpenAPI documentation. */
 @Configuration
 public class SwaggerCustomConfig {
 

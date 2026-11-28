@@ -18,12 +18,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import org.junit.jupiter.api.Tag;
 
-/**
- * Step 5A/D - one test per {@code @ExceptionHandler} method on
- * GlobalExceptionHandler. The class has no injected dependencies, so every
- * handler method is called directly rather than through a Spring context -
- * this is a plain unit test, not a @WebMvcTest.
- */
+/** Unit tests for each GlobalExceptionHandler handler method. */
 @Tag("security-boundary")
 class GlobalExceptionHandlerTest {
 

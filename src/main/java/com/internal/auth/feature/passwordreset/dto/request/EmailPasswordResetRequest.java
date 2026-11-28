@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Request body for POST /password-reset/email/request. */
+/** Request body for starting an email-based password reset. */
 @Getter
 @Setter
 @NoArgsConstructor

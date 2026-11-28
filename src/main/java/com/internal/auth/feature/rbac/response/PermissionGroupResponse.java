@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Permission group details. */
 @Getter
 @Setter
 @AllArgsConstructor

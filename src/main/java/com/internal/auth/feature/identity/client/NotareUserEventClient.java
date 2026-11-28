@@ -9,16 +9,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.Map;
 
-/**
- * Pushes user lifecycle changes made in the IAM admin console (deleted,
- * disabled, re-enabled) to notare, so notare's local user row never
- * drifts from IAM (the source of truth).
- * <p>
- * Same shape as SyncPointSessionClient: secret header, skipped when the
- * secret is blank, best-effort - never throws, because the admin's own
- * action has already been committed in IAM by the time this runs.
- * Login-time sync in notare is the fallback if a push is missed.
- */
+/** Notifies Notare of user deletions, disables and re-enables. */
 @Slf4j
 @Component
 public class NotareUserEventClient {
@@ -41,7 +32,6 @@ public class NotareUserEventClient {
         this.notareClientId = notareClientId;
     }
 
-    /** True only for users that belong to the notare tenant. */
     public boolean isNotareTenant(String clientId) {
         return notareClientId.equals(clientId);
     }

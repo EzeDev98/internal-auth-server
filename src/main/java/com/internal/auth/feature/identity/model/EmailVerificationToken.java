@@ -10,19 +10,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
-/**
- * Step 10C - a short-lived, single-use token proving control of the email
- * address on a User row. Mirrors PasswordResetToken's shape almost exactly
- * (same ResettableToken interface, same hash-only storage, same
- * single-use/expiry semantics) since it's the same kind of credential doing
- * a different job: this one authorizes exactly one "mark this email
- * verified" call, nothing else, and is never accepted by any other endpoint.
- *
- * Implements ResettableToken to plug directly into OtpResetEngine's
- * existing populateNewToken/assertUsable/markUsed methods - confirmed
- * generic (not hardcoded to password reset) rather than re-deriving the
- * same expiry/single-use logic a second time.
- */
+/** Single-use token proving control of a user's email address. */
 @Getter
 @Setter
 @NoArgsConstructor

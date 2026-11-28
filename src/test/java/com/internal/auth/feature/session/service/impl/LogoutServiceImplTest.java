@@ -22,6 +22,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/** Unit tests for LogoutServiceImpl. */
 class LogoutServiceImplTest {
 
     private final UserSessionRepository userSessionRepository = mock(UserSessionRepository.class);
@@ -34,10 +35,6 @@ class LogoutServiceImplTest {
 
     @Test
     void logout_nullToken_throwsBadRequestBeforeTouchingSessionLookup() {
-        // The null/blank guard sits above logout()'s own try/catch, so this
-        // propagates as a real exception (for GlobalExceptionHandler to
-        // convert at the HTTP layer) rather than coming back as a
-        // LogoutResponse - unlike every other failure path in this method.
         assertThatThrownBy(() -> service.logout(null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessage("Invalid token");

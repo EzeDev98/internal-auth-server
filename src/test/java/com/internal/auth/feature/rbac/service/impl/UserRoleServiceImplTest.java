@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/** Unit tests for UserRoleServiceImpl. */
 class UserRoleServiceImplTest {
 
     private final DtoMapper mapper = mock(DtoMapper.class);
@@ -43,8 +44,6 @@ class UserRoleServiceImplTest {
         return role;
     }
 
-    // -- assignRole (singular) ------------------------------------------------
-
     @Test
     void assignRole_nullUsernameOrRole_throwsEmptyField() {
         assertThatThrownBy(() -> service.assignRole(null, "buyer"))
@@ -55,9 +54,6 @@ class UserRoleServiceImplTest {
 
     @Test
     void assignRole_currentBehavior_blankStringIsNotTreatedAsEmpty() {
-        // validateInput() only null-checks - unlike bulkRoleAssignment
-        // below (and most of the rest of RBAC), a blank/whitespace string
-        // sails through untouched.
         when(utils.userRoleExists("  ", " ")).thenReturn(false);
         when(utils.getUser("  ")).thenReturn(user("  "));
         when(utils.getRole(" ")).thenReturn(role(" "));
@@ -113,8 +109,6 @@ class UserRoleServiceImplTest {
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(PermissionErrorCode.USER_ROLE_PERSISTENCE_FAILED));
     }
 
-    // -- unassignRole ----------------------------------------------------------
-
     @Test
     void unassignRole_blankUsernameOrRole_throwsEmptyField() {
         assertThatThrownBy(() -> service.unassignRole(" ", "buyer"))
@@ -125,15 +119,6 @@ class UserRoleServiceImplTest {
 
     @Test
     void unassignRole_success_currentBehavior_usernameAndRoleNameAreSwappedInResponse() {
-        // Real bug, not a debatable design choice: the constructor call is
-        // `new RemoveRoleResponse(SC_OK, message, username, roleName)`, but
-        // RemoveRoleResponse's fields are declared, in order, (statusCode,
-        // message, roleName, username) - so positionally, username's value
-        // lands in the roleName field and roleName's value lands in the
-        // username field. PermissionManagementServiceImpl.unassignRole
-        // reads this response back by getter name to build its
-        // client-facing map, so the real /unassign-role API response has
-        // "username" and "roleName" swapped today.
         User user = user("user1");
         Role role = role("buyer");
         UserRole mapping = new UserRole();
@@ -152,10 +137,6 @@ class UserRoleServiceImplTest {
 
     @Test
     void unassignRole_currentBehavior_mappingNullReturnsNothingToRemoveInsteadOfDeleting() {
-        // getUserAndRole()'s real implementation can never actually return
-        // null (it throws via orElseThrow on a miss) - this exercises the
-        // defensive null-check branch in unassignRole() directly via the
-        // mock, since production code can never reach it otherwise.
         User user = user("user1");
         Role role = role("buyer");
         when(utils.getUser("user1")).thenReturn(user);
@@ -171,18 +152,12 @@ class UserRoleServiceImplTest {
 
     @Test
     void unassignRole_currentBehavior_notFoundFromLookupIsWrappedAsGenericOperationFailed() {
-        // There is no catch(PermissionException) here before catch(Exception)
-        // - a specific 404 (role/user not found) from the lookup is always
-        // rewrapped into a generic PERMISSION_OPERATION_FAILED, and the
-        // caller loses the original signal entirely.
         when(utils.getUser("user1")).thenThrow(PermissionException.userNotFound("no such user"));
 
         assertThatThrownBy(() -> service.unassignRole("user1", "buyer"))
                 .isInstanceOfSatisfying(PermissionException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(PermissionErrorCode.PERMISSION_OPERATION_FAILED));
     }
-
-    // -- assignRoles (plural, void) ---------------------------------------------
 
     @Test
     void assignRoles_nullUsername_throwsEmptyField() {
@@ -227,9 +202,6 @@ class UserRoleServiceImplTest {
 
     @Test
     void assignRoles_currentBehavior_aSingleAlreadyAssignedRoleAbortsTheWholeCall() {
-        // Unlike bulkRoleAssignment, this does not collect duplicates - the
-        // forEach() it uses does not catch anything, so one already-assigned
-        // role propagates out and aborts the whole request.
         when(utils.isRoleExist("buyer")).thenReturn(true);
         when(utils.userRoleExists("user1", "buyer")).thenReturn(true);
 
@@ -237,8 +209,6 @@ class UserRoleServiceImplTest {
                 .isInstanceOfSatisfying(PermissionException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(PermissionErrorCode.DUPLICATE_ROLE_ASSIGNMENT));
     }
-
-    // -- bulkRoleAssignment ---------------------------------------------------
 
     @Test
     void bulkRoleAssignment_nullOrEmptyUsernames_throwsEmptyField() {

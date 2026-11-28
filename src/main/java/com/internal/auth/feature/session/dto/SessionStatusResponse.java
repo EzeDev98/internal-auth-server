@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** Whether the user still holds a live refresh token for the calling client. */
+/** Whether a user still has a live session for the calling client. */
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor

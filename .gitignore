@@ -1,11 +1,8 @@
-# Build output
 target/
 *.class
 
-# Maven wrapper leaves these behind locally; the wrapper scripts/jar themselves stay tracked
 .mvn/wrapper/maven-wrapper.jar.sha256
 
-# IDE
 .idea/
 *.iml
 *.iws
@@ -14,24 +11,16 @@ target/
 .classpath
 .project
 
-# OS
 .DS_Store
 Thumbs.db
 
-# Logs
 *.log
 
-# Local env / secrets - never commit real credentials or key material
 .env
 .env.local
 *.pem
 *.pem.b64
 *.key
 
-# Local-only property overrides (holds real secret material for local dev,
-# e.g. the signing key / secret-encryption-key - see application.properties'
-# comments). application.properties/-dev/-prod themselves are tracked
-# on purpose: they're structural config with env-var placeholders, not
-# real secrets (Step 14E review confirmed this).
 application-local.properties
 patch_step*.py

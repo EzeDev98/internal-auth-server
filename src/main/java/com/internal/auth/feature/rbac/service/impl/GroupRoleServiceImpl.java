@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
+/** Assigns and removes roles on groups. */
 @Slf4j
 @Service
 public class GroupRoleServiceImpl implements GroupRoleService {

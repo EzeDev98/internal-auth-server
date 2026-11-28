@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 
+/** Returns a uniform JSON response when authentication is missing or invalid. */
 @Component
 public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
 

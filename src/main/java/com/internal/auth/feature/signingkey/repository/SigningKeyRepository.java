@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+/** Repository for signing keys. */
 public interface SigningKeyRepository extends JpaRepository<SigningKey, Long> {
 
     List<SigningKey> findByStatus(SigningKeyStatus status);

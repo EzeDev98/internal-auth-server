@@ -9,20 +9,7 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
-/**
- * Guards the per-tenant destructive data wipe, mirroring SyncPoint's own
- * ResetAuthorizer pattern (secret + confirmation phrase, both required),
- * plus the one field that pattern didn't need: which tenant to wipe.
- * <ul>
- *   <li><b>Secret.</b> The caller must present {@code X-Reset-Secret}
- *       matching {@code admin.reset.secret}. A blank/unset property disables
- *       the endpoint entirely. Constant-time comparison.</li>
- *   <li><b>appId.</b> Required - identifies which ClientApplication's data
- *       to wipe. Never defaulted or inferred.</li>
- *   <li><b>Confirmation phrase.</b> The body must carry the exact phrase, so
- *       a call holding only the secret cannot fire by accident or replay.</li>
- * </ul>
- */
+/** Validates the secret and confirmation required for a tenant wipe. */
 @Slf4j
 @Component
 public class TenantResetAuthorizer {
@@ -35,13 +22,6 @@ public class TenantResetAuthorizer {
         this.configuredSecret = configuredSecret;
     }
 
-    /**
-     * @param providedSecret value of the {@code X-Reset-Secret} header
-     * @param appId          the clientId to wipe, from the request body
-     * @param confirmation   confirmation phrase from the request body
-     * @throws InvalidResetSecretException if the endpoint is disabled or the secret is missing/invalid
-     * @throws BadRequestException         if appId or the confirmation phrase is missing/incorrect
-     */
     public void authorize(String providedSecret, String appId, String confirmation) {
         if (configuredSecret == null || configuredSecret.isBlank()) {
             log.warn("[TenantReset] Rejected — endpoint disabled (no admin.reset.secret configured)");
@@ -64,17 +44,6 @@ public class TenantResetAuthorizer {
         }
     }
 
-    /**
-     * Guards the top-level "wipe everything" endpoint (SyncPoint + Notare +
-     * internal-auth) - same secret and confirmation phrase as {@link
-     * #authorize}, just without an appId, since this always wipes every
-     * connected app rather than one tenant.
-     *
-     * @param providedSecret value of the {@code X-Reset-Secret} header
-     * @param confirmation   confirmation phrase from the request body
-     * @throws InvalidResetSecretException if the endpoint is disabled or the secret is missing/invalid
-     * @throws BadRequestException         if the confirmation phrase is missing/incorrect
-     */
     public void authorizeWipeAll(String providedSecret, String confirmation) {
         if (configuredSecret == null || configuredSecret.isBlank()) {
             log.warn("[WipeAll] Rejected — endpoint disabled (no admin.reset.secret configured)");

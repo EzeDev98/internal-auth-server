@@ -9,13 +9,7 @@ import java.util.Base64;
 import static com.internal.auth.common.constant.AppConstant.RESET_TOKEN_BYTES;
 import static com.internal.auth.common.constant.AppConstant.SECURE_RANDOM;
 
-/**
- * Small, focused helper responsible only for cryptographic concerns of the
- * password-reset flow: generating secure OTPs/reset tokens and hashing them
- * for storage. Kept separate from PasswordResetServiceImpl so the business
- * rules (expiry, attempts, status transitions) aren't tangled up with the
- * cryptographic primitives.
- */
+/** Generates and hashes OTPs and reset tokens. */
 @Component
 public class OtpService {
 
@@ -27,10 +21,6 @@ public class OtpService {
         this.tokenHasher = tokenHasher;
     }
 
-    /**
-     * Generates a cryptographically secure numeric OTP of the given length,
-     * e.g. length=6 -> "482913". Leading zeros are preserved.
-     */
     public String generateOtp(int length) {
         StringBuilder sb = new StringBuilder(length);
         for (int i = 0; i < length; i++) {
@@ -39,37 +29,20 @@ public class OtpService {
         return sb.toString();
     }
 
-    /**
-     * Hashes a raw OTP for storage. Uses the application's existing secure
-     * password encoder (BCrypt) rather than storing the raw OTP in the DB.
-     */
     public String hashOtp(String rawOtp) {
         return passwordEncoder.encode(rawOtp);
     }
 
-    /**
-     * Compares a raw, user-submitted OTP against its stored hash.
-     */
     public boolean matchesOtp(String rawOtp, String otpHash) {
         return passwordEncoder.matches(rawOtp, otpHash);
     }
 
-    /**
-     * Generates a cryptographically secure, URL-safe reset token.
-     */
     public String generateResetToken() {
         byte[] bytes = new byte[RESET_TOKEN_BYTES];
         SECURE_RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    /**
-     * Deterministically hashes a reset token so it can be looked up
-     * directly by hash equality, unlike the OTP hash which only needs to
-     * support a single matches() comparison against an already-located
-     * record. Delegates to TokenHasher - see that class for why this uses
-     * a different mechanism (SHA-256) than password/OTP hashing (BCrypt).
-     */
     public String hashResetToken(String rawToken) {
         return tokenHasher.sha256Hex(rawToken);
     }

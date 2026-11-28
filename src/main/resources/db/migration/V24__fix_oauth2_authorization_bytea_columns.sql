@@ -1,11 +1,4 @@
--- Fixes: "column ... is of type bytea but expression is of type character
--- varying". Spring's stock JdbcOAuth2AuthorizationService.OAuth2Authorization
--- ParametersMapper (used unmodified in AuthorizationServerConfig) always
--- binds attributes/state/*_value/*_metadata as Types.VARCHAR - it never
--- writes raw bytes. V21 typed these as BYTEA, copying the library's
--- MySQL-flavored reference schema, whose BLOB type MySQL silently coerces
--- from VARCHAR. Postgres does not do that implicit cast, hence the error.
--- Switching these columns to TEXT matches what the mapper actually sends.
+-- Converts the OAuth2 authorization binary columns to text.
 ALTER TABLE oauth2_authorization
     ALTER COLUMN attributes                    TYPE TEXT USING convert_from(attributes, 'UTF8'),
     ALTER COLUMN authorization_code_value       TYPE TEXT USING convert_from(authorization_code_value, 'UTF8'),

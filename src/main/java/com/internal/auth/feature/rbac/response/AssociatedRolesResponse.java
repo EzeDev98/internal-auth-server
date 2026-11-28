@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Roles associated with a group or user. */
 @Getter
 @Setter
 @AllArgsConstructor

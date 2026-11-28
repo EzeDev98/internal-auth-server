@@ -2,7 +2,7 @@ package com.internal.auth.common.exception;
 
 import org.springframework.http.HttpStatus;
 
-/** @deprecated Use {@link PermissionException#userNotAddedToGroup(String)} instead. */
+/** Deprecated exception for a user that could not be added to a group. */
 @Deprecated(since = "2.0", forRemoval = true)
 public class UserNotAddedTOGroupException extends PermissionException {
     public UserNotAddedTOGroupException(String message, HttpStatus ignored) {

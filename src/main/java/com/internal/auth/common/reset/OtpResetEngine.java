@@ -15,47 +15,13 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.function.Consumer;
 
-/**
- * The password-reset and PIN-reset flows (PasswordResetServiceImpl,
- * PinResetServiceImpl) were, in the codebase this project was copied from,
- * the same OTP-then-token workflow applied to two different targets
- * (User.password vs Wallet.pin). Before this extraction, the cooldown
- * check, OTP-invalidation, OTP-verification, and token-usability logic
- * were copy-pasted between the two classes, differing only in entity type
- * and a couple of messages/key prefixes.
- * <p>
- * This class holds exactly that shared logic, generic over
- * {@link ResettableOtp} / {@link ResettableToken} so it works for any
- * OTP-then-token entity pair without callers needing to know about each
- * other's types.
- * <p>
- * Step 11D: PIN reset was evaluated and deliberately not built in this
- * codebase - "PIN" as originally scoped here meant Wallet.pin, a
- * payments/wallet-domain concept belonging to SyncPoint's own application,
- * not something Internal Auth (a shared identity platform for multiple
- * applications) should own. This generic engine remains in place regardless,
- * since PasswordResetServiceImpl already depends on it and any genuinely
- * platform-level OTP-then-token flow could still reuse it later.
- */
+/** Shared OTP-then-token workflow used by the reset and verification flows. */
 @Component
 @RequiredArgsConstructor
 public class OtpResetEngine {
 
     private final OtpService otpService;
 
-    /**
-     * Cooldown enforcement is a two-step check-then-arm sequence rather
-     * than one method, because both callers need to hold the bucket
-     * reference between the pre-check (at the top of requestOtp) and
-     * arming it (at the very end, after the OTP — if any — was sent).
-     *
-     * cooldownKey is opaque to this method - originally always a bare
-     * phone number, but PasswordResetServiceImpl now composes it as
-     * "clientApplicationId:phoneNumber" (multi-tenant redesign, OTP/token
-     * flows step) so two different apps' users sharing a phone number
-     * don't share a cooldown bucket. LoginServiceImpl still passes a bare
-     * phone number as of this step - that's the next one.
-     */
     public RBucket<String> getCooldownBucket(RedissonClient redissonClient, String keyPrefix, String cooldownKey) {
         return redissonClient.getBucket(keyPrefix + cooldownKey);
     }
@@ -71,16 +37,6 @@ public class OtpResetEngine {
         cooldownBucket.set("1", Duration.ofSeconds(resendCooldownSeconds));
     }
 
-    /**
-     * Invalidates the most recent still-active OTP for a phone number, if
-     * one exists, before a new one is issued.
-     *
-     * @param existing the caller's own
-     *                 {@code findTopByPhoneNumberAndStatusOrderByCreatedAtDesc}
-     *                 lookup result (repository-specific, so it stays the
-     *                 caller's responsibility)
-     * @param save     the caller's repository save method reference
-     */
     public <T extends ResettableOtp> void invalidateExisting(Optional<T> existing, Consumer<T> save) {
         existing.ifPresent(otp -> {
             otp.setStatus(ResetStatus.INVALIDATED);
@@ -89,12 +45,6 @@ public class OtpResetEngine {
         });
     }
 
-    /**
-     * Fills in the fields common to both OTP entity types on a
-     * newly-constructed OTP. The caller is still responsible for setting
-     * its own foreign key (userId or walletId) and persisting the entity —
-     * this only populates the shared fields.
-     */
     public <T extends ResettableOtp> void populateNewOtp(T otp, String phoneNumber, String rawOtp, int expirationMinutes, int maxAttempts) {
         otp.setPhoneNumber(phoneNumber);
         otp.setOtpHash(otpService.hashOtp(rawOtp));
@@ -105,14 +55,6 @@ public class OtpResetEngine {
         otp.setLastSentAt(LocalDateTime.now());
     }
 
-    /**
-     * Verifies {@code otp} against {@code rawOtp}, applying the shared
-     * expiry / attempt-limit / match rules. On any rejection this both
-     * mutates and persists (via {@code save}) the entity before throwing —
-     * matching exactly what both callers did inline before this
-     * extraction. On success, the entity is left VERIFIED and saved; the
-     * caller proceeds to issue a reset token.
-     */
     public <T extends ResettableOtp> void verify(T otp, String rawOtp, Consumer<T> save) {
         if (LocalDateTime.now().isAfter(otp.getExpiresAt())) {
             otp.setStatus(ResetStatus.EXPIRED);
@@ -149,24 +91,12 @@ public class OtpResetEngine {
         save.accept(otp);
     }
 
-    /**
-     * Fills in the fields common to both reset-token types on a
-     * newly-constructed token — hash, expiry, and the initial unused flag.
-     * The caller is still responsible for setting its own foreign key
-     * (userId or walletId) and persisting the entity. Symmetric with
-     * {@link #populateNewOtp}; consolidates the token-population block that
-     * was previously identical in both {@code verifyOtp} implementations.
-     */
     public <T extends ResettableToken> void populateNewToken(T token, String rawResetToken, int expirationMinutes) {
         token.setTokenHash(otpService.hashResetToken(rawResetToken));
         token.setExpiresAt(LocalDateTime.now().plusMinutes(expirationMinutes));
         token.setUsed(false);
     }
 
-    /**
-     * @throws ResetTokenInvalidException with {@code expiredMessage} if the
-     *         token was already used or has expired
-     */
     public <T extends ResettableToken> void assertUsable(T token, String expiredMessage) {
         if (token.isUsed() || LocalDateTime.now().isAfter(token.getExpiresAt())) {
             throw new ResetTokenInvalidException(expiredMessage);

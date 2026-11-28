@@ -9,6 +9,7 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
+/** Resolves parameters annotated with UserAgent to the request's User-Agent header. */
 @Component
 public class UserAgentArgumentResolver implements HandlerMethodArgumentResolver {
     @Override

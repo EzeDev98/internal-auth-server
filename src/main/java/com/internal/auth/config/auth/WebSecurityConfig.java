@@ -27,29 +27,16 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
+/** Configures the HTTP security filter chain, CORS and resource server. */
 @Slf4j
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class WebSecurityConfig {
-
-    /**
-     * API-contract review (step 1): single source of truth for the API
-     * base path, shared with every controller's own "${app.title}"
-     * @RequestMapping. Used below to build the permitAll() matcher paths
-     * instead of hardcoded "/api/v1/..." literals, so a controller's
-     * mapping and its security rule can never drift apart.
-     */
     @Value("${app.title}")
     private String appTitle;
 
-
-    // Step 12E: swapped from KeycloakJwtRolesConverter to the equivalent for
-    // this app's own self-issued claims shape - see SelfIssuedJwtRolesConverter's
-    // javadoc for the claim-shape rationale and current ground-truth status
-    // (correct but inert until Step 12F adds a token customizer that
-    // populates the "roles" claim it reads).
     private final SelfIssuedJwtRolesConverter jwtAuthenticationConverter;
 
     private final CustomAccessDenied customAccessDenied;
@@ -58,23 +45,9 @@ public class WebSecurityConfig {
 
     private final JwtSessionTrackingFilter jwtSessionTrackingFilter;
 
-    /**
-     * OIDC issuer this resource server validates bearer tokens against.
-     * Step 12D: defaults to this app's own authorization server
-     * (app.self-issuer-uri) rather than Keycloak - see
-     * application.properties' app.token-issuer-uri comment for the full
-     * rationale, and jwtDecoder()'s javadoc below for why it's built from
-     * the JWKS URI directly rather than via issuer-location discovery.
-     */
     @Value("${app.token-issuer-uri}")
     private String tokenIssuerUrl;
 
-    // Comma-separated browser origins allowed to call this API directly -
-    // only RegisterPage/ForgotPasswordPage/ResetPasswordPage need this
-    // (see apiClient.js), everything else goes through the client's BFF
-    // (server-to-server, not subject to CORS). Property-driven instead of
-    // hardcoded so the deployed client's onrender.com origin doesn't need
-    // a code change + redeploy to add.
     @Value("${app.cors.allowed-origins}")
     private String allowedOrigins;
 
@@ -87,27 +60,14 @@ public class WebSecurityConfig {
                         .addHeaderWriter(new StaticHeadersWriter("X-Robots-Tag", "noindex, nofollow")))
                 .authorizeHttpRequests(authorize -> authorize
 
-                        // Allow preflight CORS requests
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // Allow public endpoints
                         .requestMatchers("/public/**").permitAll()
 
-                        // Step 14B - actuator now runs on a separate port (management.server.port,
-                        // see application.properties), but that alone does NOT exempt it from this
-                        // filter chain: a custom SecurityFilterChain bean (this one) makes Spring
-                        // Boot's own actuator-security auto-configuration back off entirely, and
-                        // this app's security applies across every connector/port it listens on,
-                        // not just the main one - confirmed the hard way (both ports returned this
-                        // app's own 401 JSON until this matcher was added). EndpointRequest matches
-                        // actuator's actual configured paths regardless of base-path/port, which is
-                        // more robust than hardcoding "/actuator/**" as a literal string.
                         .requestMatchers(EndpointRequest.toAnyEndpoint()).permitAll()
 
-                        // Allow robots.txt for crawlers
                         .requestMatchers("/robots.txt").permitAll()
 
-                        // Allow Swagger/OpenAPI docs
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
@@ -118,46 +78,11 @@ public class WebSecurityConfig {
                                 "/api-docs/**"
                         ).permitAll()
 
-                        // Block malicious scanner probes
                         .requestMatchers(maliciousProbesMatcher()).denyAll()
 
-                        // POST endpoints accessible without a JWT (there is, by definition, no
-                        // bearer token to present yet at this point in the request for most of
-                        // these - they're how a caller gets authenticated in the first place).
-                        // History: "/api/v1/user/login" and "/api/v1/user/refresh-token" used to
-                        // sit here for the old Keycloak password-grant flow; both were retired
-                        // when login moved to Keycloak's hosted page (see Stage 1 assessment).
-                        // "/api/v1/auth/login" and "/api/v1/auth/login/verify-otp" are NOT a
-                        // revival of that old endpoint - they're Step 11A/11E's new
-                        // local-credential login with optional OTP step-up (LoginController),
-                        // built once this app started owning its own User table (Stage 2)
-                        // instead of delegating identity to Keycloak.
-                        // "/api/v1/kyc/response" was removed here (Stage 1 punch-list item 8):
-                        // confirmed wallet/KYC-domain leftover with no matching controller and no
-                        // relation to Internal Auth's scope.
-                        // "/api/v1/auth/register", "/api/v1/auth/activate" and
-                        // "/api/v1/auth/resend-activation" are now implemented (RegistrationController,
-                        // EmailVerificationController - Steps 10A/10C), not pre-wired stubs anymore.
-                        // "/api/v1/auth/verify-phone" and "/api/v1/auth/resend-phone-verification"
-                        // (self-service phone verification, PhoneVerificationController) fix the
-                        // previously-permanent phone-only-account login gate - no self-service flow
-                        // existed anywhere in this app to ever set phoneVerified=true, and a
-                        // phone-only user hitting that gate by definition has no bearer token yet.
-                        // "/api/v1/password-reset/request", "/verify-otp" and "/complete" were
-                        // previously unreachable here: PasswordResetController used to map under
-                        // "${app.title}/password-reset" (a property, not a literal), which fell
-                        // through to anyReguest().authenticated() with no matching permitAll rule -
-                        // the same trap RegistrationController's own Javadoc warns about, and it
-                        // made password reset uncallable by the locked-out, token-less user it's
-                        // for. PasswordResetController's mapping is now the literal
-                        // "/api/v1/password-reset", matching every other pre-auth controller here,
-                        // so this list can't silently drift from the controller again.
-                        // "/api/v1/admin/register" and "/api/v1/otp/**" remain pre-wiring for
-                        // not-yet-built work - confirmed with the project owner (Stage 1).
                         .requestMatchers(HttpMethod.POST,
                                 appTitle + "/auth/register",
                                 appTitle + "/auth/login",
-                                appTitle + "/auth/login/verify-otp",
                                 appTitle + "/auth/refresh-token",
                                 appTitle + "/auth/session-status",
                                 appTitle + "/auth/change-password",
@@ -172,12 +97,7 @@ public class WebSecurityConfig {
                                 appTitle + "/password-reset/complete",
                                 appTitle + "/admin/register",
                                 appTitle + "/admin/login",
-                                appTitle + "/admin/login/verify-otp",
                                 appTitle + "/admin/refresh-token",
-                                // React Admin Client plan v4, Step 5C/5D: admin-scoped mirrors of
-                                // "/password-reset/request" and "/verify-otp" above - see
-                                // AdminController#requestPasswordResetOtp's Javadoc for why the
-                                // client-Basic-Auth-gated originals can't be called by this app.
                                 appTitle + "/admin/password-reset/request",
                                 appTitle + "/admin/password-reset/verify-otp",
                                 appTitle + "/admin/reset/wipe-tenant",
@@ -187,19 +107,7 @@ public class WebSecurityConfig {
                         ).permitAll()
 
                         .requestMatchers(HttpMethod.GET, appTitle + "/keep-alive").permitAll()
-                        // Spring Boot forwards any unhandled 404/500 to /error, and that
-                        // forward goes through this filter chain as an ERROR dispatch. If
-                        // /error isn't permitted it falls to anyRequest().authenticated(),
-                        // gets denied, and — since no formLogin/httpBasic is configured,
-                        // making Http403ForbiddenEntryPoint the default — comes back as a
-                        // 403. The real 404 or 500 is never seen. Every "mysterious 403 on
-                        // a path I definitely permitted" in a stateless API traces back to
-                        // this line being missing.
                         .requestMatchers("/error").permitAll()
-                        // Render's health check hits this path unauthenticated. Only
-                        // /actuator/health itself is exposed — no other /actuator/**
-                        // endpoint is permitted, so nothing else in Actuator (env,
-                        // beans, etc.) is reachable without a token.
                         .requestMatchers("/actuator/health").permitAll()
 
                         .requestMatchers(HttpMethod.GET, appTitle + "/auth/activate").permitAll()
@@ -210,18 +118,11 @@ public class WebSecurityConfig {
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
                         .authenticationEntryPoint(customAuthenticationEntryPoint)
                         .accessDeniedHandler(customAccessDenied))
-                // Runs after JWT validation sets the Authentication, so it can read the
-                // token's sid claim and backfill UserSession tracking (see class javadoc).
                 .addFilterAfter(jwtSessionTrackingFilter, BearerTokenAuthenticationFilter.class)
                 .csrf(AbstractHttpConfigurer::disable)
                 .build();
     }
 
-    /**
-     * Matches requests whose URI ends with a known malicious file extension.
-     * Uses a plain string check to avoid Spring 6 PathPatternParser restrictions
-     * (which disallow any characters after ** in a pattern).
-     */
     private RequestMatcher maliciousProbesMatcher() {
         List<String> blockedExtensions = List.of(
                 ".php", ".asp", ".aspx", ".env", ".cgi", ".sh", ".bat"
@@ -263,35 +164,6 @@ public class WebSecurityConfig {
         return source;
     }
 
-    /**
-     * Step 12D history worth keeping: this was originally
-     * {@code JwtDecoders.fromIssuerLocation(tokenIssuerUrl)}, then briefly
-     * {@code @Lazy}-annotated in an attempt to defer that call until after
-     * boot. Neither worked once tokenIssuerUrl started pointing at this
-     * app's own issuer. {@code fromIssuerLocation(...)} does an eager HTTP
-     * GET to {issuer}/.well-known/openid-configuration inside its own
-     * {@code .build()} - unavoidable no matter when {@code .build()} runs.
-     * {@code @Lazy} on this bean method didn't help either: it only stops
-     * Spring's own automatic singleton pre-instantiation from creating the
-     * bean eagerly, but
-     * {@code OAuth2ResourceServerConfigurer.JwtConfigurer.getJwtDecoder()}
-     * calls {@code applicationContext.getBean(JwtDecoder.class)} directly,
-     * which always forces real construction immediately regardless of
-     * {@code @Lazy} on the bean definition - confirmed by reproducing the
-     * exact same ConnectException with @Lazy in place.
-     *
-     * <p>The actual fix: build the decoder from the JWKS URI directly
-     * ({@code NimbusJwtDecoder.withJwkSetUri(...)}, confirmed via
-     * {@code javap} to return a plain {@code NimbusJwtDecoder} with no
-     * network I/O in {@code .build()} itself) instead of via issuer-
-     * location discovery. The underlying JWKSource fetches keys lazily on
-     * the first token it actually needs to verify, by which point the
-     * server is definitely up. Since {@code withJwkSetUri(...)} doesn't
-     * set up issuer validation the way {@code fromIssuerLocation(...)}
-     * does automatically, {@code JwtValidators.createDefaultWithIssuer(...)}
-     * adds that back explicitly so a token minted by a different issuer is
-     * still rejected.
-     */
     @Bean
     public JwtDecoder jwtDecoder() {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(tokenIssuerUrl + "/oauth2/jwks").build();
@@ -303,9 +175,4 @@ public class WebSecurityConfig {
     public GrantedAuthorityDefaults grantedAuthorityDefaults() {
         return new GrantedAuthorityDefaults("");
     }
-
-    // PasswordEncoder moved to PasswordEncoderConfig (same package) - it used
-    // to be a @Bean method here, but that created a circular bean dependency
-    // with JwtSessionTrackingFilter. See PasswordEncoderConfig's class
-    // Javadoc for the full chain.
 }

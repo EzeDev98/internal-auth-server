@@ -18,41 +18,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Step 10A. Deliberately does NOT extend IntegrationTestBase: that class's
- * Postgres container is a static singleton shared (and reusable) across
- * every other IT class in this fork, so by the time most of those run it is
- * no longer empty - some earlier IT class already applied every migration
- * to it. This class starts its own, single-use Postgres container (no
- * withReuse) so "V1 through V21 from empty" is actually true here, not
- * just assumed.
- *
- * Two things are asserted:
- * 1) Flyway's own migration info shows all 21 versioned migrations applied
- *    successfully, in order, with none pending/failed/out-of-order.
- * 2) The resulting schema matches JPA entity expectations - enforced not by
- *    hand-rolling a separate schema comparison here, but by this test
- *    profile's own spring.jpa.hibernate.ddl-auto=validate
- *    (application-test.properties, "mirrors prod's schema-management
- *    strategy"): Hibernate's SchemaManagementTool runs a real validation
- *    pass against every mapped @Entity during context refresh and throws
- *    on any mismatch (missing/extra column, wrong type, wrong
- *    nullability), which would fail this test before the @Test method
- *    body even ran. Reaching the assertions below already proves that
- *    check passed against this exact, freshly-migrated schema.
- *
- * webEnvironment.MOCK (the @SpringBootTest default, named explicitly here
- * for the same reason IntegrationTestBase names its own choice): a real
- * embedded Tomcat is neither needed (no MockMvc/HTTP call in this test) nor
- * safe to add here - IntegrationTestBase's own contexts already bind
- * webEnvironment.DEFINED_PORT to port 8080 elsewhere in this same fork, and
- * this class's different container ports give it a different
- * @DynamicPropertySource fingerprint, so Spring's test-context cache cannot
- * reuse that context - it would build a second one. MOCK still satisfies
- * every @ConditionalOnWebApplication(type = SERVLET) bean this app defines
- * (including AuthorizationServerConfig's HttpSecurity-based beans), just
- * without opening a socket, so nothing here can collide with those.
- */
+/** Verifies the full Flyway migration chain applies cleanly. */
 @ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class FlywayMigrationChainIT {
@@ -86,7 +52,7 @@ class FlywayMigrationChainIT {
     private Flyway flyway;
 
     @Test
-    void everyMigrationFromV1ThroughV21AppliesCleanlyToAnEmptyDatabase_andTheContextLoadingProvesSchemaMatchesEntities() {
+    void everyMigrationFromV1ThroughV30AppliesCleanlyToAnEmptyDatabase_andTheContextLoadingProvesSchemaMatchesEntities() {
         MigrationInfo[] applied = flyway.info().applied();
 
         List<String> appliedVersions = Arrays.stream(applied)
@@ -95,7 +61,8 @@ class FlywayMigrationChainIT {
 
         assertThat(appliedVersions).containsExactly(
                 "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
-                "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21");
+                "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
+                "21", "22", "23", "24", "25", "26", "27", "28", "29", "30");
         assertThat(applied).extracting(MigrationInfo::getState).containsOnly(MigrationState.SUCCESS);
     }
 }

@@ -5,18 +5,7 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-/**
- * Tunable OTP settings, bound from app.otp.* properties. Add to
- * application.properties (or per-profile files) to override the defaults
- * below:
- *
- * <pre>
- * app.otp.length=6
- * app.otp.expiry-minutes=10
- * app.otp.max-attempts=5
- * app.otp.resend-cooldown-seconds=60
- * </pre>
- */
+/** Tunable OTP settings bound from app.otp properties. */
 @Component
 @ConfigurationProperties(prefix = "app.otp")
 @Getter

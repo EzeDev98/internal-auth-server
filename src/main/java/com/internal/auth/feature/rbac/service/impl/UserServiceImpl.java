@@ -26,40 +26,7 @@ import static com.internal.auth.common.constant.AppConstant.DEFAULT_PERMISSION_G
 import static com.internal.auth.common.constant.AppConstant.DEFAULT_ROLE;
 import static com.internal.auth.common.constant.AppConstant.DEFAULT_ROLE_DESCRIPTION;
 
-/**
- * Exception policy: throws only {@link PermissionException}.
- *
- * <p>{@link #addUserToDefaultPermissionGroup} and
- * {@link #addUserToAdminPermissionGroup} are orchestrators designed to
- * return a {@link BaseResponse} error instead of propagating exceptions —
- * this behavior is fully preserved. Both now share one parameterized
- * implementation ({@code addUserToPermissionGroup}) - same get-or-create
- * group/role/mapping/membership logic, just pointed at a different
- * group/role name pair (DEFAULT_* for every new user, ADMIN_* for the admin
- * bootstrap flow in AdminRegistrationServiceImpl).
- *
- * <p><b>Keycloak-mirroring control flow — decision record (Stage 1 punch-list
- * item 2):</b> this class used to branch every "does the default role/group
- * already exist" check on {@code KeycloakUtils} (querying Keycloak state),
- * with a separate code path for "exists in Keycloak but not locally yet" vs
- * "doesn't exist anywhere." Now that the local database is the sole source
- * of truth for RBAC (see {@link PermissionManagementServiceImpl}'s class
- * javadoc for the full decision record), there is only one thing to check —
- * local state — so the Keycloak-vs-local duality collapses to a plain
- * "create it locally if it's missing" and the {@code KeycloakUtils}
- * dependency is gone entirely.
- *
- * <p><b>Create-vs-create race (V20):</b> validateAndCreateGroup/
- * validateAndCreateRole below follow a get-then-create-if-missing pattern,
- * which is itself a check-then-act race when two callers (e.g. two
- * concurrent registrations) both find the default group/role missing and
- * both attempt to create it. PermissionEntityServiceImpl now backs its own
- * pre-check with a DB unique constraint and turns the loser's constraint
- * violation into a PermissionException.alreadyExists(...) rather than a raw
- * persistence failure — the two methods below catch that specific case and
- * treat it as success (the row exists, just not because of this call)
- * instead of failing the whole assignment.
- */
+/** Places users in the default and admin permission groups. */
 @Service
 public class UserServiceImpl implements UserService {
 
@@ -76,17 +43,6 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    // Runs in its own transaction, deliberately separate from the caller's
-    // (e.g. UserRegistrationServiceImpl.register()'s user-creation
-    // transaction). This method already catches everything and always
-    // returns a BaseResponse rather than throwing - but a failure deep
-    // inside (e.g. a role/group persistence error) was still able to mark
-    // the CALLER's transaction rollback-only if it stayed a participating
-    // transaction, silently rolling back the user account that had just
-    // been created even though this code's own soft-fail handling never
-    // saw an exception escape. REQUIRES_NEW makes that impossible: this
-    // method can now fail and roll back on its own without ever touching
-    // whatever transaction called it.
     public BaseResponse addUserToDefaultPermissionGroup(String username) {
         return addUserToPermissionGroup(username,
                 DEFAULT_PERMISSION_GROUP, DEFAULT_PERMISSION_GROUP_DESCRIPTION,
@@ -95,21 +51,6 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    // Deliberately NOT REQUIRES_NEW, unlike addUserToDefaultPermissionGroup
-    // above. AdminRegistrationServiceImpl's bootstrap path takes a FOR
-    // UPDATE lock on the admin Role row and holds it for the rest of its
-    // own transaction before calling this method - a REQUIRES_NEW here
-    // would open a second connection that can't see that row's uncommitted
-    // insert/lock, tries to re-create/re-lock it, and blocks on the first
-    // transaction, which is itself synchronously blocked waiting on this
-    // call to return. Neither side's DB session sees a lock cycle (the
-    // circular wait lives in the Java call stack, not in MySQL's lock
-    // graph), so it doesn't surface as a deadlock - it just hangs until
-    // innodb_lock_wait_timeout fires. Joining the caller's transaction
-    // also matches this class's own documented intent for the admin path
-    // (unlike the default-user path): a role-assignment failure here
-    // should roll back the whole registration, which only reliably happens
-    // if it's the same transaction as the user-row insert.
     public BaseResponse addUserToAdminPermissionGroup(String username) {
         return addUserToPermissionGroup(username,
                 ADMIN_PERMISSION_GROUP, ADMIN_PERMISSION_GROUP_DESCRIPTION,
@@ -128,14 +69,6 @@ public class UserServiceImpl implements UserService {
             return new BaseResponse(HttpServletResponse.SC_CREATED, "User " + username + " successfully added into " + groupName + " with role " + roleName);
 
         } catch (PermissionException ex) {
-            /*
-             * Behavior unchanged from before the Keycloak-mirroring redesign:
-             *
-             *  GROUP_CREATION_FAILED: Log + return 500 "Failed to create permission group".
-             *  ROLE_NOT_ASSIGNED: Log + return 500 "Role could not be assigned".
-             *  USER_NOT_ADDED_TO_GROUP: Log + return 500 "User could not be added to group".
-             *  Anything else: falls through to the outer catch (Exception) path.
-             */
             if (ex.getErrorCode() == PermissionErrorCode.GROUP_CREATION_FAILED) {
                 logger.error("Failed to create or validate permission group: {}", ex.getMessage(), ex);
                 return new BaseResponse(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Failed to create permission group");
@@ -160,8 +93,6 @@ public class UserServiceImpl implements UserService {
             return new BaseResponse(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "An unexpected error occurred");
         }
     }
-
-    // ── Private helpers ────────────────────────────────────────────────────────
 
     private void assignGroupRoleToUser(String username, String groupName) {
         try {
@@ -225,9 +156,6 @@ public class UserServiceImpl implements UserService {
                                 "Failed to create permission group " + groupName);
                     }
                 } catch (PermissionException createEx) {
-                    // Lost a create-vs-create race (V20) - the group now
-                    // genuinely exists, just not because of this call. Fall
-                    // through to the re-fetch below instead of failing.
                     if (createEx.getErrorCode() != PermissionErrorCode.ALREADY_EXISTS) {
                         throw createEx;
                     }
@@ -249,8 +177,6 @@ public class UserServiceImpl implements UserService {
                         throw PermissionException.roleCreationFailed("Failed to create role " + roleName);
                     }
                 } catch (PermissionException createEx) {
-                    // Same create-vs-create race as validateAndCreateGroup
-                    // above (V20).
                     if (createEx.getErrorCode() != PermissionErrorCode.ALREADY_EXISTS) {
                         throw createEx;
                     }
@@ -269,8 +195,6 @@ public class UserServiceImpl implements UserService {
             }
 
             BaseResponse response = permissionService.assignRoleToGroup(permissionGroup.getGroupName(), roleName);
-            // 201 = newly assigned, 200 = assignRoleToGroup's own idempotency
-            // path found it already assigned — both are success here.
             if (response.getStatusCode() != HttpServletResponse.SC_CREATED
                     && response.getStatusCode() != HttpServletResponse.SC_OK) {
                 throw PermissionException.roleNotAssigned(

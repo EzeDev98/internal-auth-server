@@ -8,13 +8,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-/**
- * Step 13A - links a Role to a fine-grained Permission, mirroring
- * RolePermissionGroupMapping's shape (which links Role to
- * PermissionGroup/SubPermissionGroup instead). See Permission's class
- * javadoc for why this join exists and what it deliberately doesn't do
- * yet (no service/controller/JWT wiring - that's Step 13C).
- */
+/** Links a role to a fine-grained permission. */
 @Getter
 @Setter
 @AllArgsConstructor

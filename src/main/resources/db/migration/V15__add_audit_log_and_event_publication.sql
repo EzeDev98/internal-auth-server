@@ -1,13 +1,4 @@
--- Step 14A: audit_log (the audit trail's storage) and event_publication
--- (Spring Modulith's own durable event-publication registry, which backs
--- the audit-event flow - see AuditEventListener's Javadoc). Prod runs
--- Flyway, so both tables are created here rather than through Modulith's
--- auto-schema-init, which is explicitly disabled for prod (see
--- spring.modulith.events.jdbc.schema-initialization.enabled=false in
--- application-prod.properties). Dev keeps relying on that auto-init
--- instead (see application-dev.properties), consistent with dev never
--- running Flyway migrations at all.
-
+-- Adds the audit log and event publication tables.
 CREATE TABLE audit_log (
     id                      BIGSERIAL PRIMARY KEY,
     actor_user_id           BIGINT,
@@ -22,8 +13,6 @@ CREATE INDEX idx_audit_log_actor_user_id ON audit_log (actor_user_id);
 CREATE INDEX idx_audit_log_client_application_id ON audit_log (client_application_id);
 CREATE INDEX idx_audit_log_created_at ON audit_log (created_at);
 
--- Spring Modulith's own table, exact DDL per the official PostgreSQL
--- schema reference (docs.spring.io/spring-modulith/reference/appendix.html#schemas).
 CREATE TABLE IF NOT EXISTS event_publication
 (
     id                     UUID NOT NULL,

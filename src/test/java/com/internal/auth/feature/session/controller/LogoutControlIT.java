@@ -25,17 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.junit.jupiter.api.Tag;
 
-/**
- * Step 13E (LogoutControl slice): DELETE /session takes no target
- * identifier at all - it looks up the UserSession row whose token_hash
- * matches the caller's OWN bearer token (LogoutServiceImpl, via the same
- * TokenHasher#sha256Hex hashing the real session-tracking path uses) and
- * invalidates only that row. There is no parameter through which a caller
- * could target someone else's session - self-only is structural, not a
- * runtime check - so the interesting case to prove is that a caller
- * holding a session alongside another user's session only ever affects
- * their own row.
- */
+/** Integration tests for LogoutControl. */
 @Tag("security-boundary")
 class LogoutControlIT extends IntegrationTestBase {
 
@@ -76,7 +66,6 @@ class LogoutControlIT extends IntegrationTestBase {
     void logout_withNoMatchingSession_returns200WithABusinessFailureEmbedded() throws Exception {
         User user = userRepository.save(UserTestDataBuilder.aUser().withClientApplicationId(client.getId()).build());
         String token = testTokenMinter.mintAccessToken(client.getId(), user.getUsername(), List.of("basic_access"));
-        // Deliberately no matching UserSession row persisted for this token.
 
         mockMvc.perform(delete("/api/v1/session").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())

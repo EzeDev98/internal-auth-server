@@ -9,17 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-/**
- * Step 11C (unit half). ClientApplicationRegisteredClientRepository's own
- * javadoc on save() explains why it must never silently succeed or write a
- * row: client creation is owned end-to-end by
- * ClientApplicationService#createClient, so there is no legitimate caller
- * of RegisteredClientRepository#save at all. This locks in the throw
- * itself and confirms it fires before ever touching
- * ClientApplicationRepository. ClientApplicationRegisteredClientRepositoryIT
- * covers the other half of Step 11C - that Spring Security's own internals
- * never call save() during ordinary client_credentials token issuance.
- */
+/** Unit tests for ClientApplicationRegisteredClientRepository. */
 class ClientApplicationRegisteredClientRepositoryTest {
 
     private final ClientApplicationRepository clientApplicationRepository = mock(ClientApplicationRepository.class);

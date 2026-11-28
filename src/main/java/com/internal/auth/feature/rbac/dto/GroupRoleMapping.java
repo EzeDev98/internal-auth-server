@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Pairing of a group name and a role name. */
 @Getter
 @Setter
 @AllArgsConstructor

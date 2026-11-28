@@ -10,12 +10,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Step 13A. Mirrors UserRolesRepository's shape (existsByUsernameAndRoleName
- * / findByUserAndRole / findRolesByUsername) for the analogous Role<->
- * Permission join - not yet used by any service or controller (see
- * Permission's class javadoc).
- */
+/** Repository for role to permission mappings. */
 public interface RolePermissionMappingRepository extends JpaRepository<RolePermissionMapping, Long> {
     Optional<RolePermissionMapping> findByRoleAndPermission(Role role, Permission permission);
 

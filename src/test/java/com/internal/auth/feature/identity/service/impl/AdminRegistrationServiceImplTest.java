@@ -38,6 +38,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/** Unit tests for AdminRegistrationServiceImpl. */
 class AdminRegistrationServiceImplTest {
 
     private static final Long CLIENT_APP_ID = 1L;
@@ -73,12 +74,10 @@ class AdminRegistrationServiceImplTest {
         return role;
     }
 
-    /** Bypasses the bootstrap gate entirely (caller already an admin) so a test can focus on what comes after it. */
     private void asAuthenticatedAdmin() {
         when(authenticationHelper.isAdmin()).thenReturn(true);
     }
 
-    /** Puts the gate on its "no admin exists yet, proceed" path with the role row already present. */
     private void asFirstAdminBootstrap() {
         when(authenticationHelper.isAdmin()).thenReturn(false);
         when(rolesRepository.existsByRoleName(ADMIN_ROLE)).thenReturn(true);
@@ -92,8 +91,6 @@ class AdminRegistrationServiceImplTest {
         when(userRepository.findByEmailAndClientApplicationId("admin@wm.com", CLIENT_APP_ID)).thenReturn(Optional.empty());
         when(passwordEncoder.encode("Passw0rd!")).thenReturn("hashed");
     }
-
-    // ===================== self-limiting bootstrap gate ====================
 
     @Test
     void register_callerIsAlreadyAdmin_skipsBootstrapGateEntirely() {
@@ -110,10 +107,6 @@ class AdminRegistrationServiceImplTest {
 
     @Test
     void register_currentBehavior_notAdmin_locksRoleRowForUpdateBeforeCheckingExistingAdmin() {
-        // The Step 5 TOCTOU fix only works in this order: acquire the lock,
-        // THEN check whether an admin already exists. Reversing the order
-        // would let two concurrent callers both observe "no admin yet"
-        // before either one's lock (and insert) is visible to the other.
         asFirstAdminBootstrap();
         stubUniquenessChecksPass();
         when(userRepository.save(any(User.class))).thenReturn(savedUserWithId(1L));
@@ -191,8 +184,6 @@ class AdminRegistrationServiceImplTest {
         verify(rolesRepository).findByRoleNameForUpdate(ADMIN_ROLE);
     }
 
-    // ===================== validation delegation (gate bypassed via admin caller) ====================
-
     @Test
     void register_usernameValidationFails_propagatesAndNeverTouchesRepository() {
         asAuthenticatedAdmin();
@@ -253,8 +244,6 @@ class AdminRegistrationServiceImplTest {
                 .isInstanceOf(BadRequestException.class);
         verifyNoInteractions(userRepository);
     }
-
-    // ===================== per-tenant uniqueness checks ====================
 
     @Test
     void register_usernameAlreadyTakenForTenant_throwsGenericConflictAndStopsBeforePhoneOrEmailChecks() {
@@ -324,8 +313,6 @@ class AdminRegistrationServiceImplTest {
         verify(userRepository, never()).findByEmailAndClientApplicationId(anyString(), any());
     }
 
-    // ===================== success path / admin-specific differences ====================
-
     @Test
     void register_success_preVerifiesBothSuppliedContactMethodsImmediately() {
         asAuthenticatedAdmin();
@@ -394,10 +381,6 @@ class AdminRegistrationServiceImplTest {
 
     @Test
     void register_currentBehavior_adminRoleAssignmentFailureThrowsAndRollsBackUnlikeRegularRegistration() {
-        // Contrast with RegistrationServiceImpl: a non-201 default-role
-        // assignment there is soft-fail (logged, ignored). Here it throws,
-        // because an admin account silently missing its admin role would be
-        // an unrecoverable broken account (no admin yet exists to fix it).
         asAuthenticatedAdmin();
         stubUniquenessChecksPass();
         when(userRepository.save(any(User.class))).thenReturn(savedUserWithId(46L));

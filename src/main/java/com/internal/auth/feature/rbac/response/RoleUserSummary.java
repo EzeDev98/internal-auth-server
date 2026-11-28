@@ -5,10 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Users-in-role row for GET ${app.title}/roles/{id} (Step 2C, React
- * Admin Client plan v4).
- */
+/** User row shown on a role's detail view. */
 @Getter
 @Setter
 @NoArgsConstructor

@@ -1,3 +1,4 @@
+-- Adds the JWT signing key table.
 CREATE TABLE signing_key (
     id BIGSERIAL PRIMARY KEY,
     kid VARCHAR(32) NOT NULL UNIQUE,
@@ -10,5 +11,4 @@ CREATE TABLE signing_key (
 
 CREATE INDEX idx_signing_key_status ON signing_key (status);
 
--- At most one row can be the current signing key at any time.
 CREATE UNIQUE INDEX idx_signing_key_current ON signing_key (is_current) WHERE is_current = TRUE;

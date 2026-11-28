@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/** Creates and manages roles and groups. */
 @Service
 public class PermissionEntityServiceImpl implements PermissionEntityService {
 
@@ -44,11 +45,6 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
             Role savedRole = entityUtils.saveRole(newRole);
             return mapper.buildRoleResponse(savedRole);
         } catch (DataIntegrityViolationException ex) {
-            // Lost a create-vs-create race: another caller's isRoleExist
-            // check above also passed before either save() landed, and the
-            // uk_roles_role_name constraint (V20) is what actually catches
-            // it here. Same outcome as the pre-check above - the row now
-            // genuinely exists, just not because of this call.
             throw PermissionException.alreadyExists("Role already exists in the database");
         } catch (DataAccessException ex) {
             throw PermissionException.of(PermissionErrorCode.ROLE_PERSISTENCE_FAILED,
@@ -76,12 +72,8 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
             PermissionGroup savedGroup = entityUtils.savePermissionGroup(group);
             return mapper.buildPermissionGroupResponse(savedGroup);
         } catch (DataIntegrityViolationException ex) {
-            // Same create-vs-create race as createRole above, caught here by
-            // uk_permission_groups_group_name (V20).
             throw PermissionException.alreadyExists("Group already exists in the database");
         } catch (DataAccessException ex) {
-            // Previously discarded ex entirely - the real cause (which
-            // constraint/column failed) never made it into the logs.
             throw PermissionException.of(PermissionErrorCode.GROUP_PERSISTENCE_FAILED,
                     "Failed to save group to database", ex);
         }
@@ -108,8 +100,6 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
             SubPermissionGroup savedGroup = entityUtils.saveSubPermissionGroup(group);
             return mapper.buildSubPermissionGroupResponse(savedGroup);
         } catch (DataIntegrityViolationException ex) {
-            // Same create-vs-create race as createRole/createSuperGroup
-            // above, caught here by uk_sub_permission_group_group_name (V20).
             throw PermissionException.alreadyExists("Subgroup already exists in the database");
         } catch (DataAccessException ex) {
             throw PermissionException.subGroupPersistenceFailed(groupName);
@@ -175,8 +165,6 @@ public class PermissionEntityServiceImpl implements PermissionEntityService {
         } catch (PermissionException ex) {
             throw ex;
         } catch (DataIntegrityViolationException ex) {
-            // Same create-vs-create race as createSubGroup above, caught
-            // here by uk_sub_permission_group_group_name (V20).
             throw PermissionException.alreadyExists("Subgroup already exists in the database");
         } catch (DataAccessException ex) {
             throw PermissionException.subGroupPersistenceFailed(newGroupName);

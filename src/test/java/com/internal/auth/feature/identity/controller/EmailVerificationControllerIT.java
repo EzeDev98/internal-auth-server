@@ -26,16 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 12A (EmailVerificationController slice). GET /activate never
- * requires a client-credential header (see the controller's own class
- * Javadoc - it resolves via the token's own hash, which is never
- * ambiguous), so only /resend-activation gets the HTTP Basic
- * enforcement cases here. The real token is built with the same
- * OtpResetEngine.populateNewToken/otpService.hashResetToken production
- * code path EmailVerificationServiceImpl itself uses, rather than
- * hand-rolling a hash, so this proves the actual round-trip.
- */
+/** Integration tests for EmailVerificationController. */
 class EmailVerificationControllerIT extends IntegrationTestBase {
 
     @Autowired

@@ -29,11 +29,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Covers the admin-facing session settings on ClientApplicationServiceImpl:
- * persistent refresh token rules, the maximum session lifetime, the
- * revoke-prior-sessions toggle, and the audit event each change publishes.
- */
+/** Unit tests for client application session settings in ClientApplicationServiceImpl. */
 class ClientApplicationServiceImplTest {
 
     private final ClientApplicationRepository repository = mock(ClientApplicationRepository.class);
@@ -58,8 +54,6 @@ class ClientApplicationServiceImplTest {
         when(repository.save(any(ClientApplication.class))).thenAnswer(returnsFirstArg());
         when(authenticationHelper.getCurrentUsername()).thenReturn("admin.user");
     }
-
-    // ===================== persistent refresh token =====================
 
     @Test
     void update_enablingPersistentToken_savesTheSettingsAndPublishesAnAuditEvent() {
@@ -113,8 +107,6 @@ class ClientApplicationServiceImplTest {
         verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
-    // ===================== validation =====================
-
     @Test
     void update_ttlBelowOneDay_isRejected() {
         assertRejected(persistent(0, null), "must be between 1 and 365");
@@ -159,8 +151,6 @@ class ClientApplicationServiceImplTest {
         assertRejected(persistent(60, null), "requires the client to have the refresh_token grant type");
     }
 
-    // ===================== revoke prior sessions on login =====================
-
     @Test
     void update_revokeOff_isSavedAndAudited() {
         UpdateClientApplicationRequest request = new UpdateClientApplicationRequest();
@@ -184,8 +174,6 @@ class ClientApplicationServiceImplTest {
 
         assertThat(response.isRevokePriorSessionsOnLogin()).isFalse();
     }
-
-    // ===================== editable grant types =====================
 
     @Test
     void update_grantTypes_replacesTheSetAndIsAudited() {
@@ -240,8 +228,6 @@ class ClientApplicationServiceImplTest {
         assertThat(response.getGrantTypes()).containsExactly("authorization_code");
     }
 
-    // ===================== create =====================
-
     @Test
     void create_defaultsRevokeToOn_andAuditsTheInitialSettings() {
         when(passwordEncoder.encode(anyString())).thenReturn("hash");
@@ -262,8 +248,6 @@ class ClientApplicationServiceImplTest {
         assertThat(publishedEvent().getDescription())
                 .startsWith("Client new-app created with rotationEnabled=false, refreshTokenTtlDays=60");
     }
-
-    // ===================== helpers =====================
 
     private static UpdateClientApplicationRequest persistent(Integer ttlDays, Integer maxLifetimeDays) {
         UpdateClientApplicationRequest request = new UpdateClientApplicationRequest();

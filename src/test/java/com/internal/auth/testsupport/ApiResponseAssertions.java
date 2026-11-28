@@ -4,16 +4,7 @@ import org.springframework.test.web.servlet.ResultMatcher;
 
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
-/**
- * jsonPath helpers for InternalAuthApiResponse's uniform envelope
- * ({success, message, data, timestamp, errorCode}), so controller tests
- * assert against it by name instead of re-typing the same jsonPath(...)
- * calls in every test class.
- *
- * Usage: mockMvc.perform(...).andExpect(status().isOk())
- *                             .andExpect(ApiResponseAssertions.success())
- *                             .andExpect(ApiResponseAssertions.message("..."));
- */
+/** JSON path assertions for the standard API response envelope. */
 public final class ApiResponseAssertions {
 
     private ApiResponseAssertions() {

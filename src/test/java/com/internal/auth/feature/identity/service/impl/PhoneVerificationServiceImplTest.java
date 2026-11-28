@@ -39,6 +39,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/** Unit tests for PhoneVerificationServiceImpl. */
 class PhoneVerificationServiceImplTest {
 
     private static final Long CLIENT_APP_ID = 7L;
@@ -73,8 +74,6 @@ class PhoneVerificationServiceImplTest {
         app.setName(name);
         return app;
     }
-
-    // ===================== sendVerificationOtp() ====================
 
     @Test
     void sendVerificationOtp_nullPhoneNumber_noOp() {
@@ -135,8 +134,6 @@ class PhoneVerificationServiceImplTest {
 
         assertThatCode(() -> service.sendVerificationOtp(user)).doesNotThrowAnyException();
     }
-
-    // ===================== verify() ====================
 
     @Test
     void verify_invalidPhoneFormat_propagatesAndNeverTouchesRepository() {
@@ -230,8 +227,6 @@ class PhoneVerificationServiceImplTest {
         assertThat(user.isPhoneVerified()).isTrue();
         verify(userRepository).save(user);
     }
-
-    // ===================== resendVerification() ====================
 
     @Test
     void resendVerification_nullPhoneNumber_returnsGenericMessageWithoutAnyLookup() {

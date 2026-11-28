@@ -26,44 +26,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.util.UUID;
 
-/**
- * Step 10A/10B/10C - the first Stage 3/4 (Authentication) work, and the
- * first code path in this app that creates a User row itself. Everything
- * before this (Stage 2) only ever read or updated an already-existing row.
- *
- * Per the Step 10A scoping decisions: newly registered users are enabled
- * immediately (emailVerified/phoneVerified stay false and independent -
- * Step 10C's verification flow sets emailVerified later, not as a gate on
- * registration itself), and this returns a plain confirmation rather than
- * a session/token (token issuance is Step 12).
- *
- * Conflict messages ("username/phone/email or password is incorrect")
- * deliberately never say "already exists". Step 10B: save() is wrapped to
- * catch DataIntegrityViolationException as a defensive backstop against
- * the uniqueness pre-checks below being check-then-act, not atomic.
- * Step 10C: on successful save, if an email was supplied, a verification
- * link is sent - failure to send never fails registration itself. If a
- * phone number was supplied, a verification OTP is sent the same way.
- *
- * Default-role gap fix: every fresh user is enrolled into the default
- * permission group/role via the existing (previously never-invoked)
- * UserService.addUserToDefaultPermissionGroup orchestration, so a brand
- * new account isn't locked out of every role-gated endpoint until an
- * admin manually assigns one. That orchestration is itself designed to
- * never throw - it always returns a BaseResponse - so this is soft-fail
- * and log-only here too, same as the email/phone verification sends
- * above it. Note this reuses the RBAC subsystem as-is, which (like the
- * rest of roles/permission groups) is not yet scoped by
- * clientApplicationId - that's a separate, already-deferred gap, not
- * something this fix changes.
- *
- * Multi-tenant redesign, registration step: clientApplicationId is
- * resolved by RegistrationController from the caller's HTTP Basic client
- * credentials before this method ever runs - every uniqueness check below
- * and the created User row are scoped to it, since username/phone/email
- * are now only unique within one client_application_id (see User's class
- * Javadoc and the V8 migration).
- */
+/** Registers users and triggers their verification. */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -85,8 +48,6 @@ public class UserRegistrationServiceImpl implements UserRegistrationService {
         registrationValidator.validatePhoneNumberIfPresent(request.getPhoneNumber());
         registrationValidator.validateEmailIfPresent(request.getEmail());
 
-        // Reuses ResetValidator's password rules directly, per the Step 10A
-        // decision to keep one password policy definition rather than two.
         resetValidator.validateNewPassword(request.getPassword(), request.getConfirmPassword());
 
         String username = request.getUsername().trim();
@@ -111,28 +72,17 @@ public class UserRegistrationServiceImpl implements UserRegistrationService {
         user.setEmail(email);
         user.setInternalAuthUserId("IA_" + UUID.randomUUID());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        // enabled defaults to true, emailVerified/phoneVerified default to
-        // false on the entity itself - left untouched here deliberately.
 
         User savedUser;
         try {
-            // IDENTITY generation (see User's @GeneratedValue) means save()
-            // issues the INSERT immediately rather than deferring it to a
-            // later flush, so a unique-constraint race is caught right here.
             savedUser = userRepository.save(user);
         } catch (DataIntegrityViolationException e) {
             log.warn("Registration lost a uniqueness race at save-time (username={})", username);
             throw new UserAlreadyExistsException("Unable to create account with the provided details");
         }
 
-        // Step 10C: soft-fail by design - sendVerificationEmail already
-        // swallows its own delivery/provider exceptions internally, so a
-        // failure here never rolls back the account that was just created.
         emailVerificationService.sendVerificationEmail(savedUser);
 
-        // Self-service phone verification fix: same soft-fail contract as
-        // email above - sendVerificationOtp swallows its own delivery
-        // failures internally.
         phoneVerificationService.sendVerificationOtp(savedUser);
 
         log.info("New user registered, id={}", savedUser.getId());

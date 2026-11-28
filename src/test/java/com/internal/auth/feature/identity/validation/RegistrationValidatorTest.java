@@ -10,11 +10,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/** Unit tests for RegistrationValidator. */
 class RegistrationValidatorTest {
 
     private final RegistrationValidator validator = new RegistrationValidator();
-
-    // -- validateUsername ---------------------------------------------------
 
     @ParameterizedTest
     @NullSource
@@ -45,8 +44,6 @@ class RegistrationValidatorTest {
         }
     }
 
-    // -- validateContactInfoPresent ------------------------------------------
-
     @Test
     void validateContactInfoPresent_bothActuallyNull_throws() {
         assertThatThrownBy(() -> validator.validateContactInfoPresent(null, null))
@@ -71,11 +68,6 @@ class RegistrationValidatorTest {
             assertThatCode(() -> validator.validateContactInfoPresent(phone, email)).doesNotThrowAnyException();
         }
     }
-
-    // -- validatePhoneNumberIfPresent -----------------------------------------
-    // Pattern: ^\+?[0-9]{11}$ - optional leading '+', then exactly 11 digits.
-    // Optional field: null/blank must be silently accepted (see
-    // validateContactInfoPresent for the "at least one" rule instead).
 
     @ParameterizedTest
     @NullSource
@@ -105,9 +97,6 @@ class RegistrationValidatorTest {
                     .hasMessage("Please enter a valid phone number");
         }
     }
-
-    // -- validateEmailIfPresent -----------------------------------------------
-    // Pattern: ^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$
 
     @ParameterizedTest
     @NullSource

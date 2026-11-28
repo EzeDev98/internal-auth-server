@@ -1,10 +1,4 @@
--- Self-service phone verification (fixes the previously-permanent
--- phone-only-account login gate: no flow anywhere in this app ever set
--- users.phone_verified=true). Mirrors login_mfa_otps' shape (V7) but with
--- client_application_id included from the start, unlike login_mfa_otps/
--- password_reset_otps which needed a V9 follow-up - the same phone number
--- can already belong to accounts in different client applications (V8).
-
+-- Adds the phone verification OTP table.
 CREATE TABLE phone_verification_otps (
     id                     BIGSERIAL PRIMARY KEY,
     user_id                BIGINT NOT NULL,

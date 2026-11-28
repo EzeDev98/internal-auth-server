@@ -43,36 +43,7 @@ import java.util.Optional;
 import static com.internal.auth.common.constant.AppConstant.GENERIC_REQUEST_MESSAGE;
 import static com.internal.auth.common.constant.AppConstant.PASSWORD_RESET_COOLDOWN_KEY_PREFIX;
 
-/**
- * Orchestrates the password-reset flow. Delegates cryptographic work to
- * OtpService, delivery to OtpDeliveryService, and session invalidation to
- * SessionManagementService. The shared OTP-verification and reset-token
- * machinery — identical to PinResetServiceImpl's, since both are the same
- * OTP-then-token workflow applied to a different target — lives in
- * {@link OtpResetEngine}; this class holds only the business rules specific
- * to resetting a password: user-enumeration protection on request, and
- * updating the local password mirror + sessions on completion.
- *
- * Stage 2 punch-list item 2: this used to also call KeycloakService before
- * updating the local password — retired, since this app doesn't use
- * Keycloak (KeycloakServiceImpl was a documented no-op stub anyway). The
- * local database is the only place a password is written now.
- *
- * Step 11B: invalidateUserSessionByAdmin is now called with the user's
- * username rather than phoneNumber - phoneNumber is optional since Stage 2,
- * so calling with it silently no-opped for any email-only user (their
- * session never got invalidated after a password reset). username is
- * mandatory on every account.
- *
- * Multi-tenant redesign, OTP/token flows step: requestOtp/verifyOtp are
- * now scoped by clientApplicationId (resolved by PasswordResetController
- * from HTTP Basic client credentials) - the user lookup, the OTP lookup,
- * and the Redis resend-cooldown bucket key all incorporate it now, since
- * phoneNumber alone can belong to accounts in different apps (see User's
- * and PasswordResetOtp's class Javadocs, and the V8/V9 migrations).
- * completeReset is untouched - it resolves everything from the reset
- * token's own hash, which was never ambiguous.
- */
+/** Orchestrates the password reset flow. */
 @RequiredArgsConstructor
 @Service
 public class PasswordResetServiceImpl implements PasswordResetService {
@@ -99,18 +70,12 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         resetValidator.validatePhoneNumberFoResetOperations(request.getPhoneNumber());
         String phoneNumber = request.getPhoneNumber();
 
-        // Composite cooldown key (multi-tenant redesign) - a bare phone
-        // number would let one app's OTP request cooldown-lock a
-        // different app's user who happens to share that phone number.
         String cooldownKey = clientApplicationId + ":" + phoneNumber;
         RBucket<String> cooldownBucket = otpResetEngine.getCooldownBucket(redissonClient, PASSWORD_RESET_COOLDOWN_KEY_PREFIX, cooldownKey);
         otpResetEngine.rejectIfCoolingDown(cooldownBucket);
 
         Optional<User> userOptional = userRepository.findByPhoneNumberAndClientApplicationId(phoneNumber, clientApplicationId);
 
-        // User enumeration protection: only generate/send an OTP if the
-        // phone number is registered, but always return the same generic
-        // response and always start the cooldown, regardless of outcome.
         if (userOptional.isPresent()) {
             User user = userOptional.get();
             otpResetEngine.invalidateExisting(
@@ -125,9 +90,6 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             otpResetEngine.populateNewOtp(otpEntity, phoneNumber, rawOtp, properties.getOtp().getExpirationMinutes(), properties.getOtp().getMaxAttempts());
             passwordResetOtpRepository.save(otpEntity);
 
-            // Branded per calling app (SyncPoint/Notare/...) rather than a
-            // single global sender name, so the SMS text matches whichever
-            // app the user actually registered under.
             String appName = clientApplicationService.getById(clientApplicationId).getName();
             otpDeliveryService.sendPasswordResetOtp(phoneNumber, rawOtp, appName);
             log.info("Password reset OTP requested for a registered phone number");
@@ -175,8 +137,6 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         Optional<User> userOptional = userRepository.findByEmailAndClientApplicationId(email, clientApplicationId);
 
-        // Same enumeration protection as the phone flow: only send when the
-        // email is registered, but always answer and cool down identically.
         if (userOptional.isPresent()) {
             User user = userOptional.get();
             otpResetEngine.invalidateExisting(
@@ -248,11 +208,6 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         otpResetEngine.markUsed(resetToken, passwordResetTokenRepository::save);
 
-        // Multi-tenant redesign, sessions step: calls invalidateActiveSessionForUser
-        // directly with the already-resolved userId, rather than
-        // invalidateUserSessionByAdmin's username-based lookup - this
-        // caller already has the User row, so there's no ambiguity to
-        // resolve and no clientApplicationId to thread through.
         sessionManagementService.invalidateActiveSessionForUser(user.getId());
 
         log.info("Password reset completed successfully for user id {}", user.getId());

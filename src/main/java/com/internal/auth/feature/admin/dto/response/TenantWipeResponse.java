@@ -7,12 +7,7 @@ import lombok.Setter;
 
 import java.util.Map;
 
-/**
- * Result of a per-tenant wipe: pre-delete row counts per table, keyed the
- * same way SyncPoint's own DatabaseResetService.ResetResult is.
- *
- * @see com.internal.auth.feature.admin.web.TenantResetController
- */
+/** Result of a tenant wipe with deleted row counts per table. */
 @Getter
 @Setter
 @AllArgsConstructor

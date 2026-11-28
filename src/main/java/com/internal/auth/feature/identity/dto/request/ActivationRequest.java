@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Request body for POST /api/v1/auth/activate (Step 10C). */
+/** Request body for activating an account. */
 @Getter
 @Setter
 @NoArgsConstructor

@@ -13,26 +13,7 @@ import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Base64;
 
-/**
- * Step 14E. AES-256-GCM at-rest encryption for sensitive material stored in
- * the database - today that's only signing_key.encrypted_private_key (see
- * SigningKeyServiceImpl), but this is deliberately generic rather than
- * baked into that one class, so any future secret-shaped column can reuse
- * it.
- *
- * app.secret-encryption-key (SECRET_ENCRYPTION_KEY) has NO insecure
- * ephemeral fallback, unlike the signing key itself
- * (SigningKeyServiceImpl#bootstrapIfEmpty) - that fallback is acceptable
- * there because losing that key only invalidates outstanding tokens.
- * Losing or rotating THIS key would silently orphan every row it already
- * encrypted (permanently undecryptable), which is a strictly worse failure
- * mode - so this fails fast at boot instead, same fail-closed pattern
- * application-prod.properties already uses for datasource credentials.
- *
- * Storage format: Base64(12-byte random IV || GCM ciphertext+tag). A fresh
- * random IV per call, never reused - required for GCM's security
- * guarantees.
- */
+/** AES-256-GCM encryption for sensitive values stored in the database. */
 @Service
 public class SecretEncryptionService {
 

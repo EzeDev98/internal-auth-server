@@ -5,11 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Response body for POST /api/v1/admin/register. Deliberately carries no
- * token - use POST /api/v1/admin/login separately to get one, same
- * register-then-login split as the regular tenant flow.
- */
+/** Response for admin registration. */
 @Getter
 @Setter
 @NoArgsConstructor

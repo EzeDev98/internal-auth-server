@@ -6,6 +6,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Unit tests for TokenHasher. */
 class TokenHasherTest {
 
     private final TokenHasher tokenHasher = new TokenHasher();
@@ -20,9 +21,6 @@ class TokenHasherTest {
 
     @Test
     void sha256Hex_matchesKnownVector() {
-        // Computed independently via Python's hashlib.sha256(...).hexdigest()
-        // - not hand-typed from memory, since a wrong "known" vector would
-        // make this test worse than useless.
         assertThat(tokenHasher.sha256Hex("abc"))
                 .isEqualTo("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
         assertThat(tokenHasher.sha256Hex("reset-token-value-987"))

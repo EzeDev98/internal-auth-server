@@ -2,7 +2,7 @@ package com.internal.auth.common.exception;
 
 import org.springframework.http.HttpStatus;
 
-/** @deprecated Use {@link PermissionException#userGroupMappingFailed(String)} instead. */
+/** Deprecated exception for a failed user-group mapping save. */
 @Deprecated(since = "2.0", forRemoval = true)
 public class UserGroupMappingPersistenceException extends PermissionException {
     public UserGroupMappingPersistenceException(String message, HttpStatus ignored) {

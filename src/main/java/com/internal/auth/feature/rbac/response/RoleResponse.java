@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Role details. */
 @Getter
 @Setter
 @AllArgsConstructor

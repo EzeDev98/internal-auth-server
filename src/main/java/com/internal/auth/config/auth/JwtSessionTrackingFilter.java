@@ -22,28 +22,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Backfills a local {@code UserSession} row the first time an authenticated
- * request is seen for a given bearer token — because frontends authenticate
- * against the configured OIDC issuer's own hosted login page (Authorization
- * Code flow) rather than a local "/login" endpoint here, the backend never
- * receives a discrete "login" event, only ordinary bearer-token-bearing API
- * calls. {@code SessionManagementService.hasActiveSession}/
- * {@code invalidateSession} both depend on a {@code UserSession} row
- * existing, so this filter is what keeps that table populated.
- *
- * <p>Deliberately cheap: a short-lived Redis flag prevents this from hitting
- * the database on every single request once a session has already been
- * recorded recently, and any failure here is logged and swallowed rather
- * than allowed to break the actual request.
- *
- * <p>NOTE: this only creates/refreshes the session row. It does not stamp
- * a separate per-user "last active" timestamp — that capability doesn't
- * exist on {@link SessionManagementService} today (the earlier version of
- * this filter assumed a wider {@code SessionService} interface that was
- * never actually built). Revisit if activity tracking beyond "has an
- * active session" is needed.
- */
+/** Records a local user session the first time a bearer token is seen. */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -65,7 +44,6 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
         try {
             trackSessionIfNeeded(request);
         } catch (Exception ex) {
-            // Session bookkeeping should never take down a real request.
             log.warn("Failed to track session from JWT: {}", ex.getMessage());
         }
 
@@ -91,7 +69,7 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
         String cacheKey = resolveCacheKey(sid, username, rawToken);
 
         if (sessionStorage.getCache(TRACKED_CACHE, cacheKey) != null) {
-            return; // already tracked recently — skip the database round trip
+            return;
         }
 
         Optional<User> user = resolveUser(username);
@@ -104,17 +82,6 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
         sessionStorage.putCache(TRACKED_CACHE, cacheKey, Boolean.TRUE, TRACKED_CACHE_TTL_SECONDS);
     }
 
-    /**
-     * Step 3 (session-tracking lookup fix): scoped by client_application_id
-     * when the current token carries that claim (a self-issued local-login
-     * token - see AuthenticationHelper#getCurrentClientApplicationId and
-     * LoginServiceImpl#mintAccessToken). A Keycloak-issued token carries no
-     * such claim and predates the tenant concept entirely, so it can't be
-     * scoped that way - instead this falls back to findAllByUsername and
-     * refuses to guess when the username collides across more than one
-     * tenant, rather than risking Spring Data's opaque
-     * IncorrectResultSizeDataAccessException or an arbitrary match.
-     */
     private Optional<User> resolveUser(String username) {
         Long clientApplicationId = authenticationHelper.getCurrentClientApplicationId();
         if (clientApplicationId != null) {
@@ -131,20 +98,6 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
         return matches.stream().findFirst();
     }
 
-    /**
-     * Step 14A fix: this short-circuit cache previously fell straight back
-     * to the bare username whenever a token carried no "sid" claim - which
-     * is every self-issued local-login token (see class javadoc), so two
-     * tenants sharing a username shared one cache entry and whichever
-     * user's request landed second within TRACKED_CACHE_TTL_SECONDS had
-     * its own session tracking silently skipped, even though resolveUser()
-     * above already resolves the correct per-tenant User. Now prefixes the
-     * username with client_application_id when the token carries that
-     * claim (the same composite-key pattern LoginServiceImpl's login-MFA
-     * OTP cooldown key already uses), so same-username tenants never share
-     * a cache entry. A Keycloak-issued token carries no such claim and
-     * falls back to the prior username-only key, unchanged.
-     */
     private String resolveCacheKey(String sid, String username, String rawToken) {
         if (sid != null) {
             return sid;
@@ -162,15 +115,9 @@ public class JwtSessionTrackingFilter extends OncePerRequestFilter {
         return header.substring(7).trim();
     }
 
-    /**
-     * Shared with {@code UserSessionController}'s self-service session-status
-     * check, so the "sid, falling back to session_state" claim lookup only
-     * lives in one place.
-     */
     public static String extractSessionId(Jwt jwt) {
         String sid = jwt.getClaimAsString("sid");
         if (sid == null) {
-            // Some issuers expose the session id under this claim name instead.
             sid = jwt.getClaimAsString("session_state");
         }
         return sid;

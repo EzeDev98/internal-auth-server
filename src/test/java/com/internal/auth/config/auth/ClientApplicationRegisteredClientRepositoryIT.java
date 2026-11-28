@@ -16,23 +16,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 11C (integration half). Drives a real client_credentials grant
- * through POST /oauth2/token - the actual Spring Authorization Server
- * machinery this app doesn't hand-roll (OAuth2ClientAuthenticationFilter,
- * OAuth2TokenEndpointFilter, OAuth2ClientCredentialsAuthenticationProvider)
- * - against a real persisted ClientApplication. That path only ever calls
- * RegisteredClientRepository#findByClientId to authenticate the caller and
- * OAuth2AuthorizationService#save (a different bean entirely, see
- * AuthorizationServerConfig#authorizationService) to persist the resulting
- * OAuth2Authorization; nothing in ordinary token issuance calls
- * RegisteredClientRepository#save. A 200 with an access_token proves that
- * held true here - ClientApplicationRegisteredClientRepositoryTest already
- * confirmed save() throws immediately if anything ever does call it, so a
- * 500 here (not a plausible outcome, but the point of this test) would
- * mean Spring Security's internals started calling it after some future
- * change.
- */
+/** Integration tests for ClientApplicationRegisteredClientRepository. */
 class ClientApplicationRegisteredClientRepositoryIT extends IntegrationTestBase {
 
     @Autowired

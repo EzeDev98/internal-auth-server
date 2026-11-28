@@ -24,31 +24,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * Mints real, fully valid self-issued access tokens for MockMvc tests -
- * without going through POST /auth/login - by driving the exact same
- * OAuth2TokenGenerator / RegisteredClientRepository / AuthorizationServerSettings
- * beans LoginServiceImpl#mintAccessToken uses in production (same class,
- * same method, see its source for the original this is mirrored from).
- * Only the identity (username, roles, client_application_id) is
- * test-supplied - token construction, RSA signing, and claim-stamping
- * (AuthorizationServerConfig's jwtTokenCustomizer adds "roles", "kid", and
- * "client_application_id") are 100% production code, so a test token is
- * indistinguishable from a real one to every consumer of it
- * (WebSecurityConfig#jwtDecoder, SelfIssuedJwtRolesConverter,
- * AuthenticationHelper).
- *
- * Does NOT persist an OAuth2Authorization row (the oauth2_authorization
- * table) the way a real login does - that table backs the authorization
- * server's own introspection/revocation, not the resource-server JWT
- * decode path this exercises, so it isn't needed for a bearer token to
- * validate correctly here.
- *
- * Requires a ClientApplication row (and therefore a RegisteredClient - see
- * ClientApplicationRegisteredClientRepository) to already exist for the
- * given clientApplicationId - persist one via ClientApplicationTestDataBuilder
- * first, or this throws IllegalStateException.
- */
+/** Mints valid self-issued access tokens for tests. */
 @TestComponent
 @RequiredArgsConstructor
 public class TestTokenMinter {
@@ -63,12 +39,10 @@ public class TestTokenMinter {
     @Value("${app.self-issuer-uri}")
     private String selfIssuerUri;
 
-    /** Mints a token for a user with no roles - e.g. a freshly-registered, unverified account. */
     public String mintAccessToken(Long clientApplicationId, String username) {
         return mintAccessToken(clientApplicationId, username, List.of());
     }
 
-    /** Mints a token carrying the given role names, e.g. List.of("create-admin"). */
     public String mintAccessToken(Long clientApplicationId, String username, List<String> roleNames) {
         RegisteredClient registeredClient = registeredClientRepository.findById(String.valueOf(clientApplicationId));
         if (registeredClient == null) {
@@ -83,8 +57,6 @@ public class TestTokenMinter {
 
         UsernamePasswordAuthenticationToken principal =
                 new UsernamePasswordAuthenticationToken(username, null, authorities);
-        // Read back by AuthorizationServerConfig's jwtTokenCustomizer to stamp
-        // the "client_application_id" claim - see LoginServiceImpl#mintAccessToken.
         principal.setDetails(clientApplicationId);
 
         AuthorizationServerContext context =

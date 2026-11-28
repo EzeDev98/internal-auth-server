@@ -11,18 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
-/**
- * Self-service phone verification (fixes the previously-permanent
- * phone-only-account login gate - see User's class Javadoc). Mirrors
- * LoginMfaOtp/PasswordResetOtp field-for-field via ResettableOtp. Like
- * EmailVerificationToken, no separate follow-up token exists - a
- * successful verify() sets phoneVerified=true directly
- * (PhoneVerificationServiceImpl#verify).
- *
- * clientApplicationId is required from this entity's first version -
- * unlike login_mfa_otps/password_reset_otps, which needed a V9 follow-up
- * migration to add it after the fact.
- */
+/** OTP used to verify a user's phone number. */
 @Getter
 @Setter
 @NoArgsConstructor

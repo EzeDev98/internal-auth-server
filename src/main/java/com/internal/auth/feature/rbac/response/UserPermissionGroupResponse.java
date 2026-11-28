@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** A user's permission group membership. */
 @Getter
 @Setter
 @AllArgsConstructor

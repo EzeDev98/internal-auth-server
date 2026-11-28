@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** A role and the permission group it is mapped to. */
 @Getter
 @Setter
 @AllArgsConstructor

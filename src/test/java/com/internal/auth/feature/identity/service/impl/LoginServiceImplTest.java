@@ -3,31 +3,19 @@ package com.internal.auth.feature.identity.service.impl;
 import com.internal.auth.common.exception.AccountDisabledException;
 import com.internal.auth.common.exception.AccountNotVerifiedException;
 import com.internal.auth.common.exception.InvalidCredentialsException;
-import com.internal.auth.common.exception.OtpInvalidException;
-import com.internal.auth.common.exception.OtpResendCooldownException;
-import com.internal.auth.common.reset.OtpResetEngine;
-import com.internal.auth.common.reset.OtpService;
-import com.internal.auth.common.reset.delivery.OtpDeliveryService;
 import com.internal.auth.feature.audit.event.UserLoggedInEvent;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
-import com.internal.auth.feature.identity.config.LoginMfaProperties;
 import com.internal.auth.feature.identity.dto.request.LoginRequest;
 import com.internal.auth.feature.identity.dto.response.LoginResponse;
-import com.internal.auth.feature.identity.dto.request.VerifyLoginOtpRequest;
-import com.internal.auth.feature.identity.model.LoginMfaOtp;
 import com.internal.auth.feature.identity.model.User;
-import com.internal.auth.feature.identity.repository.LoginMfaOtpRepository;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.session.service.SessionManagementService;
-import com.internal.auth.common.reset.ResetStatus;
 import com.internal.auth.feature.rbac.model.Role;
 import com.internal.auth.feature.rbac.repository.UserRolesRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.redisson.api.RBucket;
-import org.redisson.api.RedissonClient;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -53,16 +41,14 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/** Unit tests for UserLoginServiceImpl login flows. */
 class LoginServiceImplTest {
 
     private static final Long CLIENT_APP_ID = 7L;
@@ -71,12 +57,6 @@ class LoginServiceImplTest {
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
-    private final LoginMfaOtpRepository loginMfaOtpRepository = mock(LoginMfaOtpRepository.class);
-    private final OtpService otpService = mock(OtpService.class);
-    private final OtpDeliveryService otpDeliveryService = mock(OtpDeliveryService.class);
-    private final OtpResetEngine otpResetEngine = mock(OtpResetEngine.class);
-    private final LoginMfaProperties loginMfaProperties = new LoginMfaProperties();
-    private final RedissonClient redissonClient = mock(RedissonClient.class);
     private final UserRolesRepository userRolesRepository = mock(UserRolesRepository.class);
     private final RegisteredClientRepository registeredClientRepository = mock(RegisteredClientRepository.class);
     private final OAuth2AuthorizationService authorizationService = mock(OAuth2AuthorizationService.class);
@@ -89,17 +69,13 @@ class LoginServiceImplTest {
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate = mock(org.springframework.jdbc.core.JdbcTemplate.class);
 
     private final UserLoginServiceImpl service = new UserLoginServiceImpl(
-            eventPublisher, userRepository, passwordEncoder, loginMfaOtpRepository, otpService,
-            otpDeliveryService, otpResetEngine, loginMfaProperties, redissonClient, userRolesRepository,
+            eventPublisher, userRepository, passwordEncoder, userRolesRepository,
             registeredClientRepository, authorizationService, tokenGenerator, authorizationServerSettings,
             clientApplicationService, sessionManagementService, jdbcTemplate);
 
     @BeforeEach
     void wireSelfIssuerUri() {
-        // @Value-injected field - not part of @RequiredArgsConstructor, so
-        // it has to be set via reflection to match how Spring wires it.
         ReflectionTestUtils.setField(service, "selfIssuerUri", SELF_ISSUER_URI);
-        // login()/verifyLoginOtp() now read the client's revokePriorSessionsOnLogin flag (default true).
         when(clientApplicationService.getById(CLIENT_APP_ID)).thenReturn(clientApplication("TestApp"));
     }
 
@@ -119,7 +95,6 @@ class LoginServiceImplTest {
         user.setEnabled(true);
         user.setEmailVerified(true);
         user.setPhoneVerified(true);
-        user.setMfaEnabled(false);
         return user;
     }
 
@@ -142,7 +117,6 @@ class LoginServiceImplTest {
         return app;
     }
 
-    /** Plain token - deliberately NOT a ClaimAccessor, for the "else" branch of mintAccessToken. */
     private static final class PlainToken implements OAuth2Token {
         private final String value;
         private final Instant issuedAt;
@@ -170,7 +144,6 @@ class LoginServiceImplTest {
         }
     }
 
-    /** A token that also exposes claims - for the ClaimAccessor branch of mintAccessToken. */
     private static final class ClaimBearingToken implements OAuth2Token, ClaimAccessor {
         private final String value;
         private final Map<String, Object> claims;
@@ -206,8 +179,6 @@ class LoginServiceImplTest {
         when(userRolesRepository.findRolesByUserId(user.getId())).thenReturn(List.of(role("Buyer")));
         when(tokenGenerator.generate(any(OAuth2TokenContext.class))).thenReturn(generatedToken);
     }
-
-    // ===================== login() - input / lookup guards ====================
 
     @Test
     void login_nullUsername_throwsInvalidCredentialsWithoutTouchingRepository() {
@@ -255,8 +226,6 @@ class LoginServiceImplTest {
         verify(userRepository, never()).findByUsername(anyString());
     }
 
-    // ===================== login() - password check ====================
-
     @Test
     void login_storedPasswordIsNull_throwsInvalidCredentialsAndNeverCallsPasswordEncoder() {
         User user = activeVerifiedUser();
@@ -267,7 +236,6 @@ class LoginServiceImplTest {
                 .isInstanceOfSatisfying(InvalidCredentialsException.class,
                         ex -> assertThat(ex.getMessage()).isEqualTo("Username or password is incorrect"));
 
-        // Short-circuits on the null check - matches() is never reached.
         verify(passwordEncoder, never()).matches(any(), any());
     }
 
@@ -281,8 +249,6 @@ class LoginServiceImplTest {
                 .isInstanceOfSatisfying(InvalidCredentialsException.class,
                         ex -> assertThat(ex.getMessage()).isEqualTo("Username or password is incorrect"));
     }
-
-    // ===================== login() - post-password account-state gates ====================
 
     @Test
     void login_disabledAccount_afterPasswordConfirmedCorrect_throwsAccountDisabled() {
@@ -339,9 +305,6 @@ class LoginServiceImplTest {
 
     @Test
     void login_verifiedEmailWithUnverifiedPhone_loginSucceeds() {
-        // Login requires only ONE verified contact method, not every one
-        // present on the account - a verified email is sufficient even
-        // though phone is still unverified.
         User user = activeVerifiedUser();
         user.setEmailVerified(true);
         user.setPhoneVerified(false);
@@ -356,9 +319,6 @@ class LoginServiceImplTest {
 
     @Test
     void login_currentBehavior_absentContactMethodIsNeverALoginBlocker() {
-        // No email, no phone verification problem, no MFA - reaches the
-        // success path even though emailVerified/phoneVerified are both
-        // false, because neither contact method is actually present.
         User user = activeVerifiedUser();
         user.setEmail(null);
         user.setEmailVerified(false);
@@ -373,74 +333,8 @@ class LoginServiceImplTest {
         assertThat(response.getMessage()).isEqualTo("Login successful.");
     }
 
-    // ===================== login() - MFA step-up branch ====================
-
     @Test
-    void login_mfaEnabled_sendsOtpAndReturnsMfaRequiredResponseWithNoToken() {
-        User user = activeVerifiedUser();
-        user.setMfaEnabled(true);
-        when(userRepository.findByUsernameAndClientApplicationId("alice", CLIENT_APP_ID)).thenReturn(Optional.of(user));
-        when(passwordEncoder.matches("Passw0rd!", "hashed-pw")).thenReturn(true);
-
-        RBucket<String> bucket = mock(RBucket.class);
-        when(otpResetEngine.getCooldownBucket(redissonClient, "login-mfa:otp-cooldown:", CLIENT_APP_ID + ":+2348000000001"))
-                .thenReturn(bucket);
-        when(loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+2348000000001", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.empty());
-        when(otpService.generateOtp(6)).thenReturn("654321");
-        when(clientApplicationService.getById(CLIENT_APP_ID)).thenReturn(clientApplication("TestApp"));
-
-        LoginResponse response = service.login(loginRequest("alice", "Passw0rd!"), CLIENT_APP_ID);
-
-        assertThat(response.getUserId()).isNull();
-        assertThat(response.getUsername()).isEqualTo("alice");
-        assertThat(response.getMessage()).isEqualTo("A verification code has been sent to your registered phone number.");
-        assertThat(response.isMfaRequired()).isTrue();
-        assertThat(response.getAccessToken()).isNull();
-
-        verify(otpResetEngine).rejectIfCoolingDown(bucket);
-        // Explicit type witness: invalidateExisting's <T extends ResettableOtp>
-        // has no concrete-type evidence from Optional.empty() alone, so pin T
-        // to LoginMfaOtp rather than leaving it to (fragile) inference.
-        verify(otpResetEngine).<LoginMfaOtp>invalidateExisting(eq(Optional.empty()), any());
-        verify(otpResetEngine).populateNewOtp(any(LoginMfaOtp.class), eq("+2348000000001"), eq("654321"), eq(5), eq(3));
-        verify(otpDeliveryService).sendLoginOtp("+2348000000001", "654321", "TestApp");
-        verify(otpResetEngine).startCooldown(bucket, 60);
-
-        ArgumentCaptor<LoginMfaOtp> otpCaptor = ArgumentCaptor.forClass(LoginMfaOtp.class);
-        verify(loginMfaOtpRepository).save(otpCaptor.capture());
-        assertThat(otpCaptor.getValue().getUserId()).isEqualTo(1L);
-        assertThat(otpCaptor.getValue().getClientApplicationId()).isEqualTo(CLIENT_APP_ID);
-
-        // No token is minted, and login isn't recorded, until verifyLoginOtp() completes.
-        verifyNoInteractions(tokenGenerator, authorizationService, registeredClientRepository, eventPublisher);
-    }
-
-    @Test
-    void login_mfaEnabled_coolingDown_propagatesResendCooldownAndNeverSendsOrPersistsANewOtp() {
-        User user = activeVerifiedUser();
-        user.setMfaEnabled(true);
-        when(userRepository.findByUsernameAndClientApplicationId("alice", CLIENT_APP_ID)).thenReturn(Optional.of(user));
-        when(passwordEncoder.matches("Passw0rd!", "hashed-pw")).thenReturn(true);
-
-        RBucket<String> bucket = mock(RBucket.class);
-        when(otpResetEngine.getCooldownBucket(redissonClient, "login-mfa:otp-cooldown:", CLIENT_APP_ID + ":+2348000000001"))
-                .thenReturn(bucket);
-        doThrow(new OtpResendCooldownException("Please wait before requesting another code.", 30L))
-                .when(otpResetEngine).rejectIfCoolingDown(bucket);
-
-        assertThatThrownBy(() -> service.login(loginRequest("alice", "Passw0rd!"), CLIENT_APP_ID))
-                .isInstanceOf(OtpResendCooldownException.class);
-
-        verify(loginMfaOtpRepository, never()).save(any());
-        verifyNoInteractions(otpDeliveryService);
-        verify(otpResetEngine, never()).startCooldown(any(), anyInt());
-    }
-
-    // ===================== login() - success / token minting ====================
-
-    @Test
-    void login_success_noMfa_mintsAccessTokenAndPersistsAuthorizationBuiltFromContext() {
+    void login_success_mintsAccessTokenAndPersistsAuthorizationBuiltFromContext() {
         User user = activeVerifiedUser();
         when(userRepository.findByUsernameAndClientApplicationId("alice", CLIENT_APP_ID)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("Passw0rd!", "hashed-pw")).thenReturn(true);
@@ -458,7 +352,6 @@ class LoginServiceImplTest {
         assertThat(response.getUserId()).isEqualTo(1L);
         assertThat(response.getUsername()).isEqualTo("alice");
         assertThat(response.getMessage()).isEqualTo("Login successful.");
-        assertThat(response.isMfaRequired()).isFalse();
         assertThat(response.getAccessToken()).isEqualTo("abc.def.ghi");
 
         verify(eventPublisher).publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), CLIENT_APP_ID));
@@ -484,15 +377,11 @@ class LoginServiceImplTest {
         assertThat(authorization.getPrincipalName()).isEqualTo("alice");
         assertThat(authorization.getAuthorizationGrantType()).isEqualTo(new AuthorizationGrantType("local_login"));
         assertThat(authorization.getAccessToken().getToken().getTokenValue()).isEqualTo("abc.def.ghi");
-        // Plain token (not a ClaimAccessor) - no claims metadata attached.
         assertThat(authorization.getAccessToken().getClaims()).isNull();
     }
 
     @Test
     void login_success_currentBehavior_rolesAreLookedUpByUserIdNeverByUsername() {
-        // The multi-tenant regression this step specifically has to lock
-        // in: usernames are only unique per tenant, so a username-based
-        // role lookup here would be a cross-tenant privilege-escalation bug.
         User user = activeVerifiedUser();
         when(userRepository.findByUsernameAndClientApplicationId("alice", CLIENT_APP_ID)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("Passw0rd!", "hashed-pw")).thenReturn(true);
@@ -514,7 +403,6 @@ class LoginServiceImplTest {
         assertThatThrownBy(() -> service.login(loginRequest("alice", "Passw0rd!"), CLIENT_APP_ID))
                 .isInstanceOf(IllegalStateException.class);
 
-        // The login was already recorded as successful before minting blew up.
         verify(eventPublisher).publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), CLIENT_APP_ID));
     }
 
@@ -563,100 +451,5 @@ class LoginServiceImplTest {
         OAuth2Authorization authorization = authorizationCaptor.getValue();
         assertThat(authorization.getAccessToken().getToken().getTokenValue()).isEqualTo("claim.token.value");
         assertThat(authorization.getAccessToken().getClaims()).isEqualTo(claims);
-    }
-
-    // ===================== verifyLoginOtp() ====================
-
-    @Test
-    void verifyLoginOtp_nullPhoneNumber_throwsOtpInvalidWithoutTouchingRepository() {
-        assertThatThrownBy(() -> service.verifyLoginOtp(new VerifyLoginOtpRequest(null, "123456"), CLIENT_APP_ID))
-                .isInstanceOfSatisfying(OtpInvalidException.class,
-                        ex -> assertThat(ex.getMessage()).isEqualTo("The verification code is invalid."));
-
-        verifyNoInteractions(loginMfaOtpRepository, otpResetEngine);
-    }
-
-    @Test
-    void verifyLoginOtp_blankPhoneNumber_throwsOtpInvalid() {
-        assertThatThrownBy(() -> service.verifyLoginOtp(new VerifyLoginOtpRequest("   ", "123456"), CLIENT_APP_ID))
-                .isInstanceOf(OtpInvalidException.class);
-
-        verifyNoInteractions(loginMfaOtpRepository);
-    }
-
-    @Test
-    void verifyLoginOtp_noActiveOtpForPhoneAndTenant_throwsOtpInvalidAndNeverVerifies() {
-        when(loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+2348000000001", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.verifyLoginOtp(new VerifyLoginOtpRequest("+2348000000001", "123456"), CLIENT_APP_ID))
-                .isInstanceOfSatisfying(OtpInvalidException.class,
-                        ex -> assertThat(ex.getMessage()).isEqualTo("The verification code is invalid."));
-
-        verifyNoInteractions(otpResetEngine);
-    }
-
-    @Test
-    void verifyLoginOtp_currentBehavior_lookupIsScopedByClientApplicationIdNeverUnscoped() {
-        when(loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+2348000000001", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.verifyLoginOtp(new VerifyLoginOtpRequest("+2348000000001", "123456"), CLIENT_APP_ID))
-                .isInstanceOf(OtpInvalidException.class);
-
-        verify(loginMfaOtpRepository, never())
-                .findTopByPhoneNumberAndStatusOrderByCreatedAtDesc(anyString(), any());
-    }
-
-    @Test
-    void verifyLoginOtp_otpVerificationRejected_propagatesWhateverOtpResetEngineThrows() {
-        LoginMfaOtp otp = new LoginMfaOtp();
-        otp.setUserId(1L);
-        when(loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+2348000000001", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
-        doThrow(new OtpInvalidException("The verification code is invalid."))
-                .when(otpResetEngine).verify(eq(otp), eq("000000"), any());
-
-        assertThatThrownBy(() -> service.verifyLoginOtp(new VerifyLoginOtpRequest("+2348000000001", "000000"), CLIENT_APP_ID))
-                .isInstanceOf(OtpInvalidException.class);
-
-        verifyNoInteractions(userRepository, eventPublisher, tokenGenerator);
-    }
-
-    @Test
-    void verifyLoginOtp_verifiedButUserRecordMissing_throwsInvalidCredentials() {
-        LoginMfaOtp otp = new LoginMfaOtp();
-        otp.setUserId(99L);
-        when(loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+2348000000001", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
-        when(userRepository.findById(99L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.verifyLoginOtp(new VerifyLoginOtpRequest("+2348000000001", "654321"), CLIENT_APP_ID))
-                .isInstanceOfSatisfying(InvalidCredentialsException.class,
-                        ex -> assertThat(ex.getMessage()).isEqualTo("Username or password is incorrect"));
-
-        verifyNoInteractions(eventPublisher, tokenGenerator);
-    }
-
-    @Test
-    void verifyLoginOtp_success_recordsAuditAndMintsAccessToken() {
-        User user = activeVerifiedUser();
-        LoginMfaOtp otp = new LoginMfaOtp();
-        otp.setUserId(user.getId());
-        when(loginMfaOtpRepository.findTopByPhoneNumberAndClientApplicationIdAndStatusOrderByCreatedAtDesc(
-                "+2348000000001", CLIENT_APP_ID, ResetStatus.ACTIVE)).thenReturn(Optional.of(otp));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        stubSuccessfulMinting(user, new PlainToken("otp-verified-token", Instant.now(), Instant.now().plusSeconds(60)));
-
-        LoginResponse response = service.verifyLoginOtp(new VerifyLoginOtpRequest("+2348000000001", "654321"), CLIENT_APP_ID);
-
-        verify(otpResetEngine).verify(eq(otp), eq("654321"), any());
-        assertThat(response.getUserId()).isEqualTo(1L);
-        assertThat(response.getUsername()).isEqualTo("alice");
-        assertThat(response.getMessage()).isEqualTo("Login successful.");
-        assertThat(response.isMfaRequired()).isFalse();
-        assertThat(response.getAccessToken()).isEqualTo("otp-verified-token");
-
-        verify(eventPublisher).publishEvent(new UserLoggedInEvent(user.getId(), user.getUsername(), CLIENT_APP_ID));
     }
 }

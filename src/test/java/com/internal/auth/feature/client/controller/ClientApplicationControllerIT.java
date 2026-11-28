@@ -22,27 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.junit.jupiter.api.Tag;
 
-/**
- * Step 13F (last item of Step 13): ClientApplicationController's create and
- * rotate-secret endpoints are both @PreAuthorize(Roles.HAS_ADMIN), and
- * CreateClientApplicationResponse's own class Javadoc is explicit that
- * clientSecret "carries the one and only time the raw secret is ever
- * available" - only its BCrypt hash is ever persisted, so a rotated
- * client's PREVIOUS secret must never reappear anywhere in the response and
- * must genuinely stop authenticating once rotated.
- *
- * The rotate-secret admin-token case seeds a client with a known raw
- * secret, then asserts three things together: the response's new secret is
- * never equal to that known old one (nothing "leaks" the previous value
- * back), the old secret's hash no longer verifies against the persisted
- * row afterward, and the new secret's hash does - proving the rotation is
- * both real and one-way, not just a response-shape check.
- *
- * Only calls rotate-secret once with a genuine admin token -
- * AppConstant.MAX_CLIENT_SECRET_ROTATE_REQUEST is 5 per IP per day (the
- * rate limiter runs inside the method body, after @PreAuthorize already
- * passed, so the no-token/non-admin-token cases below never touch it).
- */
+/** Integration tests for ClientApplicationController. */
 @Tag("security-boundary")
 class ClientApplicationControllerIT extends IntegrationTestBase {
 
@@ -59,8 +39,6 @@ class ClientApplicationControllerIT extends IntegrationTestBase {
 
     @BeforeEach
     void persistCallerClient() {
-        // The client application backing the caller's own minted token -
-        // unrelated to any client application a test creates/rotates below.
         callerClient = clientApplicationRepository.save(ClientApplicationTestDataBuilder.aClientApplication().build());
     }
 

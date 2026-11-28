@@ -4,6 +4,7 @@ import com.internal.auth.common.response.BaseResponse;
 
 import java.util.List;
 
+/** High-level RBAC management operations. */
 public interface PermissionManagementService {
     BaseResponse createRole(String name, String description);
     BaseResponse createSuperGroup(String groupName, String description);

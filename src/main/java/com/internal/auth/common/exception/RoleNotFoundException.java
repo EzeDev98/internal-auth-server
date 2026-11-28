@@ -2,7 +2,7 @@ package com.internal.auth.common.exception;
 
 import org.springframework.http.HttpStatus;
 
-/** @deprecated Use {@link PermissionException#roleNotFound(String)} instead. */
+/** Deprecated exception for a missing role. */
 @Deprecated(since = "2.0", forRemoval = true)
 public class RoleNotFoundException extends PermissionException {
     public RoleNotFoundException(String message, HttpStatus ignored) {

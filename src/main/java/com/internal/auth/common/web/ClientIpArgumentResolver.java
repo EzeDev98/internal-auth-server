@@ -9,6 +9,7 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
+/** Resolves parameters annotated with ClientIp to the caller's IP address. */
 @Component
 public class ClientIpArgumentResolver implements HandlerMethodArgumentResolver {
     @Override

@@ -35,6 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/** Unit tests for UserRegistrationServiceImpl. */
 class RegistrationServiceImplTest {
 
     private static final Long CLIENT_APP_ID = 7L;
@@ -68,8 +69,6 @@ class RegistrationServiceImplTest {
         when(userRepository.findByEmailAndClientApplicationId("new@user.com", CLIENT_APP_ID)).thenReturn(Optional.empty());
         when(passwordEncoder.encode("Passw0rd!")).thenReturn("hashed");
     }
-
-    // -- validation delegation ------------------------------------------------
 
     @Test
     void register_usernameValidationFails_propagatesAndNeverTouchesRepository() {
@@ -152,13 +151,9 @@ class RegistrationServiceImplTest {
 
         service.register(request, CLIENT_APP_ID);
 
-        // Validator sees the raw, untrimmed value - only the copy used for
-        // the uniqueness check and the saved entity gets trimmed.
         verify(registrationValidator).validateUsername("  newuser  ");
         verify(userRepository).findByUsernameAndClientApplicationId("newuser", CLIENT_APP_ID);
     }
-
-    // -- per-tenant uniqueness checks -----------------------------------------
 
     @Test
     void register_usernameAlreadyTakenForTenant_throwsGenericConflictAndStopsBeforePhoneOrEmailChecks() {
@@ -207,9 +202,6 @@ class RegistrationServiceImplTest {
 
     @Test
     void register_currentBehavior_uniquenessChecksAreScopedToGivenClientApplicationIdOnly() {
-        // Same username taken under a different tenant must never block
-        // this registration - and the check must never fall back to the
-        // unscoped findByUsername/findByPhoneNumber/findByEmail.
         RegisterRequest request = validRequest();
         Long otherTenant = 99L;
         when(userRepository.findByUsernameAndClientApplicationId("newuser", otherTenant)).thenReturn(Optional.empty());
@@ -245,8 +237,6 @@ class RegistrationServiceImplTest {
         verify(userRepository, never()).findByPhoneNumberAndClientApplicationId(anyString(), any());
         verify(userRepository, never()).findByEmailAndClientApplicationId(anyString(), any());
     }
-
-    // -- successful save, dual verification triggers, default role -----------
 
     @Test
     void register_success_savesEncodedUserAndReturnsConfirmation() {
@@ -295,10 +285,6 @@ class RegistrationServiceImplTest {
 
         service.register(request, CLIENT_APP_ID);
 
-        // Current behavior: register() never calls
-        // UserService.addUserToDefaultPermissionGroup, even though the
-        // field is wired in - the default-role enrollment described in
-        // the class Javadoc isn't actually invoked yet.
         verify(userService, never()).addUserToDefaultPermissionGroup("newuser");
     }
 
@@ -328,21 +314,14 @@ class RegistrationServiceImplTest {
         try (MockedStatic<TransactionSynchronizationManager> tsm = mockStatic(TransactionSynchronizationManager.class)) {
             response = service.register(request, CLIENT_APP_ID);
 
-            // Current behavior: register() never registers a synchronization
-            // and never calls addUserToDefaultPermissionGroup, so the
-            // stubbed-to-throw mock above is never exercised.
             tsm.verifyNoInteractions();
         }
         verify(userService, never()).addUserToDefaultPermissionGroup("newuser");
         assertThat(response.getInternalAuthUserId()).isEqualTo("String123@");
     }
 
-    // -- uniqueness-race handling ----------------------------------------------
-
     @Test
     void register_currentBehavior_saveRaceLossIsWrappedAsUserAlreadyExistsAndSkipsPostSaveSteps() {
-        // The uniqueness pre-checks above are check-then-act, not atomic;
-        // save() is the defensive backstop for a race that slips past them.
         RegisterRequest request = validRequest();
         stubUniquenessChecksPass();
         when(userRepository.save(any(User.class))).thenThrow(new DataIntegrityViolationException("duplicate key"));

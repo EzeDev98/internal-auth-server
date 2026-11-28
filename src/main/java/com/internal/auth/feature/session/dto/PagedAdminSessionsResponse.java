@@ -7,11 +7,7 @@ import lombok.Setter;
 
 import java.util.List;
 
-/**
- * Pagination envelope for GET ${app.title}/admin/sessions (Step 2E,
- * React Admin Client plan v4) - same hand-rolled shape as
- * PagedUsersResponse (Step 2A).
- */
+/** Paged list of sessions for the admin view. */
 @Getter
 @Setter
 @NoArgsConstructor

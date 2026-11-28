@@ -23,14 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.junit.jupiter.api.Tag;
 
-/**
- * Step 8C. UserSessionController's own Javadoc always described
- * DELETE ${app.title}/users/{username}/sessions as admin-only; this is the
- * regression test for the confirmed broken-access-control gap that fix
- * closed - an authenticated caller with no admin role must never be able to
- * force-terminate another user's session, and a genuine admin caller must
- * still be able to.
- */
+/** Integration tests for UserSessionController. */
 @Tag("security-boundary")
 class UserSessionControllerIT extends IntegrationTestBase {
 

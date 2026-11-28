@@ -16,21 +16,7 @@ import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Step 3D - RateLimiterService against a real, throwaway Redis (not a
- * mock), since the interesting behavior here (rate-limiter state, TTL-based
- * window reset) lives entirely in Redis itself, not in this class's own
- * code.
- *
- * <p>Deliberately does NOT extend IntegrationTestBase / start a Spring
- * context - RateLimiterService has exactly one collaborator
- * (RedissonClient), which is cheaper and faster to wire directly against
- * this test's own container than to boot the whole application for it.
- *
- * <p>Named *IT (not *Test) so this only runs under {@code mvn verify}
- * (Failsafe, Step 1) - it needs Docker, and a plain {@code mvn test} should
- * never require that.
- */
+/** Integration tests for RateLimiterService against a real Redis. */
 @Testcontainers
 class RateLimiterServiceIT {
 
@@ -80,10 +66,6 @@ class RateLimiterServiceIT {
         assertThatThrownBy(() -> rateLimiterService.checkRateLimit(key, 1, window))
                 .isInstanceOf(MaxAttemptsExceededException.class);
 
-        // No further calls during this sleep - each call refreshes the
-        // limiter's TTL (see RateLimiterService.checkRateLimit), so letting
-        // it sit untouched past the window is what actually proves the
-        // bucket expires rather than accumulating forever.
         Thread.sleep(window.plusSeconds(1).toMillis());
 
         rateLimiterService.checkRateLimit(key, 1, window);
@@ -99,8 +81,6 @@ class RateLimiterServiceIT {
         assertThatThrownBy(() -> rateLimiterService.checkRateLimit(keyA, 1, window))
                 .isInstanceOf(MaxAttemptsExceededException.class);
 
-        // keyB has never been touched - it must not be affected by keyA
-        // being exhausted.
         rateLimiterService.checkRateLimit(keyB, 1, window);
     }
 }

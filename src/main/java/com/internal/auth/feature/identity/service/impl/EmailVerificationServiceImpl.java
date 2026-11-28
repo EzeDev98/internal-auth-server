@@ -28,24 +28,7 @@ import static com.internal.auth.common.constant.AppConstant.EMAIL_VERIFICATION_C
 import static com.internal.auth.common.constant.AppConstant.RESET_TOKEN_BYTES;
 import static com.internal.auth.common.constant.AppConstant.SECURE_RANDOM;
 
-/**
- * Step 10C. Reuses OtpResetEngine's generic token-lifecycle methods
- * (populateNewToken/assertUsable/markUsed) against EmailVerificationToken
- * rather than re-deriving expiry/single-use logic. Token hashing goes
- * through TokenHasher directly (not OtpService, which is explicitly scoped
- * to the password-reset flow per its own class Javadoc) - same SHA-256
- * mechanism, called at the source rather than through a differently-scoped
- * wrapper.
- *
- * Multi-tenant redesign, OTP/token flows step: resendVerification is now
- * scoped by clientApplicationId (resolved by EmailVerificationController
- * from HTTP Basic client credentials) - the user lookup and the Redis
- * resend-cooldown bucket key both incorporate it now, since email alone
- * can belong to accounts in different apps (see User's class Javadoc and
- * the V8 migration). activate()/sendVerificationEmail() are untouched -
- * both resolve via token_hash or an already-known User, never an
- * ambiguous phone/email lookup.
- */
+/** Issues and verifies email activation tokens. */
 @Service
 @RequiredArgsConstructor
 public class EmailVerificationServiceImpl implements EmailVerificationService {
@@ -83,8 +66,6 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
             String appName = clientApplicationService.getById(user.getClientApplicationId()).getName();
             emailDeliveryService.sendVerificationEmail(user.getEmail(), link, appName);
         } catch (Exception e) {
-            // Delivery/provider failures must never block registration or
-            // resend from otherwise succeeding - see class Javadoc.
             log.warn("Failed to send verification email for user id {}: {}", user.getId(), e.getMessage());
         }
     }
@@ -100,16 +81,6 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
         EmailVerificationToken token = tokenRepository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> new ResetTokenInvalidException("This verification link is invalid or has expired."));
 
-        // Step 8 idempotency-safety fix: GET /activate is a plain link an email
-        // client's link-scanner (Outlook Safe Links, a corporate mail gateway, a
-        // spam filter) may fetch on its own before the real recipient ever clicks
-        // it, consuming this single-use token first. Without this check the
-        // human's own click then fails with "invalid or expired" even though
-        // their email really was verified - by the scanner's request, not
-        // theirs. If this token is already used AND the account it belongs to
-        // is already verified, a repeat hit is treated as the same success
-        // rather than an error; any other invalid/expired token still fails
-        // exactly as before.
         if (token.isUsed()) {
             User alreadyVerifiedUser = userRepository.findById(token.getUserId()).orElse(null);
             if (alreadyVerifiedUser != null && alreadyVerifiedUser.isEmailVerified()) {
@@ -139,26 +110,17 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
             return new ActivationResponse(GENERIC_RESEND_MESSAGE);
         }
 
-        // Composite cooldown key (multi-tenant redesign) - see
-        // PasswordResetServiceImpl.requestOtp for the same reasoning.
         String cooldownKey = clientApplicationId + ":" + email;
         RBucket<String> cooldownBucket = otpResetEngine.getCooldownBucket(
                 redissonClient, EMAIL_VERIFICATION_COOLDOWN_KEY_PREFIX, cooldownKey);
         otpResetEngine.rejectIfCoolingDown(cooldownBucket);
 
-        // self-invocation (this.sendVerificationEmail) collapses into this
-        // method's own @Transactional boundary rather than opening a
-        // second one - fine here, since sendVerificationEmail already
-        // swallows its own failures internally.
         userRepository.findByEmailAndClientApplicationId(email.trim(), clientApplicationId)
                 .filter(user -> !user.isEmailVerified())
                 .ifPresent(this::sendVerificationEmail);
 
         otpResetEngine.startCooldown(cooldownBucket, properties.getResendCooldownSeconds());
 
-        // Always the same response, regardless of whether the email exists,
-        // is already verified, or delivery succeeded - enumeration
-        // resistance, matching PasswordResetServiceImpl#requestOtp.
         return new ActivationResponse(GENERIC_RESEND_MESSAGE);
     }
 

@@ -2,17 +2,12 @@ package com.internal.auth.feature.identity.service.impl;
 
 import com.internal.auth.common.exception.AccountDisabledException;
 import com.internal.auth.common.exception.InvalidRefreshTokenException;
-import com.internal.auth.common.reset.OtpResetEngine;
-import com.internal.auth.common.reset.OtpService;
-import com.internal.auth.common.reset.delivery.OtpDeliveryService;
 import com.internal.auth.feature.client.model.ClientApplication;
 import com.internal.auth.feature.client.service.ClientApplicationService;
-import com.internal.auth.feature.identity.config.LoginMfaProperties;
 import com.internal.auth.feature.identity.dto.request.LoginRequest;
 import com.internal.auth.feature.identity.dto.request.RefreshTokenRequest;
 import com.internal.auth.feature.identity.dto.response.LoginResponse;
 import com.internal.auth.feature.identity.model.User;
-import com.internal.auth.feature.identity.repository.LoginMfaOtpRepository;
 import com.internal.auth.feature.identity.repository.UserRepository;
 import com.internal.auth.feature.rbac.model.Role;
 import com.internal.auth.feature.rbac.repository.UserRolesRepository;
@@ -20,7 +15,6 @@ import com.internal.auth.feature.session.service.SessionManagementService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.redisson.api.RedissonClient;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -54,12 +48,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * Covers the refresh-token paths added for persistent (non-rotating) clients:
- * sliding expiry, the absolute session cap, legacy authorizations without a
- * login stamp, the rotating path staying unchanged, and the per-client
- * revokePriorSessionsOnLogin toggle on login().
- */
+/** Unit tests for refresh token handling in UserLoginServiceImpl. */
 class UserLoginServiceRefreshTest {
 
     private static final Long CLIENT_APP_ID = 7L;
@@ -80,9 +69,7 @@ class UserLoginServiceRefreshTest {
     private final JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
 
     private final UserLoginServiceImpl service = new UserLoginServiceImpl(
-            eventPublisher, userRepository, passwordEncoder, mock(LoginMfaOtpRepository.class), mock(OtpService.class),
-            mock(OtpDeliveryService.class), mock(OtpResetEngine.class), new LoginMfaProperties(), mock(RedissonClient.class),
-            userRolesRepository, registeredClientRepository, authorizationService, tokenGenerator,
+            eventPublisher, userRepository, passwordEncoder, userRolesRepository, registeredClientRepository, authorizationService, tokenGenerator,
             AuthorizationServerSettings.builder().issuer(SELF_ISSUER_URI).build(),
             clientApplicationService, sessionManagementService, jdbcTemplate);
 
@@ -111,7 +98,6 @@ class UserLoginServiceRefreshTest {
         user.setEnabled(true);
         user.setEmailVerified(true);
         user.setPhoneVerified(true);
-        user.setMfaEnabled(false);
         when(userRepository.findByInternalAuthUserIdAndClientApplicationId("alice", CLIENT_APP_ID)).thenReturn(Optional.of(user));
 
         Role role = new Role();
@@ -122,8 +108,6 @@ class UserLoginServiceRefreshTest {
         when(tokenGenerator.generate(any(OAuth2TokenContext.class)))
                 .thenReturn(new AccessOnly("new-access", Instant.now(), Instant.now().plusSeconds(900)));
     }
-
-    // ===================== persistent (non-rotating) refresh =====================
 
     @Test
     void nonRotating_refresh_keepsTheSameTokenValueAndSlidesExpiryByTheClientTtl() {
@@ -167,7 +151,6 @@ class UserLoginServiceRefreshTest {
 
         service.refreshToken(new RefreshTokenRequest("refresh-1"), CLIENT_APP_ID);
 
-        // now + 60d would land after the deadline (login + 90d = now + 40d), so it is clamped to it.
         assertThat(savedAuthorization().getRefreshToken().getToken().getExpiresAt())
                 .isEqualTo(startedAt.plus(Duration.ofDays(90)));
     }
@@ -213,8 +196,6 @@ class UserLoginServiceRefreshTest {
         assertThat(Instant.parse(stamped)).isAfterOrEqualTo(before);
     }
 
-    // ===================== guards shared by both modes =====================
-
     @Test
     void refresh_tokenIssuedToAnotherClient_isRejectedWithoutChangingAnything() {
         OAuth2Authorization existing = authorization(registeredClient("8"), Instant.now().plus(Duration.ofDays(5)), Instant.now());
@@ -251,8 +232,6 @@ class UserLoginServiceRefreshTest {
         verify(authorizationService, never()).save(any());
     }
 
-    // ===================== rotating path is unchanged =====================
-
     @Test
     void rotating_refresh_removesTheSpentAuthorizationAndMintsANewOne() {
         client.setRefreshTokenRotationEnabled(true);
@@ -276,8 +255,6 @@ class UserLoginServiceRefreshTest {
         assertThat(response.getRefreshToken()).isEqualTo("refresh-2");
         assertThat(savedAuthorization().getRefreshToken().getToken().getTokenValue()).isEqualTo("refresh-2");
     }
-
-    // ===================== login(): revokePriorSessionsOnLogin toggle =====================
 
     @Test
     void login_revokePriorSessionsOn_deletesEarlierAuthorizationsForThatUserAndClient() {
@@ -312,8 +289,6 @@ class UserLoginServiceRefreshTest {
         assertThat(stamped).isNotNull();
         assertThat(Instant.parse(stamped)).isAfterOrEqualTo(before);
     }
-
-    // ===================== helpers =====================
 
     private void stubPasswordLogin() {
         when(userRepository.findByUsernameAndClientApplicationId("alice", CLIENT_APP_ID)).thenReturn(Optional.of(user));
@@ -353,7 +328,6 @@ class UserLoginServiceRefreshTest {
         return builder.build();
     }
 
-    /** Minimal access token - not a ClaimAccessor, so the plain accessToken(...) branch is used. */
     private record AccessOnly(String value, Instant issuedAt, Instant expiresAt) implements OAuth2Token {
         @Override
         public String getTokenValue() {

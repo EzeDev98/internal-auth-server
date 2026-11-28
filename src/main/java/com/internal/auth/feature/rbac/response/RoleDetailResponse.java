@@ -8,12 +8,7 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Single-role detail shape for GET ${app.title}/roles/{id} (Step 2C,
- * React Admin Client plan v4) - see RoleQueryServiceImpl's Javadoc for
- * why permissions/permissionGroups/usersInRole are three separate lists
- * rather than one.
- */
+/** Detail view of a single role. */
 @Getter
 @Setter
 @NoArgsConstructor

@@ -5,6 +5,7 @@ import com.internal.auth.feature.rbac.model.PermissionGroup;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicLong;
 
+/** Test data builder for PermissionGroup. */
 public class PermissionGroupTestDataBuilder {
 
     private static final AtomicLong COUNTER = new AtomicLong();

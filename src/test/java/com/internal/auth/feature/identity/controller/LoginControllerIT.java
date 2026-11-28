@@ -22,16 +22,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 12A (LoginController slice). Happy path plus the same HTTP Basic
- * client-credential enforcement RegistrationControllerIT covers -
- * LoginController resolves the caller's ClientApplication the identical
- * way (see LoginController's own class Javadoc). The seeded User uses
- * UserTestDataBuilder's defaults (enabled, phoneVerified=true, no email,
- * mfaEnabled=false) so login completes in one step with no MFA branch,
- * exactly like TestTokenMinter avoids needing a real login round-trip for
- * every other test in this suite - here the round-trip itself is the point.
- */
+/** Integration tests for LoginController. */
 class LoginControllerIT extends IntegrationTestBase {
 
     @Autowired
@@ -71,7 +62,6 @@ class LoginControllerIT extends IntegrationTestBase {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(success())
-                .andExpect(jsonPath("$.data.mfaRequired").value(false))
                 .andExpect(jsonPath("$.data.accessToken").exists())
                 .andExpect(jsonPath("$.data.username").value(user.getUsername()));
     }

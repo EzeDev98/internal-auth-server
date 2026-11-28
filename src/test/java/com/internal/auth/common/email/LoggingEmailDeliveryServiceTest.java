@@ -14,24 +14,7 @@ import java.lang.reflect.Field;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Step 16B: locks in today's behavior around app.email.log-to-console -
- * confirmed OFF by default, confirmed to genuinely gate whether the raw
- * verification link reaches the log, so a future change to that default
- * (a real security-relevant regression: this app's own Javadoc says the
- * flag "must stay false in production") doesn't go unnoticed.
- *
- * <p>No Spring context needed - LoggingEmailDeliveryService has exactly
- * one collaborator (SLF4J's Logger) and one @Value field, same pattern as
- * Step 16A's ContiguityOtpDeliveryServiceTest. The default itself is
- * asserted two ways: directly off the @Value annotation's literal (so
- * editing "${app.email.log-to-console:false}" to any other default fails
- * this test immediately, without needing a Spring context to bind it),
- * and behaviorally, by constructing the service via `new` (leaving the
- * boolean field at Java's own uninitialized default, exactly mirroring
- * matchIfMissing behavior with no property set at all) and asserting the
- * link never reaches the logger.
- */
+/** Unit tests for LoggingEmailDeliveryService console logging behaviour. */
 class LoggingEmailDeliveryServiceTest {
 
     private static final String EMAIL = "user@example.com";
@@ -73,10 +56,6 @@ class LoggingEmailDeliveryServiceTest {
 
     @Test
     void sendVerificationEmail_neverLogsTheRawLink_whenLogToConsoleIsAtItsDefault() {
-        // No ReflectionTestUtils.setField call here on purpose - an
-        // un-set boolean field defaults to false in plain Java exactly
-        // like matchIfMissing does when the property itself is absent,
-        // so this genuinely exercises "the default", not just "false".
         service.sendVerificationEmail(EMAIL, VERIFICATION_LINK, APP_NAME);
 
         assertThat(logAppender.list).hasSize(1);

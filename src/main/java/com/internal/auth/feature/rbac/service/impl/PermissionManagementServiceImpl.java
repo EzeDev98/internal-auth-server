@@ -18,48 +18,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-/**
- * Orchestrates RBAC writes against the local database.
- *
- * <p><b>Keycloak-mirroring control flow — decision record (Stage 1 punch-list
- * item 2):</b> every method here used to open with a call into
- * {@code KeycloakService} (create/assign/remove "in Keycloak"), only then
- * write locally, and on a local failure ran a manual "compensating
- * transaction" — delete/re-add the Keycloak-side object to keep the two
- * systems in sync. That two-phase saga made sense when Keycloak was a real,
- * independently-failing external system. It stopped making sense the moment
- * {@code KeycloakServiceImpl} became a local-only stub (Stage 1 punch-list
- * item 1) that cannot fail and mirrors nothing — at that point the
- * "compensating transaction" was compensating for a failure that could
- * never happen, while doing nothing to protect against the only failure
- * that actually can happen (a local database error), because
- * {@code @Transactional} already rolls that back automatically.
- *
- * <p>Per the architecture assessment — "Internal Auth will be our own
- * authentication and authorization platform. Keycloak will NOT be used" —
- * the local database is the sole source of truth for RBAC. This class no
- * longer calls {@code KeycloakService} at all. Each method below is now:
- * validate input → call exactly one local entity/mapping service → wrap its
- * response. All idempotency ("already exists") and persistence-failure
- * handling already lives in those local services (see
- * {@link PermissionEntityServiceImpl}, {@link GroupRoleServiceImpl},
- * {@link UserRoleServiceImpl}, {@link UserPermissionGroupServiceImpl}) —
- * each independently performs its own existence check before writing and
- * throws a specific {@link PermissionException} on conflict or DB failure,
- * so no separate check was ever needed at this layer once the Keycloak step
- * is gone.
- *
- * <p>{@code KeycloakService}/{@code KeycloakServiceImpl} are NOT deleted —
- * {@code PasswordResetServiceImpl} still uses {@code resetPassword} against
- * them, which is out of scope for this decision. The RBAC-mirroring methods
- * on that interface ({@code createRoleInKeycloak}, {@code assignRoleToUser},
- * etc.) are now unused dead surface; trimming the interface itself is a
- * separate, smaller follow-up, not a control-flow question, so it's left
- * for later rather than folded in here. {@code KeycloakUtils} — which
- * existed solely to answer "does this already exist in Keycloak" for the
- * idempotency branches this class no longer has — had no other callers and
- * has been deleted outright.
- */
+/** Orchestrates RBAC writes against the database. */
 @Service
 public class PermissionManagementServiceImpl implements PermissionManagementService {
 
@@ -77,11 +36,6 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
         this.groupService = groupService;
     }
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  Role creation
-    // ══════════════════════════════════════════════════════════════════════════
-
     @Override
     @Transactional
     public BaseResponse createRole(String roleName, String description) {
@@ -93,9 +47,6 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
         roleName = roleName.toLowerCase().trim();
 
         try {
-            // No keycloakRoleId to mirror any more — pass null rather than a
-            // synthetic placeholder, since there's no external system for the
-            // value to mean anything about.
             RoleResponse roleResponse = permissionEntityService.createRole(roleName, description);
             return new BaseResponse(HttpStatus.CREATED.value(), "Role created successfully", roleResponse);
         } catch (PermissionException ex) {
@@ -104,10 +55,6 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
             throw PermissionException.internalError("Unexpected error during role creation: " + ex.getMessage());
         }
     }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  Group creation
-    // ══════════════════════════════════════════════════════════════════════════
 
     @Override
     @Transactional
@@ -150,10 +97,6 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  Role assignment
-    // ══════════════════════════════════════════════════════════════════════════
-
     @Override
     @Transactional
     public BaseResponse assignRoleToUser(String username, String role) {
@@ -191,9 +134,6 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
             return new BaseResponse(HttpServletResponse.SC_CREATED, "Role assigned to group successfully", response);
 
         } catch (PermissionException ex) {
-            // Idempotency: groupRoleService already checked the local mapping and
-            // found it exists — treat a repeat request as a no-op success rather
-            // than an error, same as every other "assign" endpoint in this class.
             if (ex.getErrorCode() == PermissionErrorCode.ALREADY_EXISTS) {
                 return new BaseResponse(HttpServletResponse.SC_OK, "Role already assigned to group", null);
             }
@@ -230,10 +170,6 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
             throw PermissionException.internalError("Unexpected error during role assignment to subgroup: " + e.getMessage());
         }
     }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  User-to-group assignment
-    // ══════════════════════════════════════════════════════════════════════════
 
     @Override
     @Transactional
@@ -319,10 +255,6 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  Role and group removal
-    // ══════════════════════════════════════════════════════════════════════════
-
     @Transactional
     @Override
     public BaseResponse unassignRole(String username, String roleName) {
@@ -336,10 +268,6 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
 
         try {
             RemoveRoleResponse roleResponse = userRoleService.unassignRole(username, roleName);
-            // Step 2F: typed replacement for the Map.of(...) this used to
-            // build - identical two keys/values, so the JSON response is
-            // unchanged; only the Java side is now a real type
-            // PermissionController can declare instead of Object.
             return new BaseResponse(HttpServletResponse.SC_OK, roleResponse.getMessage(),
                     new UnassignRoleResult(roleResponse.getUsername(), roleResponse.getRoleName()));
         } catch (PermissionException ex) {
@@ -365,10 +293,6 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
 
         try {
             RemoveUserResponse removeUserResponse = groupService.removeUserFromPermissionGroup(username, groupName);
-            // Step 2F: typed replacement for the Map.of(...) this used to
-            // build, including the pre-existing "roleName" key actually
-            // holding the group name (see RemoveUserFromGroupResult's
-            // javadoc for why that's kept as-is, not corrected here).
             return new BaseResponse(HttpServletResponse.SC_OK, removeUserResponse.getMessage(),
                     new RemoveUserFromGroupResult(removeUserResponse.getUsername(), removeUserResponse.getGroupName()));
         } catch (PermissionException ex) {
@@ -378,10 +302,6 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
             throw PermissionException.internalError("Database operation failed while removing user from group. Original error: " + e.getMessage());
         }
     }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  Group deletion
-    // ══════════════════════════════════════════════════════════════════════════
 
     @Override
     @Transactional
@@ -403,12 +323,6 @@ public class PermissionManagementServiceImpl implements PermissionManagementServ
         }
     }
 
-    /**
-     * Step 2D (React Admin Client plan v4): fixes "only parent-group delete
-     * exists today" - deleteSuperGroup above cascades and removes an entire
-     * parent group plus every subgroup under it; this deletes exactly one
-     * subgroup, leaving the parent and its other subgroups untouched.
-     */
     @Override
     @Transactional
     public BaseResponse deleteSubGroup(String parentGroupName, String subGroupName) {

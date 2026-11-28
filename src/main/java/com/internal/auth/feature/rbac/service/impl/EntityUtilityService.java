@@ -11,6 +11,7 @@ import org.springframework.util.CollectionUtils;
 import java.util.Collections;
 import java.util.List;
 
+/** Shared lookups for RBAC entities. */
 @Component
 public class EntityUtilityService {
 
@@ -32,19 +33,6 @@ public class EntityUtilityService {
         this.userRepository = userRepository;
     }
 
-    /**
-     * Step 2 (RBAC admin lookup fix): usernames stopped being globally unique
-     * once the multi-tenant redesign scoped uniqueness to
-     * (client_application_id, username) - see User's class javadoc. RBAC
-     * itself stays deliberately global (role/group management lives only in
-     * internal-auth-server), so this does NOT add client-scoping here - it
-     * just stops assuming findByUsername's single result is safe. 0 matches
-     * is "not found" as before, exactly 1 match behaves exactly as before,
-     * and 2+ matches (same username now present in more than one tenant)
-     * fails loudly with a clear 409 instead of Spring Data's opaque
-     * IncorrectResultSizeDataAccessException or silently acting on whichever
-     * row the query happens to return first.
-     */
     public User getUser(String username) {
         List<User> matches = userRepository.findAllByUsername(username);
         if (matches.isEmpty()) {
@@ -190,14 +178,6 @@ public class EntityUtilityService {
         permissionGroupsRepository.delete(parentGroup);
     }
 
-    /**
-     * Step 2D (React Admin Client plan v4): fixes "only parent-group delete
-     * exists today" - unlike deleteSuperGroup above (which cascades and
-     * removes the whole parent plus every subgroup under it), this removes
-     * exactly one subgroup. Reuses getSubGroup's existing validation (both
-     * names exist, and subGroupName is actually a child of parentGroupName)
-     * rather than duplicating it.
-     */
     public void deleteSubGroup(String parentGroupName, String subGroupName) {
         SubPermissionGroup subGroup = getSubGroup(parentGroupName, subGroupName);
 
@@ -206,24 +186,12 @@ public class EntityUtilityService {
         subPermissionGroupRepository.delete(subGroup);
     }
 
-    /**
-     * Reuses getSubGroup's existing validation (both names exist, and
-     * subGroupName is actually a child of parentGroupName), same pattern
-     * as deleteSubGroup above.
-     */
     public SubPermissionGroup renameSubGroup(String parentGroupName, String subGroupName, String newGroupName) {
         SubPermissionGroup subGroup = getSubGroup(parentGroupName, subGroupName);
         subGroup.setGroupName(newGroupName);
         return subPermissionGroupRepository.save(subGroup);
     }
 
-    /**
-     * Re-parents an existing subgroup under a different top-level group,
-     * leaving its name, role mappings, and members untouched. Reuses
-     * getSubGroup's existing validation (both names exist, and
-     * subGroupName is actually a child of currentParentGroupName), same
-     * pattern as deleteSubGroup/renameSubGroup above.
-     */
     public SubPermissionGroup moveSubGroup(String currentParentGroupName, String subGroupName, String newParentGroupName) {
         SubPermissionGroup subGroup = getSubGroup(currentParentGroupName, subGroupName);
         PermissionGroup newParentGroup = getPermissionGroup(newParentGroupName);
@@ -272,16 +240,6 @@ public class EntityUtilityService {
         return subPermissionGroup;
     }
 
-    /**
-     * Step 14A fix: previously queried by bare username with no tenant
-     * scoping (findPermissionGroupsByUsername), so a username colliding
-     * across two client applications silently merged both users' group
-     * memberships into one list. Now resolves through getUser(username)
-     * first - the same fail-closed (409 AMBIGUOUS_USERNAME) guard every
-     * other RBAC admin lookup already goes through - then looks up by
-     * that single resolved user via the existing findAllByUser(User),
-     * never joining on username directly.
-     */
     public List<PermissionGroup> findUserPermissionGroups(String username) {
         User user = getUser(username);
         List<UserPermissionGroup> mappings = userPermissionGroupRepository.findAllByUser(user);
@@ -294,14 +252,6 @@ public class EntityUtilityService {
                 .toList();
     }
 
-    /**
-     * Step 14A fix: same issue and same fix shape as
-     * findUserPermissionGroups above - findRolesByUsername had no tenant
-     * scoping either. Now resolves through getUser(username)'s
-     * fail-closed guard, then reuses findRolesByUserId (already the
-     * tenant-safe lookup LoginServiceImpl#mintAccessToken relies on for
-     * JWT role claims - see its own Javadoc).
-     */
     public List<Role> findUserRoles(String username) {
         User user = getUser(username);
         List<Role> userRoles = userRolesRepository.findRolesByUserId(user.getId());

@@ -9,16 +9,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.Map;
 
-/**
- * Pushes an admin's "Logout all sessions" action straight to Ahorra the
- * moment it happens, instead of leaving Ahorra to find out only on its
- * next hasActiveSession pull. A dedicated secret header, fail-closed
- * when the secret is unset, generous read timeout for Render's
- * free-tier cold starts, and deliberately best-effort: every failure
- * is caught and logged here, never rethrown, since the admin's own
- * console action must complete regardless of whether Ahorra is
- * reachable.
- */
+/** Notifies Ahorra when an admin logs out all of a user's sessions. */
 @Slf4j
 @Component
 public class AhorraSessionClient {
@@ -37,11 +28,6 @@ public class AhorraSessionClient {
         this.secret = secret;
     }
 
-    /**
-     * Fire-and-forget: never throws. Logs and returns if the secret isn't
-     * configured (feature stays off until ahorra.session-invalidate.secret
-     * is set on both sides) or if the call itself fails for any reason.
-     */
     public void notifySessionInvalidated(String username) {
         if (secret == null || secret.isBlank()) {
             log.warn("[SessionPush] ahorra.session-invalidate.secret not configured - skipping push to Ahorra for {}", username);

@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Manages users' group memberships. */
 @Component
 public class UserPermissionGroupServiceImpl implements UserPermissionGroupService {
 

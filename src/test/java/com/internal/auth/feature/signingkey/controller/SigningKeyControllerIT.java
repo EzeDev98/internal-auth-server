@@ -17,17 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.junit.jupiter.api.Tag;
 
-/**
- * Step 13D (SigningKeyController slice): POST /admin/signing-keys/rotate is
- * @PreAuthorize(Roles.HAS_ADMIN) - admin-only JWT signing-key rotation.
- *
- * Only the admin-token case actually reaches SigningKeyService#rotate() and
- * its rate limiter (checkRateLimit runs inside the method body, after
- * @PreAuthorize already passed) - the no-token/non-admin-token cases below
- * never touch it. AppConstant.MAX_SIGNING_KEY_ROTATE_REQUEST is 5 per IP per
- * day, so this class calls the endpoint with a real admin token exactly
- * once to stay well under that threshold.
- */
+/** Integration tests for SigningKeyController. */
 @Tag("security-boundary")
 class SigningKeyControllerIT extends IntegrationTestBase {
 

@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/** Queries groups and sub-groups. */
 @Service
 @RequiredArgsConstructor
 public class GroupQueryServiceImpl implements GroupQueryService {

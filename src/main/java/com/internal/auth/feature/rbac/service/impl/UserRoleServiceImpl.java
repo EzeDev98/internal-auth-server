@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/** Manages users' roles. */
 @Service
 public class UserRoleServiceImpl implements UserRoleService {
     private static final Logger log = LoggerFactory.getLogger(UserRoleServiceImpl.class);

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 
+/** Redis-backed rate limiter for sensitive endpoints. */
 @Service
 @RequiredArgsConstructor
 public class RateLimiterService {

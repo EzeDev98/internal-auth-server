@@ -20,28 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 11B. Confirms the two discovery documents and the JWKS endpoint
- * AuthorizationServerConfig's javadoc describes actually respond - both
- * were "not yet confirmed" / added by correction there (OIDC discovery,
- * Step 12C) rather than proven by a test - and, more importantly, that a
- * token this app mints for itself genuinely verifies against the public
- * key it serves at that JWKS endpoint. That last part is deliberately not
- * done via WebSecurityConfig#jwtDecoder (this app verifying its own token
- * with its own in-process decoder would only prove the two beans agree
- * with each other, not that a real external resource-server client could
- * do the same against the published key) - it re-parses the raw
- * /oauth2/jwks response with Nimbus directly, the same way an external
- * verifier would.
- *
- * No bearer token is sent for the discovery/JWKS requests themselves and
- * none is required: this app's own AS filter chain
- * (AuthorizationServerConfig#authorizationServerSecurityFilterChain) ends
- * in anyRequest().authenticated(), which Spring Security's default
- * AnonymousAuthenticationFilter satisfies for an anonymous caller too -
- * only fullyAuthenticated() would reject anonymous access, and this app
- * does not use that here.
- */
+/** Verifies the discovery documents and JWKS endpoint. */
 class AuthorizationServerConfigIT extends IntegrationTestBase {
 
     @Autowired

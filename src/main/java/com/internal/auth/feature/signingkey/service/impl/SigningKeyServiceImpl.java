@@ -37,24 +37,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Step 14D. Owns all JWT signing-key material: generation, PEM encode/decode,
- * persistence (signing_key table, V16), the live JWKSet cache, and rotation.
- * AuthorizationServerConfig's jwkSource()/jwtTokenCustomizer() beans are thin
- * adapters over this class.
- *
- * The decodePemRsaKey/computeKeyId logic below is carried over unchanged
- * from AuthorizationServerConfig's pre-14D single-key implementation (same
- * Base64(PEM) format, same SHA-256-derived kid) - only the persistence and
- * multi-key cache layer around it is new.
- *
- * Step 14E: the PEM string is now encrypted (SecretEncryptionService)
- * before it's ever written to signingKeyRepository, and decrypted
- * immediately after reading a row back - encodeToPemBase64/decodePemRsaKey
- * below never see anything but plaintext PEM; encryption is applied only
- * at the persistNewKey/rebuildCache boundary where a row crosses into or
- * out of the database.
- */
+/** Generates, stores, loads and rotates JWT signing keys. */
 @Service
 @RequiredArgsConstructor
 public class SigningKeyServiceImpl implements SigningKeyService {

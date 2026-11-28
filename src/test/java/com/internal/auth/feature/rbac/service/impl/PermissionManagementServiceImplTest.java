@@ -18,6 +18,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/** Unit tests for PermissionManagementServiceImpl. */
 class PermissionManagementServiceImplTest {
 
     private final PermissionEntityService permissionEntityService = mock(PermissionEntityService.class);
@@ -27,8 +28,6 @@ class PermissionManagementServiceImplTest {
 
     private final PermissionManagementServiceImpl service = new PermissionManagementServiceImpl(
             permissionEntityService, userRoleService, groupRoleService, groupService);
-
-    // -- createRole -----------------------------------------------------------
 
     @Test
     void createRole_blankRoleName_throwsWithoutCallingCollaborator() {
@@ -70,8 +69,6 @@ class PermissionManagementServiceImplTest {
                 });
     }
 
-    // -- createSuperGroup -------------------------------------------------------
-
     @Test
     void createSuperGroup_blankGroupName_throws() {
         assertThatThrownBy(() -> service.createSuperGroup(" ", "desc"))
@@ -91,8 +88,6 @@ class PermissionManagementServiceImplTest {
         assertThat(response.getStatusCode()).isEqualTo(201);
         assertThat(response.getData()).isSameAs(groupResponse);
     }
-
-    // -- createSubGroup ---------------------------------------------------------
 
     @Test
     void createSubGroup_blankGroupNameOrParent_throws() {
@@ -115,8 +110,6 @@ class PermissionManagementServiceImplTest {
         assertThat(response.getData()).isSameAs(subGroupResponse);
     }
 
-    // -- assignRoleToUser ---------------------------------------------------------
-
     @Test
     void assignRoleToUser_blankUsernameOrRole_throws() {
         assertThatThrownBy(() -> service.assignRoleToUser(" ", "buyer")).isInstanceOf(PermissionException.class);
@@ -126,10 +119,6 @@ class PermissionManagementServiceImplTest {
 
     @Test
     void assignRoleToUser_normalizesRoleCaseButNotUsernameCase() {
-        // Current behavior: only the role is lowercased/trimmed here - the
-        // username is passed through to userRoleService exactly as given.
-        // Locked in deliberately, since it differs from every other method
-        // below that normalizes both.
         UserRoleResponse roleResponse = new UserRoleResponse();
         when(userRoleService.assignRole("User1", "buyer")).thenReturn(roleResponse);
 
@@ -139,8 +128,6 @@ class PermissionManagementServiceImplTest {
         assertThat(response.getStatusCode()).isEqualTo(201);
         assertThat(response.getData()).isSameAs(roleResponse);
     }
-
-    // -- assignRoleToGroup (idempotency / conflict path) -------------------------
 
     @Test
     void assignRoleToGroup_blankGroupOrRole_throws() {
@@ -180,8 +167,6 @@ class PermissionManagementServiceImplTest {
         assertThatThrownBy(() -> service.assignRoleToGroup("buyers", "buyer")).isSameAs(notFound);
     }
 
-    // -- assignRoleToSubGroup -----------------------------------------------------
-
     @Test
     void assignRoleToSubGroup_blankAnyField_throws() {
         assertThatThrownBy(() -> service.assignRoleToSubGroup(" ", "group", "role"))
@@ -195,11 +180,6 @@ class PermissionManagementServiceImplTest {
 
     @Test
     void assignRoleToSubGroup_currentBehavior_superGroupNameValidatedButNeverForwarded() {
-        // Current behavior: superGroupName is required (blank -> throws
-        // above) but is never normalized and never actually passed to
-        // groupRoleService - only groupName and role are. Locked in as-is,
-        // since a caller relying on subgroup-name resolution being scoped
-        // to a specific supergroup would be surprised by this.
         RoleAndPermissionGroupMappingResponse mappingResponse = new RoleAndPermissionGroupMappingResponse();
         when(groupRoleService.assignRoleToSubGroup("tier1", "buyer")).thenReturn(mappingResponse);
 
@@ -208,8 +188,6 @@ class PermissionManagementServiceImplTest {
         verify(groupRoleService).assignRoleToSubGroup("tier1", "buyer");
         assertThat(response.getStatusCode()).isEqualTo(201);
     }
-
-    // -- addUserToGroup -----------------------------------------------------------
 
     @Test
     void addUserToGroup_blankUsernameOrGroup_throws() {
@@ -228,8 +206,6 @@ class PermissionManagementServiceImplTest {
         assertThat(response.getStatusCode()).isEqualTo(201);
         assertThat(response.getData()).isSameAs(groupResponse);
     }
-
-    // -- addUserToSubGroup ---------------------------------------------------------
 
     @Test
     void addUserToSubGroup_blankAnyField_throws() {
@@ -254,8 +230,6 @@ class PermissionManagementServiceImplTest {
         assertThat(response.getData()).isSameAs(subGroupResponse);
     }
 
-    // -- addUserToSubGroups ---------------------------------------------------------
-
     @Test
     void addUserToSubGroups_blankUsernameOrSuperGroup_throws() {
         assertThatThrownBy(() -> service.addUserToSubGroups(" ", "super", List.of("tier1")))
@@ -275,8 +249,6 @@ class PermissionManagementServiceImplTest {
 
     @Test
     void addUserToSubGroups_normalizesAndFiltersSubGroupNameList() {
-        // Blank/whitespace-only entries are dropped, everything else is
-        // trimmed and lowercased.
         when(groupService.addUserToSubGroups("user1", "buyers", List.of("tier1", "tier2")))
                 .thenReturn(List.of(new UserPermissionGroupResponse()));
 
@@ -286,8 +258,6 @@ class PermissionManagementServiceImplTest {
         verify(groupService).addUserToSubGroups("user1", "buyers", List.of("tier1", "tier2"));
         assertThat(response.getStatusCode()).isEqualTo(201);
     }
-
-    // -- unassignRole -----------------------------------------------------------
 
     @Test
     void unassignRole_blankUsernameOrRole_throws() {
@@ -325,8 +295,6 @@ class PermissionManagementServiceImplTest {
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(PermissionErrorCode.INTERNAL_ERROR));
     }
 
-    // -- removeUserFromGroup -----------------------------------------------------
-
     @Test
     void removeUserFromGroup_blankUsernameOrGroup_throws() {
         assertThatThrownBy(() -> service.removeUserFromGroup(" ", "group")).isInstanceOf(PermissionException.class);
@@ -335,11 +303,6 @@ class PermissionManagementServiceImplTest {
 
     @Test
     void removeUserFromGroup_currentBehavior_responseMapKeyIsMisleadinglyNamedRoleName() {
-        // Current behavior: the response map always uses the literal key
-        // "roleName", even though its value here is the GROUP name, not a
-        // role - copy-pasted from unassignRole's map construction. Locked
-        // in as-is so a client depending on this exact (misleading) shape
-        // isn't broken by an incidental "fix".
         RemoveUserResponse removeResponse = new RemoveUserResponse(200, "User removed", "user1", "buyers");
         when(groupService.removeUserFromPermissionGroup("user1", "buyers")).thenReturn(removeResponse);
 
@@ -349,8 +312,6 @@ class PermissionManagementServiceImplTest {
         assertThat(response.getStatusCode()).isEqualTo(200);
         assertThat(response.getData()).usingRecursiveComparison().isEqualTo(new RemoveUserFromGroupResult("user1", "buyers"));
     }
-
-    // -- deleteSuperGroup ---------------------------------------------------------
 
     @Test
     void deleteSuperGroup_blankGroupName_throws() {

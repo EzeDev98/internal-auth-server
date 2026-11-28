@@ -41,6 +41,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/** Endpoints for managing roles, permission groups and their assignments. */
 @RestController
 @RequestMapping("${app.title}")
 @Tag(name = "User Roles And Permissions API", description = "Comprehensive management of roles, groups, and user permissions")
@@ -56,15 +57,6 @@ public class PermissionController {
 
     private final RoleQueryService roleQueryService;
 
-    /**
-     * Stage 1 assessment, "Immediate Next Steps" #3 - the service-to-service
-     * role-assignment endpoint below had no allow-list at all: any caller
-     * holding the "service" authority could grant ANY role, including an
-     * admin-tier one, to any user. Fail-closed by default: unless an
-     * operator explicitly lists which roles service credentials may assign,
-     * none are permitted (the admin-only /roles/assign/user endpoint is
-     * unaffected - it can still assign any role, as intended).
-     */
     private final Set<String> serviceAssignableRoles;
 
     public PermissionController(PermissionManagementService permissionService,
@@ -92,14 +84,6 @@ public class PermissionController {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    /**
-     * Step 2F (React Admin Client plan v4), scoped to the create/assign
-     * endpoints only. permissionService.createRole still returns
-     * BaseResponse internally, unchanged - PermissionManagementService's
-     * interface and every test exercising it are untouched by this pass.
-     * PermissionEntityServiceImpl always sets this call's data to the
-     * RoleResponse it just built, so the cast below is safe, not a guess.
-     */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Create a new role", description = "Creates a role in the local database. Roles define permissions that can be assigned to users or groups.")
     @PostMapping("/roles")
@@ -109,7 +93,6 @@ public class PermissionController {
                 .body(InternalAuthApiResponse.success(roleResponse.getDescription(), (RoleResponse) roleResponse.getData()));
     }
 
-    /** Step 2F, same rationale as createRole above. */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Create a parent group", description = "Creates a top-level group in the database. Parent groups can contain subgroups and users.")
     @PostMapping("/groups")
@@ -119,7 +102,6 @@ public class PermissionController {
                 .body(InternalAuthApiResponse.success(groupResponse.getDescription(), (GroupCreationResponse) groupResponse.getData()));
     }
 
-    /** Step 2F, same rationale as createRole above. */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Create a subgroup", description = "Creates a child group under a specified, already-existing parent group.")
     @PostMapping("/groups/{parentGroupName}/subgroups")
@@ -141,7 +123,6 @@ public class PermissionController {
                 .body(InternalAuthApiResponse.success(roleResponse.getDescription(), (UserRoleResponse) roleResponse.getData()));
     }
 
-    /** Step 2F, same rationale as createRole above. */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Assign role to user", description = "Grants a specific role to a user and records the assignment in the local database.")
     @PostMapping("/users/{username}/roles")
@@ -151,11 +132,6 @@ public class PermissionController {
                 .body(InternalAuthApiResponse.success(roleResponse.getDescription(), (UserRoleResponse) roleResponse.getData()));
     }
 
-    /**
-     * Step 2F, same rationale as createRole above. Note the idempotent
-     * "already assigned" branch in PermissionManagementServiceImpl sets
-     * data to null - casting null is safe, so this stays typed either way.
-     */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Assign role to parent group", description = "Assigns a role to all members of a parent group. All users in the group inherit the role.")
     @PostMapping("/groups/{groupName}/roles")
@@ -165,7 +141,6 @@ public class PermissionController {
                 .body(InternalAuthApiResponse.success(roleResponse.getDescription(), (RoleAndPermissionGroupMappingResponse) roleResponse.getData()));
     }
 
-    /** Step 2F, same rationale as createRole above. */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Assign role to subgroup", description = "Assigns a role to a specific subgroup within a parent group hierarchy.")
     @PostMapping("/groups/{parentGroupName}/subgroups/{subGroupName}/roles")
@@ -278,13 +253,6 @@ public class PermissionController {
                 .body(InternalAuthApiResponse.success(response.getDescription(), (List<RoleResponse>) response.getData()));
     }
 
-    /**
-     * Step 2C (React Admin Client plan v4). Deliberately typed
-     * (InternalAuthApiResponse<List<RoleSummaryResponse>>) rather than the
-     * untyped Object/BaseResponse pattern the rest of this controller still
-     * uses - that cleanup is Step 2F's job for the existing endpoints above;
-     * this is new code, so it starts typed.
-     */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "List roles", description = "Lists every role in the local database.")
     @GetMapping("/roles")
@@ -293,11 +261,6 @@ public class PermissionController {
         return ResponseEntity.ok(InternalAuthApiResponse.success(response));
     }
 
-    /**
-     * Step 2C. permissions/permissionGroups/usersInRole are three distinct,
-     * separately-populated concepts - see RoleQueryServiceImpl's Javadoc
-     * for why the response carries all three instead of picking one.
-     */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Get role detail", description = "Single role's detail: description, fine-grained permissions, associated permission groups, and the users directly assigned this role.")
     @GetMapping("/roles/{id}")
@@ -306,13 +269,6 @@ public class PermissionController {
         return ResponseEntity.ok(InternalAuthApiResponse.success(response));
     }
 
-
-    /**
-     * Step 2D (React Admin Client plan v4): fixes "no way to enumerate
-     * group names today" - the existing GET /groups/{groupName} requires
-     * already knowing the name. Deliberately typed, same rationale as
-     * Step 2C's listRoles/getRole above.
-     */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "List top-level groups", description = "Lists every top-level permission group in the local database.")
     @GetMapping("/groups")
@@ -321,15 +277,6 @@ public class PermissionController {
         return ResponseEntity.ok(InternalAuthApiResponse.success(response));
     }
 
-    /**
-     * Step 2D. Same gap as above, one level down: the existing GET
-     * /groups/{parentGroupName}/subgroups/{subGroupName} requires already
-     * knowing the subgroup's name. Keyed by the parent's numeric id
-     * (rather than name, like every other group endpoint) because listing
-     * by id is what actually solves "I don't know the names yet" - once
-     * the frontend has this response, it has the names for every
-     * name-keyed endpoint.
-     */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "List subgroups", description = "Lists every subgroup under the given top-level group.")
     @GetMapping("/groups/{id}/subgroups")
@@ -338,12 +285,6 @@ public class PermissionController {
         return ResponseEntity.ok(InternalAuthApiResponse.success(response));
     }
 
-    /**
-     * Step 2D: fixes "only parent-group delete exists today" (DELETE
-     * /groups/{groupName} above removes an entire parent group and
-     * cascades to every subgroup under it) - this removes exactly one
-     * subgroup, leaving the parent and its other subgroups untouched.
-     */
     @PreAuthorize(Roles.HAS_ADMIN)
     @Operation(summary = "Delete a subgroup", description = "Deletes a single subgroup without affecting its parent group or sibling subgroups.")
     @DeleteMapping("/groups/{parentGroupName}/subgroups/{subGroupName}")

@@ -6,6 +6,7 @@ import com.internal.auth.feature.rbac.response.UserRoleResponse;
 
 import java.util.List;
 
+/** Operations for managing users' roles. */
 public interface UserRoleService {
     void assignRoles(String username, List<String> roles);
     UserRoleResponse assignRole(String username, String role);

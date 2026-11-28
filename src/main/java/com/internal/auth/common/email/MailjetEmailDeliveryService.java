@@ -19,29 +19,7 @@ import java.util.Map;
 
 import static com.internal.auth.common.constant.AppConstant.REQUEST_TIMEOUT;
 
-/**
- * EmailDeliveryService implementation backed by Mailjet's transactional
- * Send API v3.1 - https://dev.mailjet.com/email/guides/send-api-v31/.
- *
- * Activate by setting app.email.provider=mailjet and providing
- * mailjet.api-key / mailjet.secret-key / mailjet.sender-email (see
- * application.properties). Mirrors ContiguityOtpDeliveryService's shape
- * deliberately - same raw-HttpClient-plus-Basic-auth approach, same
- * fail-silently-per-request contract, same reasoning for it: a provider
- * outage must never change what a caller-facing endpoint returns (e.g.
- * EmailVerificationServiceImpl#requestResend's enumeration-resistant
- * "always the same response" contract), so send() below only ever logs
- * on failure, never throws.
- *
- * appName (per-call, from ClientApplication.name - the app the email's
- * owning user actually belongs to, e.g. "SyncPoint" vs "Notare") is used
- * as the sender display name and in the message copy, instead of a single
- * global mailjet.sender-name, so a Notare user no longer gets an email
- * branded "SyncPoint" - same reasoning and pattern as
- * ContiguityOtpDeliveryService's appName handling. mailjet.sender-name is
- * kept as a fallback default for the (should-never-happen) case a caller
- * passes a blank appName.
- */
+/** Email delivery implementation backed by the Mailjet Send API. */
 @Service
 @ConditionalOnProperty(prefix = "app.email", name = "provider", havingValue = "mailjet")
 public class MailjetEmailDeliveryService implements EmailDeliveryService {
@@ -61,7 +39,6 @@ public class MailjetEmailDeliveryService implements EmailDeliveryService {
     @Value("${mailjet.sender-email:}")
     private String senderEmail;
 
-    /** Fallback sender label, used only if a caller passes a blank appName. */
     @Value("${mailjet.sender-name:SyncPoint}")
     private String defaultSenderName;
 
@@ -172,9 +149,6 @@ public class MailjetEmailDeliveryService implements EmailDeliveryService {
             if (!errorMessage.isMissingNode()) {
                 return errorMessage.asText();
             }
-            // v3.1 partial-failure shape: HTTP 200 overall but an
-            // individual message can still report "error" - check that
-            // too rather than only the top-level error shape.
             JsonNode messages = node.path("Messages");
             if (messages.isArray() && !messages.isEmpty()) {
                 return messages.get(0).path("Errors").toString();

@@ -32,21 +32,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.Duration;
 
-/**
- * Step 11B: @RequestParam changed from phoneNumber to username. Keeping it
- * phoneNumber-based would have left this endpoint permanently unable to
- * invalidate a session for any email-only user (nothing to search by) -
- * username is mandatory on every account, consistent with how the rest of
- * this app moved off phone/wmUniqueId-based lookups onto username
- * (Stage 2 item 1).
- *
- * Multi-tenant redesign, sessions step: username alone is no longer
- * enough to identify a unique account (see User's class Javadoc, V8) - the
- * admin must now also supply clientId, resolved here to a
- * client_application_id via ClientApplicationService#getEnabledClientByClientId
- * (a plain lookup, not a credential check - this caller is already an
- * authenticated admin, not an integrating app authenticating itself).
- */
+/** Endpoints for viewing and invalidating user sessions. */
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("${app.title}")
@@ -59,29 +45,12 @@ public class UserSessionController {
     private final SyncPointSessionClient syncPointSessionClient;
     private final AhorraSessionClient ahorraSessionClient;
 
-    /**
-     * clientId SyncPoint is registered under in THIS app's client_applications
-     * table (see application.properties). Only this client gets the push
-     * below - SyncPoint is the one integrating app with its own downstream
-     * per-user session row that needs to hear about this action directly;
-     * every other client is unaffected.
-     */
     @Value("${sync-point.internal-auth-client-id:sync-point}")
     private String syncPointClientId;
 
-    /** Same pattern as syncPointClientId above, for Ahorra's own push. */
     @Value("${ahorra.internal-auth-client-id:ahorra}")
     private String ahorraClientId;
 
-    /**
-     * Fixes a confirmed broken-access-control gap found while confirming
-     * Stage 1 punch-list item 5 (session tracking): this endpoint's own
-     * Javadoc always described it as admin-only, but nothing enforced that
-     * — WebSecurityConfig only required an authenticated caller, so any
-     * logged-in user (any role) could force-logout an arbitrary other user.
-     * Gated the same way the item-3 fixes gated PermissionController: an
-     * explicit @PreAuthorize check.
-     */
     @Operation(method = "POST", summary = "Invalidate session", description = "This an admin endpoint for invalidating a user's session in case they mistakenly got locked out of the app. This will be on very rare occasion")
     @PreAuthorize(Roles.HAS_ADMIN)
     @DeleteMapping("/users/{username}/sessions")
@@ -89,11 +58,6 @@ public class UserSessionController {
         rateLimiterService.checkRateLimit(AppConstant.SESSION_INVALIDATE_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), AppConstant.MAX_SESSION_INVALIDATE_REQUEST, Duration.ofHours(AppConstant.SESSION_INVALIDATE_RATE_LIMIT_DURATION_HOURS));
         ClientApplication client = clientApplicationService.getEnabledClientByClientId(clientId);
         InvalidatedSessionResponse response = sessionService.invalidateUserSessionByAdmin(username, client.getId());
-        // Push straight to SyncPoint so its own user_sessions row is freed now, not just on
-        // the user's next login attempt (see SyncPointSessionClient's Javadoc). Fired even if
-        // this app had no active UserSession row to close above (response 404) - the
-        // oauth2_authorization rows behind it are deleted unconditionally by
-        // invalidateUserSessionByAdmin, so SyncPoint's own record is stale either way.
         if (syncPointClientId.equals(clientId)) {
             syncPointSessionClient.notifySessionInvalidated(username);
         }

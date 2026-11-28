@@ -2,7 +2,7 @@ package com.internal.auth.common.exception;
 
 import org.springframework.http.HttpStatus;
 
-/** @deprecated Use {@link PermissionException#groupCreationFailed(String)} instead. */
+/** Deprecated exception for a failed group creation. */
 @Deprecated(since = "2.0", forRemoval = true)
 public class GroupCreationException extends PermissionException {
     public GroupCreationException(String message, HttpStatus ignored) {

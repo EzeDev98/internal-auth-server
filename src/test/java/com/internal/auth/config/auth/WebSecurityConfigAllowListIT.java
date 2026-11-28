@@ -19,33 +19,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 
-/**
- * Step 11A. A "diff test" between {@link WebSecurityConfig#securityFilterChain}'s
- * own permitAll() list and the actual set of endpoints this app exposes
- * under app.title ("/api/v1"): every path+method pair marked permitAll
- * there must genuinely be reachable with no bearer token, and - the more
- * dangerous direction, since it's permitAll-by-accident rather than by
- * decision - every other path+method pair this app's own controllers map
- * must reject an unauthenticated caller with 401.
- *
- * <p>Endpoints are discovered at runtime from {@link RequestMappingHandlerMapping}
- * rather than hand-listed here, so a new mapping added to any controller
- * under app.title is automatically pulled into this test the next time it
- * runs: it fails closed (demands a 401) until WebSecurityConfig and
- * EXPECTED_PUBLIC below are both updated deliberately. That is the
- * intended failure mode - this test is meant to be re-run, and to fail
- * loudly, on every change to WebSecurityConfig, per the roadmap.
- *
- * <p>Scoped to paths starting with app.title only. Actuator (Step 14E),
- * Swagger/robots.txt, the OPTIONS-preflight matcher and the malicious-probe
- * denyAll matcher are not this app's own {@code RequestMappingHandlerMapping}
- * entries and are covered elsewhere - out of scope for this diff.
- * "/api/v1/otp/**" and "/api/v1/logout/backchannel" are in
- * WebSecurityConfig's permitAll list but have no implemented controller yet
- * (confirmed pre-wiring stubs per that file's own comments), so there is
- * nothing to discover or exercise for them here - deliberately absent from
- * EXPECTED_PUBLIC below; add them once a real endpoint exists.
- */
+/** Verifies the security permitAll list matches the real endpoints. */
 class WebSecurityConfigAllowListIT extends IntegrationTestBase {
 
     @Autowired
@@ -67,11 +41,11 @@ class WebSecurityConfigAllowListIT extends IntegrationTestBase {
     void buildExpectedPublicList() {
         expectedPublic = new LinkedHashSet<>();
         Set.of(
-                "/auth/register", "/auth/login", "/auth/login/verify-otp",
+                "/auth/register", "/auth/login",
                 "/auth/activate", "/auth/resend-activation",
                 "/auth/verify-phone", "/auth/resend-phone-verification",
                 "/password-reset/request", "/password-reset/verify-otp", "/password-reset/complete",
-                "/admin/register", "/admin/login", "/admin/login/verify-otp"
+                "/admin/register", "/admin/login"
         ).forEach(path -> expectedPublic.add(new Endpoint(HttpMethod.POST, appTitle + path).toString()));
 
         expectedPublic.add(new Endpoint(HttpMethod.GET, appTitle + "/auth/activate").toString());
@@ -87,7 +61,7 @@ class WebSecurityConfigAllowListIT extends IntegrationTestBase {
 
             for (String pattern : info.getPatternValues()) {
                 if (!pattern.startsWith(appTitle)) {
-                    continue; // out of scope - see class Javadoc
+                    continue;
                 }
 
                 for (RequestMethod requestMethod : methods) {

@@ -16,26 +16,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Step 12B (AdminController): the full bootstrap-then-lock sequence -
- * register creates the very first admin with no credentials of any kind
- * (see AdminController's own class Javadoc - "/register" is permitAll by
- * definition, since the first admin has nothing to authenticate with yet),
- * that admin can immediately log in through the same LoginService every
- * regular user uses and receive a real access token, and a second,
- * unauthenticated /register attempt is correctly rejected once the
- * create-admin role is held by anyone (AdminRegistrationServiceImpl's
- * self-limiting gate -> AccessDeniedException -> GlobalExceptionHandler's
- * 403 FORBIDDEN mapping).
- *
- * UserRolesRepository#existsByRoleRoleName is deliberately global, not
- * scoped by client_application_id (see that method's own Javadoc), and
- * this suite's Postgres container is a reused singleton across the whole
- * IT run (IntegrationTestBase) - so this class clears any prior
- * create-admin state in @BeforeEach rather than assuming it's the only
- * test class that will ever touch that role, keeping the "no admin exists
- * yet" precondition true regardless of run order.
- */
+/** Integration tests for AdminController bootstrap and sign-in. */
 class AdminControllerIT extends IntegrationTestBase {
 
     @Autowired
@@ -73,7 +54,6 @@ class AdminControllerIT extends IntegrationTestBase {
                         .content(objectMapper.writeValueAsString(loginRequest)))
                 .andExpect(status().isOk())
                 .andExpect(success())
-                .andExpect(jsonPath("$.data.mfaRequired").value(false))
                 .andExpect(jsonPath("$.data.accessToken").exists())
                 .andExpect(jsonPath("$.data.username").value("root_admin_12b"));
 

@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/** Maps RBAC entities to response objects. */
 @Component
 public class DtoMapper {
 
@@ -133,12 +134,6 @@ public class DtoMapper {
         return userResponse;
     }
 
-    /**
-     * Every group/subgroup this user belongs to, across the whole system
-     * (not just the group being viewed) - matches Keycloak's own Members
-     * tab "Membership" column, which lists every group path a user is in,
-     * not only the one whose Members tab you're looking at.
-     */
     private String buildMembershipPaths(User user) {
         List<UserPermissionGroup> memberships = userPermissionGroupRepository.findAllByUser(user);
         if (CollectionUtils.isEmpty(memberships)) {

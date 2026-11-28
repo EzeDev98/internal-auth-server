@@ -22,26 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * Step 2A (React Admin Client plan v4). Admin-only user directory:
- * list/search, single-profile lookup, and enable/disable + verified-flag
- * edits. Mapped under the same "${app.title}/users/{username}" resource
- * path MfaAdminController and UserSessionController already use for other
- * admin actions on a user, rather than a separate "/admin/users" prefix -
- * keeps every admin action on the users resource under one path family.
- *
- * clientId is required on the single-user endpoints for the same reason
- * MfaAdminController/UserSessionController require it: username is only
- * unique per client_application_id since the multi-tenant redesign (see
- * User's class Javadoc, V8), so username alone can't safely resolve one
- * row. It's optional on the list endpoint - omit it to see users across
- * every client application, or supply it to scope the list to one tenant.
- *
- * No rate limiting here, matching precedent: MfaAdminController's PUT
- * /users/{username}/mfa has none either - that hardening (Step 14C/14D)
- * was applied only to a specific set of higher-impact actions (session
- * invalidation, secret/key rotation), not to every admin-gated endpoint.
- */
+/** Admin endpoints for listing, viewing and managing users. */
 @RestController
 @RequestMapping("${app.title}")
 @Tag(name = "Admin User API", description = "Admin user directory: list/search, profile lookup, enable/disable and verified-flag edits")
@@ -65,7 +46,7 @@ public class AdminUserController {
         return ResponseEntity.ok(InternalAuthApiResponse.success(response));
     }
 
-    @Operation(method = "GET", summary = "Get user profile", description = "Single user's profile: contact info, verification flags, enabled state, MFA status, created date.")
+    @Operation(method = "GET", summary = "Get user profile", description = "Single user's profile: contact info, verification flags, enabled state, created date.")
     @PreAuthorize(Roles.HAS_ADMIN)
     @GetMapping("/users/{username}")
     public ResponseEntity<InternalAuthApiResponse<UserProfileResponse>> getUser(@PathVariable String username, @RequestParam String clientId) {

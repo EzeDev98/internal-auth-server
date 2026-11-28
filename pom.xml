@@ -6,7 +6,7 @@
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
 		<version>4.1.1</version>
-		<relativePath/> <!-- lookup parent from repository -->
+		<relativePath/>
 	</parent>
 	<groupId>com.internal.auth</groupId>
 	<artifactId>internal-auth-server</artifactId>
@@ -31,11 +31,6 @@
 	</properties>
 	<dependencyManagement>
 		<dependencies>
-			<!-- wiremock-jetty12:3.13.2 expects Jetty 12.0.30 (see its own
-			     dependencyManagement), but spring-boot-starter-parent manages
-			     a newer Jetty (12.1.x), causing a jetty-util/jetty-ee10-servlet
-			     version mismatch (NoSuchMethodError on Environment.ensure).
-			     Pin back to the version WireMock tests need. -->
 			<dependency>
 				<groupId>org.eclipse.jetty</groupId>
 				<artifactId>jetty-bom</artifactId>
@@ -164,15 +159,11 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<!-- Step 2 fix: declared directly rather than relying on it coming in
-		     transitively via spring-boot-starter-webmvc-test - this is where
-		     @AutoConfigureMockMvc and friends actually live. -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-test-autoconfigure</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<!-- Step 1: test-infrastructure baseline (Testcontainers + WireMock) -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-testcontainers</artifactId>
@@ -196,8 +187,6 @@
 			<version>1.21.4</version>
 			<scope>test</scope>
 		</dependency>
-		<!-- version pinned explicitly - not covered by spring-boot-starter-parent's
-		     dependency management the way the org.testcontainers.* artifacts above are -->
 		<dependency>
 			<groupId>org.wiremock</groupId>
 			<artifactId>wiremock-jetty12</artifactId>
@@ -209,10 +198,6 @@
 			<artifactId>spring-modulith-starter-jdbc</artifactId>
 			<version>2.1.1</version>
 		</dependency>
-		<!-- Step 17A: @ApplicationModuleTest, Scenario, and the
-		     PublishedEvents/Scenario JUnit parameter resolvers used by
-		     AuditEventListenerModuleTest. Pinned to the same version as
-		     spring-modulith-starter-jdbc above - no Modulith BOM in this pom. -->
 		<dependency>
 			<groupId>org.springframework.modulith</groupId>
 			<artifactId>spring-modulith-starter-test</artifactId>
@@ -244,17 +229,7 @@
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
 			<plugin>
-		
-			<!-- Step 17A fix: spring.modulith.detection-strategy=explicitly-annotated
-			     needs to reach Spring Modulith's own ApplicationModules.of()/verify()
-			     bootstrap (used by @ApplicationModuleTest, e.g.
-			     AuditEventListenerModuleTest) - that bootstrap builds its own
-			     throwaway Environment for this one property, which is NOT
-			     profile-aware (never reads application-test.properties) and checks
-			     system properties before any file. A JVM system property here is
-			     the only way to set it for tests without touching main's
-			     application.properties or Boot's own config loading - dev/prod
-			     never see this, since they don't go through Surefire. -->
+
 			<groupId>org.apache.maven.plugins</groupId>
 			<artifactId>maven-surefire-plugin</artifactId>
 			<configuration>
@@ -264,8 +239,6 @@
 			</configuration>
 		</plugin>
 				<plugin>
-             <!-- Step 1: runs src/test/java/**/*IT.java in `mvn verify`, separately
-				     from the *Test.java unit tests Surefire already runs on `mvn test` -->
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
 				<executions>
@@ -278,7 +251,6 @@
 				</executions>
 			</plugin>
 			<plugin>
-				<!-- Step 1: no coverage tooling existed in this repo before this -->
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
 				<version>0.8.15</version>

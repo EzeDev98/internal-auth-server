@@ -6,19 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
-/**
- * Development-friendly EmailDeliveryService implementation, mirroring
- * LoggingOtpDeliveryService exactly: active by default (app.email.provider
- * unset or =logging) so the abstraction has a working implementation
- * without a real provider configured. Logs the verification link instead
- * of emailing it.
- *
- * IMPORTANT: logging the raw link is strictly a development convenience,
- * gated behind app.email.log-to-console, which must stay false in
- * production. No real email provider (SendGrid/SES/etc.) is wired up -
- * that's unscoped future work, same status SMS delivery had before
- * ContiguityOtpDeliveryService existed.
- */
+/** Default email delivery implementation that logs messages instead of sending them. */
 @Service
 @ConditionalOnProperty(prefix = "app.email", name = "provider", havingValue = "logging", matchIfMissing = true)
 public class LoggingEmailDeliveryService implements EmailDeliveryService {

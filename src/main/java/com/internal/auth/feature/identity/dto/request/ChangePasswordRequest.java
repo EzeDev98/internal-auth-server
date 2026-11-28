@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Body for POST /auth/change-password: which of the calling client's users, and both passwords. */
+/** Request body for a user changing their password. */
 @Getter
 @Setter
 @NoArgsConstructor

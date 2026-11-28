@@ -38,17 +38,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 8A. The behavior under test here is the fix described on
- * SessionManagementServiceImpl's class Javadoc and this filter's own
- * resolveUser() Javadoc: once a username can exist in more than one
- * client application (multi-tenant redesign), a token carrying no
- * client_application_id claim (a Keycloak-issued token, which predates the
- * tenant concept) can no longer safely guess which tenant's user a bare
- * username refers to. The filter must skip session tracking entirely in
- * that case - not silently attach the session to an arbitrary match - and
- * log it, so the gap is visible rather than swallowed.
- */
+/** Unit tests for JwtSessionTrackingFilter. */
 class JwtSessionTrackingFilterTest {
 
     private final SessionManagementService sessionManagementService = mock(SessionManagementService.class);
@@ -96,7 +86,6 @@ class JwtSessionTrackingFilterTest {
                     assertThat(event.getLevel()).isEqualTo(Level.WARN);
                     assertThat(event.getFormattedMessage()).contains("Skipping session tracking").contains("shared_username");
                 });
-        // Session bookkeeping is never allowed to block the real request.
         verify(filterChain).doFilter(request, response);
     }
 
@@ -144,8 +133,6 @@ class JwtSessionTrackingFilterTest {
 
     @Test
     void skipsTracking_whenThereIsNoJwtAuthenticatedPrincipal() throws Exception {
-        // SecurityContextHolder left empty - no login-adjacent request at all.
-
         filter.doFilterInternal(request, response, filterChain);
 
         verifyNoInteractions(sessionManagementService, sessionStorage, userRepository);

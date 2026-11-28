@@ -9,13 +9,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/** Unit tests for ResetValidator. */
 class ResetValidatorTest {
 
     private final ResetValidator resetValidator = new ResetValidator();
-
-    // -- validatePhoneNumberFoResetOperations ---------------------------------
-    // Unlike RegistrationValidator's phone check, this one is mandatory - the
-    // reset flows always need a phone number to look the account up by.
 
     @ParameterizedTest
     @NullSource
@@ -46,11 +43,6 @@ class ResetValidatorTest {
         }
     }
 
-    // -- validateOtpFormat -----------------------------------------------------
-    // Pattern is built as "\\d{" + expectedLength + "}" and checked with
-    // String#matches(), which always requires a full-string match regardless
-    // of anchors - so length and character-set boundaries both matter.
-
     @ParameterizedTest
     @NullSource
     @ValueSource(strings = {"", "   "})
@@ -80,8 +72,6 @@ class ResetValidatorTest {
         }
     }
 
-    // -- validateNewPassword ----------------------------------------------------
-
     @ParameterizedTest
     @NullSource
     @ValueSource(strings = {"", "   "})
@@ -98,9 +88,6 @@ class ResetValidatorTest {
             "123456789,",
     })
     void validateNewPassword_lengthBoundary(String newPassword, String expectedMessage) {
-        // confirmPassword deliberately equals newPassword on every row here,
-        // so only the length rule is under test - the match rule has its own
-        // tests below.
         if (expectedMessage == null) {
             assertThatCode(() -> resetValidator.validateNewPassword(newPassword, newPassword))
                     .doesNotThrowAnyException();

@@ -38,31 +38,7 @@ import java.util.stream.Collectors;
 
 import static com.internal.auth.common.constant.AppConstant.*;
 
-/**
- * Step 10D. Admin-only client application registration - not the OAuth2
- * client-credentials grant itself (that's Step 12, once Spring Authorization
- * Server's RegisteredClientRepository is wired up), just the data-layer
- * piece: create a ClientApplication row with a server-generated secret,
- * store only its BCrypt hash (per Step 9's credential storage policy -
- * client secrets are verified against an already-located row, same as
- * User.password, so BCrypt applies here rather than TokenHasher), and
- * expose a verify method Step 12 can call once the token endpoint exists.
- *
- * Same uniqueness-race defense as RegistrationServiceImpl (Step 10B):
- * findByClientId is check-then-act, so save() is wrapped to catch
- * DataIntegrityViolationException as a backstop against client_applications'
- * uk_client_applications_client_id constraint.
- *
- * rotateClientSecret (fixes "no client-secret rotation endpoint") reuses
- * the exact same generateClientSecret()/BCrypt-encode logic createClient
- * uses, just against an already-existing row instead of a new one -
- * deliberately no dual-valid grace period like SigningKeyService's key
- * rotation has: a client secret used over HTTP Basic isn't embedded in
- * already-issued tokens the way a signing key is, so there's nothing
- * still in flight that a grace period would protect, and the scenario
- * this fixes ("I lost the secret") has no old secret worth keeping valid
- * anyway.
- */
+/** Creates, updates and rotates secrets for client applications. */
 @Service
 @RequiredArgsConstructor
 public class ClientApplicationServiceImpl implements ClientApplicationService {
@@ -105,7 +81,6 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         applyRefreshTokenSettings(client, request.getRefreshTokenRotationEnabled(), request.getRefreshTokenTtlDays(), request.getRefreshTokenMaxLifetimeDays());
         client.setRevokePriorSessionsOnLogin(request.getRevokePriorSessionsOnLogin() == null || request.getRevokePriorSessionsOnLogin());
         applySessionLimit(client, request.getMaxActiveSessions());
-        // enabled defaults to true on the entity itself.
 
         ClientApplication saved;
         try {
@@ -250,33 +225,20 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
 
         ClientApplication client = new ClientApplication();
         client.setClientId(internalAdminClientId);
-        // No secret on purpose - a public/no-secret client (see class
-        // javadoc on ClientApplication.clientSecretHash). Nothing ever
-        // authenticates against this row via HTTP Basic; AdminController
-        // resolves it by clientId only.
         client.setClientSecretHash(null);
         client.setName("Internal Auth Admin Console");
         client.setDescription("Reserved client application internal-auth-server's own admin accounts are grouped under. Not a real integrating app - never authenticated against via HTTP Basic.");
         client.setGrantTypes(new HashSet<>(Set.of("client_credentials", "refresh_token")));
-        // enabled defaults to true on the entity itself.
 
         try {
             return clientApplicationRepository.save(client);
         } catch (DataIntegrityViolationException e) {
-            // Lost a create-vs-create race against a concurrent first call -
-            // same backstop pattern as createClient() above.
             log.warn("Internal admin client application creation lost a uniqueness race at save-time");
             return ensureRefreshTokenGrant(clientApplicationRepository.findByClientId(internalAdminClientId)
                     .orElseThrow(() -> new BadRequestException("Failed to resolve internal admin client application after a create-vs-create race")));
         }
     }
 
-    /**
-     * Step 2H self-heal: a row created before this pass has an empty
-     * grantTypes set, so admin login never minted a refresh token. Backfills
-     * it on every read instead of requiring a migration, so an
-     * already-provisioned environment picks this up with no manual step.
-     */
     private ClientApplication ensureRefreshTokenGrant(ClientApplication client) {
         if (client.getGrantTypes().contains("refresh_token")) {
             return client;
@@ -348,21 +310,12 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         return toDetail(saved);
     }
 
-    /**
-     * Persistent (non-rotating) refresh token settings. Both arguments null
-     * means "leave as is". Rotation on always clears the per-client TTL
-     * (a single-use token has no use for one); rotation off requires an
-     * explicit TTL and the refresh_token grant, since without that grant
-     * UserLoginServiceImpl never mints a refresh token at all.
-     */
     private void applyRefreshTokenSettings(ClientApplication client, Boolean rotationEnabled, Integer ttlDays, Integer maxLifetimeDays) {
         if (rotationEnabled == null && ttlDays == null && maxLifetimeDays == null) {
             return;
         }
         boolean rotation = rotationEnabled != null ? rotationEnabled : client.isRefreshTokenRotationEnabled();
         Integer ttl = ttlDays != null ? ttlDays : client.getRefreshTokenTtlDays();
-        // When rotationEnabled is supplied, the persistent settings are replaced as a set, so a
-        // null maxLifetimeDays clears the cap. Otherwise a null leaves the existing cap alone.
         Integer maxLifetime = (rotationEnabled != null || maxLifetimeDays != null)
                 ? maxLifetimeDays
                 : client.getRefreshTokenMaxLifetimeDays();
@@ -402,11 +355,6 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         }
     }
 
-    /**
-     * Grant types can be edited on a live client, with three rules: at least one must remain (an empty set would silently fall back to
-     * client_credentials), only the three supported values are accepted, and refresh_token cannot be removed from a client that still has
-     * persistent refresh tokens on. Tokens already issued are not revoked by removing a grant type.
-     */
     private Set<String> validateGrantTypes(Set<String> requested) {
         if (requested.isEmpty()) {
             throw new BadRequestException("At least one grant type is required");
@@ -428,7 +376,6 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
                 + ", grantTypes=" + new java.util.TreeSet<>(client.getGrantTypes());
     }
 
-    /** before == null means the client was just created. Publishes nothing when an update changed none of these settings. */
     private void publishSessionSettingsAudit(ClientApplication saved, String before) {
         String after = sessionSettingsSnapshot(saved);
         if (before != null && before.equals(after)) {
@@ -471,11 +418,6 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
                 client.getMaxActiveSessions());
     }
 
-    /**
-     * Step 17h (B-14): how many devices one user may keep signed in. null leaves the limit as it is.
-     * Checked after revokePriorSessionsOnLogin is applied, because more than one device only works
-     * when a sign-in does not end the others.
-     */
     private void applySessionLimit(ClientApplication client, Integer maxActiveSessions) {
         if (maxActiveSessions != null) {
             if (maxActiveSessions < 1 || maxActiveSessions > MAX_ACTIVE_SESSIONS_CEILING) {
@@ -488,11 +430,6 @@ public class ClientApplicationServiceImpl implements ClientApplicationService {
         }
     }
 
-    // Admin-console-only reveal: decrypts clientSecretEncrypted purely for
-    // display, never for authentication (see ClientApplication's javadoc on
-    // that field). Null for PUBLIC clients and for any CONFIDENTIAL client
-    // that predates this column - regenerate is the only way for those to
-    // get a viewable secret.
     private String decryptSecretForDisplay(ClientApplication client) {
         if (client.getClientSecretEncrypted() == null) {
             return null;

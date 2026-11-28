@@ -29,12 +29,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 8A (service half). SessionManagementServiceImpl's own class Javadoc
- * documents the userId-keyed redesign (see that class) - these tests lock
- * in every branch of its public contract directly, as plain mock-based unit
- * tests against UserSessionRepository/UserRepository/TokenHasher.
- */
+/** Unit tests for SessionManagementServiceImpl. */
 class SessionManagementServiceImplTest {
 
     private final UserSessionRepository userSessionRepository = mock(UserSessionRepository.class);

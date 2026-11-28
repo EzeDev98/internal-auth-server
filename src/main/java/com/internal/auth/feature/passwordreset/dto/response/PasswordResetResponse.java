@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/** Response for password reset requests. */
 @Getter
 @Setter
 @AllArgsConstructor

@@ -11,27 +11,7 @@ import java.net.http.HttpResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Step 11E. management.endpoints.web.exposure.include in application.properties
- * explicitly limits actuator's web exposure to health,info,metrics,prometheus -
- * this proves that limit actually holds against a real running server on the
- * separate management port (management.server.port, 8081), not just that the
- * property is set. Requires a genuinely running embedded server rather than
- * MockMvc: the management port is a distinct embedded connector with its own
- * DispatcherServlet, outside the main WebApplicationContext MockMvc dispatches
- * into directly - IntegrationTestBase's DEFINED_PORT webEnvironment (see its
- * own javadoc) is what makes a real loopback HTTP call to localhost work here
- * at all. Uses the plain JDK HttpClient rather than a Spring Boot test HTTP
- * client - Boot 4's per-feature test-starter split (spring-boot-starter-restclient-test
- * et al., see pom.xml) relocated several test-only classes, and this avoids
- * depending on knowing that new package path correctly.
- *
- * WebSecurityConfig's own javadoc on EndpointRequest.toAnyEndpoint() notes
- * this app's security filter chain applies across every port it listens on,
- * confirmed the hard way - so a sensitive endpoint being unreachable here
- * must come from Boot never registering a web handler for it in the first
- * place (a plain 404), not from a security rule that could later be loosened.
- */
+/** Verifies which actuator endpoints are exposed over the web. */
 class ActuatorManagementPortIT extends IntegrationTestBase {
 
     private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();

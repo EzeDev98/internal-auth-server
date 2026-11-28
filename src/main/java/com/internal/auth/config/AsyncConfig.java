@@ -8,6 +8,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
+/** Configures the thread pool used for asynchronous tasks. */
 @Configuration
 @EnableAsync
 public class AsyncConfig {

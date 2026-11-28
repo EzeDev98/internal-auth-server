@@ -9,6 +9,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+/** Links a user to a permission group. */
 @Getter
 @Setter
 @AllArgsConstructor

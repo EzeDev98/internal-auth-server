@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.util.List;
 
+/** Sub-group details. */
 @Getter
 @Setter
 @AllArgsConstructor

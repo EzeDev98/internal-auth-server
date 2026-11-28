@@ -5,11 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Fine-grained-permission row for GET ${app.title}/roles/{id} (Step 2C,
- * React Admin Client plan v4) - see RoleQueryServiceImpl's Javadoc for why
- * this is currently always an empty list for every role.
- */
+/** Permission row shown on a role's detail view. */
 @Getter
 @Setter
 @NoArgsConstructor

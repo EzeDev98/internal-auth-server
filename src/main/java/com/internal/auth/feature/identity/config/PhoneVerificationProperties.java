@@ -5,13 +5,7 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Typed configuration for the phone-verification OTP flow, backed by
- * "phone-verification.*" properties - same pattern as
- * EmailVerificationProperties/LoginMfaProperties. Defaults are set
- * directly on the fields so this works with no application.properties
- * changes required.
- */
+/** Phone verification OTP settings bound from phone-verification properties. */
 @Getter
 @Setter
 @Configuration

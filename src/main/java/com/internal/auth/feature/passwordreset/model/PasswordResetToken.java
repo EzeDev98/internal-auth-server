@@ -10,15 +10,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
-/**
- * A short-lived, single-use, purpose-specific token issued only after
- * successful OTP verification. It authorizes exactly one password-reset
- * completion call and grants no other application access — it is not a
- * Keycloak access/refresh token and is never accepted by any other endpoint.
- *
- * Only the hash of the token is stored, never the raw value, mirroring the
- * OTP storage approach.
- */
+/** Single-use token issued after a password reset OTP is verified. */
 @Getter
 @Setter
 @NoArgsConstructor

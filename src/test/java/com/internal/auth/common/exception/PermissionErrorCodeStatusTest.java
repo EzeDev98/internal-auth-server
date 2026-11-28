@@ -10,12 +10,7 @@ import java.util.Arrays;
 import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Tag;
 
-/**
- * Step 5C - locks in the numeric code and HTTP status for every
- * PermissionErrorCode value, so a future edit that reorders, renumbers, or
- * changes the status of one of these fails loudly here instead of silently
- * changing a documented API contract.
- */
+/** Locks in the code and HTTP status of every PermissionErrorCode. */
 @Tag("security-boundary")
 class PermissionErrorCodeStatusTest {
 
@@ -58,9 +53,6 @@ class PermissionErrorCodeStatusTest {
 
     @Test
     void everyEnumConstantIsCoveredByTheTableAbove() {
-        // If this fails, a new PermissionErrorCode was added without adding
-        // a row to the @CsvSource table above locking in its code and
-        // status - or one was removed without removing its row.
         assertThat(PermissionErrorCode.values()).hasSize(27);
     }
 

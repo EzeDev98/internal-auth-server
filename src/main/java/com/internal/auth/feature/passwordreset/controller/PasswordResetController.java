@@ -34,28 +34,7 @@ import static com.internal.auth.common.constant.AppConstant.RESET_PASSWORD_RATE_
 import static com.internal.auth.common.constant.AppConstant.VERIFY_OTP_RATE_LIMIT_DURATION_HOURS;
 import static com.internal.auth.common.constant.AppConstant.VERIFY_OTP_RATE_LIMIT_KEY_PREFIX;
 
-
-/**
- * Mapped under the "${app.title}" property, same as every other controller
- * in the app. API-contract review (step 1): this was briefly pinned to the
- * literal "/api/v1/password-reset" because WebSecurityConfig's permitAll()
- * matchers didn't yet cover the "${app.title}" form for these paths - that
- * was the wrong fix for the underlying problem. WebSecurityConfig now reads
- * the same "app.title" property to build its own matcher paths, so this
- * controller and its security rule move together no matter which
- * representation either side uses.
- *
- * Multi-tenant redesign, OTP/token flows step: "/request" and
- * "/verify-otp" now require the same HTTP Basic client-credential header
- * RegistrationController/LoginController resolve (see
- * RegistrationController's Javadoc for the full rationale). Rate-limiter
- * keys are namespaced by the resolved client_application_id too - a bare
- * phone-number key would let one app's caller exhaust the rate limit for a
- * different app's user who happens to share that phone number.
- * "/complete" is untouched - it resolves everything from the reset
- * token's own hash, which was never ambiguous, so there's no caller
- * identity to resolve there.
- */
+/** Endpoints for resetting and changing passwords. */
 @RestController
 @RequestMapping("${app.title}/password-reset")
 @Tag(name = "Password Reset API", description = "Phone-number OTP based password reset flow")
@@ -86,10 +65,6 @@ public class PasswordResetController {
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
             @RequestBody VerifyOtpRequest request) {
         ClientApplication client = clientApplicationService.authenticateClientFromBasicAuthHeader(authorizationHeader);
-        // Step 11F: guards against the per-OTP attemptCount getting reset by
-        // simply requesting a fresh OTP every cooldown window — this caps
-        // total guess attempts per phone number independently of how many
-        // OTPs were issued.
         rateLimiterService.checkRateLimit(VERIFY_OTP_RATE_LIMIT_KEY_PREFIX + client.getId() + ":" + request.getPhoneNumber(), MAX_VERIFY_OTP_REQUEST, Duration.ofHours(VERIFY_OTP_RATE_LIMIT_DURATION_HOURS));
         VerifyOtpResponse response = passwordResetService.verifyOtp(request, client.getId());
         return ResponseEntity.ok(InternalAuthApiResponse.success("OTP verified successfully.", response));
@@ -97,10 +72,6 @@ public class PasswordResetController {
 
     @PostMapping("/complete")
     public ResponseEntity<InternalAuthApiResponse<PasswordResetResponse>> completeReset(@RequestBody CompletePasswordResetRequest request, HttpServletRequest httpRequest) {
-        // Step 11F: CompletePasswordResetRequest carries no phone number, and
-        // the reset token itself is a 256-bit random value that can't
-        // realistically be brute-forced, so this is generic abuse/DoS
-        // protection keyed by client IP rather than a guessing defense.
         rateLimiterService.checkRateLimit(COMPLETE_RESET_RATE_LIMIT_KEY_PREFIX + httpRequest.getRemoteAddr(), MAX_COMPLETE_RESET_REQUEST, Duration.ofHours(COMPLETE_RESET_RATE_LIMIT_DURATION_HOURS));
         PasswordResetResponse response = passwordResetService.completeReset(request);
         return ResponseEntity.ok(InternalAuthApiResponse.success(response.getMessage(), response));

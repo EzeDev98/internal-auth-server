@@ -1,3 +1,4 @@
+# Local Docker Compose services for MySQL, Postgres and Redis.
 services:
   mysql:
     image: 'mysql:latest'
@@ -9,11 +10,6 @@ services:
     ports:
       - '3306'
     labels:
-      # Local dev uses the host MySQL on 3306 directly (see
-      # application-dev.properties) - this container was silently
-      # overriding spring.datasource.url to an ephemeral-port throwaway
-      # container instead, so tables were landing in a container's
-      # `mydatabase` schema, never in the real internal_auth_db.
       org.springframework.boot.ignore: true
   postgres:
     image: 'postgres:latest'

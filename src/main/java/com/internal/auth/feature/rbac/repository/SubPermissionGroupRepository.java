@@ -10,16 +10,11 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
+/** Repository for sub-groups. */
 public interface SubPermissionGroupRepository extends JpaRepository<SubPermissionGroup, Long> {
     Optional<SubPermissionGroup> findByGroupName(String groupName);
     boolean existsByGroupName(String groupName);
 
-    /**
-     * Step 2D (React Admin Client plan v4): backs GET
-     * ${app.title}/groups/{id}/subgroups - the admin group directory's
-     * "list every subgroup under this parent" gap (no way to enumerate
-     * subgroup names today without already knowing them).
-     */
     List<SubPermissionGroup> findAllByParentGroup(PermissionGroup parentGroup);
 
     @Modifying

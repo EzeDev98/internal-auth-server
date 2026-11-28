@@ -5,13 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Request body for POST /api/v1/admin/register. Same shape as
- * RegisterRequest (phoneNumber/email both optional individually, at least
- * one required - see RegistrationValidator#validateContactInfoPresent) -
- * kept as its own type rather than reused so the admin bootstrap flow can
- * evolve independently of regular tenant registration.
- */
+/** Request body for registering an admin. */
 @Getter
 @Setter
 @NoArgsConstructor

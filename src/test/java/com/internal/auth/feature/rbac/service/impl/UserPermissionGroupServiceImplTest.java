@@ -27,6 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/** Unit tests for UserPermissionGroupServiceImpl. */
 class UserPermissionGroupServiceImplTest {
 
     private final EntityUtilityService utils = mock(EntityUtilityService.class);
@@ -52,8 +53,6 @@ class UserPermissionGroupServiceImplTest {
         role.setRoleName(name);
         return role;
     }
-
-    // -- removeUserFromPermissionGroup ---------------------------------------
 
     @Test
     void removeUserFromPermissionGroup_blankUsernameOrGroup_throws() {
@@ -85,8 +84,6 @@ class UserPermissionGroupServiceImplTest {
 
     @Test
     void removeUserFromPermissionGroup_currentBehavior_perRoleUnassignFailureIsSwallowed() {
-        // A role that fails to unassign is logged and skipped - it does not
-        // abort removing the user from the group.
         User user = user("user1");
         PermissionGroup group = group("buyers");
         UserPermissionGroup mapping = new UserPermissionGroup();
@@ -112,9 +109,6 @@ class UserPermissionGroupServiceImplTest {
 
     @Test
     void removeUserFromPermissionGroup_currentBehavior_unexpectedExceptionWrappedWithFixedMessage() {
-        // The wrapping message here is a fixed string, not one that embeds
-        // the underlying exception's message (unlike most other RBAC
-        // catch-alls in this codebase).
         User user = user("user1");
         PermissionGroup group = group("buyers");
         when(utils.getUser("user1")).thenReturn(user);
@@ -128,8 +122,6 @@ class UserPermissionGroupServiceImplTest {
                     assertThat(ex.getMessage()).isEqualTo("Failed to remove user from the specified group");
                 });
     }
-
-    // -- addUserToGroup (idempotency) ----------------------------------------
 
     @Test
     void addUserToGroup_nullUsernameOrGroup_throwsEmptyField() {
@@ -216,8 +208,6 @@ class UserPermissionGroupServiceImplTest {
                 .isInstanceOfSatisfying(PermissionException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(PermissionErrorCode.USER_GROUP_MAPPING_FAILED));
     }
-
-    // -- addUserToSubGroup / addUserToSubGroups (no idempotency guard) ------
 
     @Test
     void addUserToSubGroup_success_savesAndReturnsMappedResponse() {

@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Body for POST /auth/session-status: which of the calling client's users to check. */
+/** Request body for checking a user's session status. */
 @Getter
 @Setter
 @NoArgsConstructor

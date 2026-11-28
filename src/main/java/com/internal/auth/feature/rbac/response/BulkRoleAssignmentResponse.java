@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.util.List;
 
+/** Result of a bulk role assignment. */
 @Getter
 @Setter
 @AllArgsConstructor

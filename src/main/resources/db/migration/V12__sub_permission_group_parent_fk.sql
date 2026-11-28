@@ -1,23 +1,4 @@
--- Step 13D: SubPermissionGroup.parentGroupId becomes a real FK.
---
--- Today parent_group_id is a bare VARCHAR that's supposed to match the
--- parent PermissionGroup's keycloak_group_id - but every PermissionGroup
--- has been created with keycloak_group_id = NULL since Step 13C's
--- control-flow rewrite stopped calling Keycloak at all, so that match has
--- been silently broken for every subgroup created under current code
--- (EntityUtilityService.getSubGroup/fetchAllUserPermissionGroups both
--- defensively threw "Parent group has no Keycloak ID assigned" rather
--- than NPE, but the parent/child relationship could never actually be
--- verified). This replaces it with a real FK to permission_groups(id).
---
--- No existing parent_group_id string value is a valid FK target, so - same
--- "pre-production, fine to wipe" basis as V8/V9 - this clears out
--- sub_permission_group and anything that references a subgroup, rather
--- than attempting a cast. Only rows scoped to a subgroup are touched:
--- role_permission_group_mapping/user_permission_group rows that instead
--- point directly at a PermissionGroup (sub_permission_group_id IS NULL)
--- are left alone.
-
+-- Links each sub-group to its parent permission group with a foreign key.
 DELETE FROM role_permission_group_mapping WHERE sub_permission_group_id IS NOT NULL;
 DELETE FROM user_permission_group WHERE sub_permission_group_id IS NOT NULL;
 DELETE FROM sub_permission_group;

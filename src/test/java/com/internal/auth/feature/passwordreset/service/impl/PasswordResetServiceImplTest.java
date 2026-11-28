@@ -57,16 +57,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/**
- * Unit tests for {@link PasswordResetServiceImpl}.
- *
- * PasswordResetProperties is used as a real object (default field values
- * from PasswordOtp/PasswordToken: otp length 6, expiration 5 minutes, max
- * attempts 5, resend cooldown 60 seconds; token expiration 10 minutes)
- * rather than mocked, since it is a plain configuration holder, consistent
- * with how the other identity-area tests in this suite treat
- * @ConfigurationProperties classes.
- */
+/** Unit tests for PasswordResetServiceImpl. */
 @ExtendWith(MockitoExtension.class)
 class PasswordResetServiceImplTest {
 
@@ -156,10 +147,6 @@ class PasswordResetServiceImplTest {
         return token;
     }
 
-    // ---------------------------------------------------------------
-    // requestOtp
-    // ---------------------------------------------------------------
-
     @Test
     @DisplayName("requestOtp: invalid phone number throws and never reaches the cooldown check")
     void requestOtp_invalidPhoneNumber_throwsAndSkipsCooldownCheck() {
@@ -194,10 +181,6 @@ class PasswordResetServiceImplTest {
 
         passwordResetService.requestOtp(request, CLIENT_APPLICATION_ID);
 
-        // Unlike EmailVerificationServiceImpl/PhoneVerificationServiceImpl's
-        // resendVerification (Step 7 Part D), this method never trims the
-        // phone number anywhere, so the cooldown key and the repository
-        // lookup both use the exact same raw value.
         verify(otpResetEngine).getCooldownBucket(redissonClient, PASSWORD_RESET_COOLDOWN_KEY_PREFIX, CLIENT_APPLICATION_ID + ":" + PHONE_NUMBER);
     }
 
@@ -245,10 +228,6 @@ class PasswordResetServiceImplTest {
         PasswordResetResponse response = passwordResetService.requestOtp(request, CLIENT_APPLICATION_ID);
 
         verifyNoInteractions(passwordResetOtpRepository, otpDeliveryService);
-        // Explicit type witnesses: both arguments are bare any() matchers
-        // here, giving the compiler no concrete-type evidence to infer T
-        // from (unlike the "success" test above, where any(X.class) or a
-        // concretely-typed eq(...) pins it down).
         verify(otpResetEngine, never()).<PasswordResetOtp>invalidateExisting(any(), any());
         verify(otpResetEngine, never()).<PasswordResetOtp>populateNewOtp(any(), anyString(), anyString(), anyInt(), anyInt());
         verify(otpResetEngine).startCooldown(cooldownBucket, 60);
@@ -274,10 +253,6 @@ class PasswordResetServiceImplTest {
         verify(passwordResetOtpRepository, never())
                 .findTopByPhoneNumberAndStatusOrderByCreatedAtDesc(any(), any());
     }
-
-    // ---------------------------------------------------------------
-    // verifyOtp
-    // ---------------------------------------------------------------
 
     @Test
     @DisplayName("verifyOtp: invalid phone number throws and never validates the OTP format")
@@ -361,10 +336,6 @@ class PasswordResetServiceImplTest {
         assertThat(response.getResetToken()).isEqualTo(RAW_RESET_TOKEN);
     }
 
-    // ---------------------------------------------------------------
-    // completeReset
-    // ---------------------------------------------------------------
-
     @Test
     @DisplayName("completeReset: validates the new password before checking whether a reset token was even supplied")
     void completeReset_validatesNewPasswordBeforeResetTokenPresence() {
@@ -439,8 +410,6 @@ class PasswordResetServiceImplTest {
         assertThrows(UserNotFoundException.class, () -> passwordResetService.completeReset(request));
 
         verify(passwordEncoder, never()).encode(anyString());
-        // Type witness for the same reason as above - both args are bare
-        // any() matchers with no concrete-type evidence for T.
         verify(otpResetEngine, never()).<PasswordResetToken>markUsed(any(), any());
         verifyNoInteractions(sessionManagementService);
     }

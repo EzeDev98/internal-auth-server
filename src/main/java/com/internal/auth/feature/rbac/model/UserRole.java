@@ -9,6 +9,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+/** Links a user to a role. */
 @Getter
 @Setter
 @AllArgsConstructor

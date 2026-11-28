@@ -51,37 +51,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.junit.jupiter.api.Tag;
 
-/**
- * Step 13A (continued): the "200 with an admin token" side of
- * PermissionController's full route set - one test per endpoint, each
- * seeding whatever real precondition rows that endpoint's actual service
- * call needs (ground-truthed from PermissionManagementServiceImpl/
- * PermissionEntityServiceImpl/EntityUtilityService), asserting the real
- * per-operation status code (201 for every create/assign, 200 for every
- * fetch/delete - never a blanket 200, see each service method's own
- * BaseResponse construction). PermissionControllerAccessControlIT already
- * covers the 401/no-token and 403/non-admin-token cases for all 18
- * endpoints without needing this setup.
- *
- * All role/group/subgroup names are unique per test run (RoleTestDataBuilder/
- * PermissionGroupTestDataBuilder's own counters, or an explicit UUID suffix
- * for names this class hands to an endpoint directly) since roles and
- * permission groups are global, not tenant-scoped, and this suite's
- * Postgres container is a reused singleton across the whole IT run.
- *
- * Note (flagged for Step 13C, not fixed here): fetchUserPermissionGroups
- * (GET /users/{username}/permission-groups) carries both
- * @PreAuthorize(Roles.HAS_ADMIN) AND an internal
- * authenticationHelper.requireSelfOrAdmin(username) call - the method
- * Javadoc says "callers without the admin role may only fetch their own",
- * but the @PreAuthorize annotation actually blocks every non-admin caller
- * before requireSelfOrAdmin ever runs, so self-access doesn't currently
- * work at all. This class only asserts the admin-token path, which behaves
- * correctly under the code as it stands; Step 13C's own IDOR-fix test
- * (GET /users/{username}/permission-groups - user A can't fetch user B's
- * groups, can fetch their own, admin can fetch anyone's) is where that
- * discrepancy will actually surface.
- */
+/** Integration tests for PermissionController with an admin token. */
 @Tag("security-boundary")
 class PermissionControllerAdminHappyPathIT extends IntegrationTestBase {
 

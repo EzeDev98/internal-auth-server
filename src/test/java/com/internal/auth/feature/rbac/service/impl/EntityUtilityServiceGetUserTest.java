@@ -16,16 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-/**
- * Step 6B - EntityUtilityService.getUser() regression test for the RBAC
- * admin-lookup fix: usernames stopped being globally unique once the
- * multi-tenant redesign scoped uniqueness to (client_application_id,
- * username) - see EntityUtilityService's own javadoc on this method. RBAC
- * itself stays deliberately global, so this locks in the three-way branch:
- * 0 matches is "not found", exactly 1 behaves as before, and 2+ (the same
- * username now present in more than one tenant) fails loudly with a 409
- * instead of silently picking one.
- */
+/** Unit tests for EntityUtilityService user lookup. */
 class EntityUtilityServiceGetUserTest {
 
     private final UserRepository userRepository = mock(UserRepository.class);

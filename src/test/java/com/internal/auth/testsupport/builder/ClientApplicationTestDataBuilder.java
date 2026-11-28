@@ -6,13 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Fluent test-data builder for ClientApplication (a tenant). Defaults to a
- * confidential client_credentials client with no secret set - call
- * withClientSecretHash(...) with a real BCrypt hash (see
- * ClientApplication's class javadoc: PasswordEncoder, not TokenHasher) for
- * tests that authenticate as this client over HTTP Basic.
- */
+/** Test data builder for ClientApplication. */
 public class ClientApplicationTestDataBuilder {
 
     private static final AtomicLong COUNTER = new AtomicLong();

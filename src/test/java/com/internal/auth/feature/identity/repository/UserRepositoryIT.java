@@ -16,21 +16,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Step 9B/9C. Runs against a real, throwaway Postgres with every Flyway
- * migration applied (via IntegrationTestBase's Testcontainers setup)
- * rather than a lighter @DataJpaTest/H2 slice - this app has no separate
- * test datasource wiring outside that base class, and reusing it keeps
- * these queries and constraints running against the exact same
- * schema-application path production does, which is the whole point of
- * this step (H2 would not catch a Postgres-specific mistake across 21
- * migrations, including the composite UNIQUE constraints under test here).
- *
- * Confirms the V8 multi-tenant redesign actually holds at the database
- * level - tenant scoping in the custom finders, and the composite
- * (client_application_id, username/phone_number/email) uniqueness
- * constraints - not just in application code.
- */
+/** Integration tests for UserRepository against a migrated database. */
 class UserRepositoryIT extends IntegrationTestBase {
 
     @Autowired

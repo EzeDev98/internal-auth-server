@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Step 17h: how many of the caller's other devices DELETE /session/others signed out. */
+/** Number of the caller's other sessions that were signed out. */
 @Getter
 @Setter
 @NoArgsConstructor

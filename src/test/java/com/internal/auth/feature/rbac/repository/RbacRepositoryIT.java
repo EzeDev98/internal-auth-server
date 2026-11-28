@@ -31,21 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Step 9B/9C/9D. Runs against a real, throwaway Postgres with every Flyway
- * migration applied (via IntegrationTestBase, same rationale as
- * UserRepositoryIT's class javadoc) rather than a lighter @DataJpaTest/H2
- * slice.
- *
- * Covers the RBAC custom queries that AdminRegistrationServiceImpl and
- * UserRoleServiceImpl actually depend on: the tenant-scoped vs
- * deliberately-global read paths (RolesRepository is global by product
- * decision - see RoleTestDataBuilder's own javadoc), the V20 name-uniqueness
- * constraints, and - the part a mock can never prove - that
- * findByRoleNameForUpdate's PESSIMISTIC_WRITE lock genuinely blocks a
- * second concurrent caller at the database level rather than just
- * compiling with the right annotation.
- */
+/** Integration tests for the RBAC repositories against a migrated database. */
 class RbacRepositoryIT extends IntegrationTestBase {
 
     @Autowired
@@ -90,10 +76,6 @@ class RbacRepositoryIT extends IntegrationTestBase {
         Role role = rolesRepository.save(RoleTestDataBuilder.aRole().build());
         link(userInThatTenant, role);
 
-        // No clientApplicationId/tenant is passed to this query at all - it
-        // is true purely because *some* user, in *some* tenant, holds this
-        // role, matching AdminRegistrationServiceImpl's own use of it to
-        // self-limit admin bootstrap system-wide rather than per tenant.
         assertThat(userRolesRepository.existsByRoleRoleName(role.getRoleName())).isTrue();
         assertThat(userRolesRepository.existsByRoleRoleName("role-nobody-anywhere-holds")).isFalse();
     }
@@ -125,17 +107,6 @@ class RbacRepositoryIT extends IntegrationTestBase {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
-    /**
-     * Proves findByRoleNameForUpdate's @Lock(PESSIMISTIC_WRITE) is a real
-     * SELECT ... FOR UPDATE, not a no-op annotation: a second transaction
-     * that tries to lock the same row must genuinely wait in the database
-     * until the first transaction commits, rather than reading through
-     * immediately. First transaction holds the lock, signals it has it,
-     * then sleeps 500ms *after* confirming the second caller has already
-     * issued its own locking query - so the second caller's measured
-     * elapsed time is a real wait on Postgres, not a race against this
-     * test's own thread scheduling.
-     */
     @Test
     void findByRoleNameForUpdate_pessimisticWriteLock_secondCallerGenuinelyBlocksUntilTheFirstCommits() throws Exception {
         rolesRepository.saveAndFlush(RoleTestDataBuilder.aRole().withRoleName("lock-target-role").build());

@@ -1,15 +1,4 @@
--- Baseline schema for internal-auth-server (Stage 1 punch-list item 4).
---
--- Targets PostgreSQL only - the app's production datastore. Local/dev runs
--- against MySQL with Hibernate's own ddl-auto=update and never runs Flyway
--- (see application-dev.properties / application-prod.properties), so this
--- file intentionally has no MySQL counterpart.
---
--- Column set, nullability and lengths are taken directly from the JPA
--- entities under com.internal.auth.feature.*.model so that
--- spring.jpa.hibernate.ddl-auto=validate (prod) passes against this schema
--- without Hibernate needing to alter anything at startup.
-
+-- Creates the initial users, RBAC, session and password reset tables.
 CREATE TABLE users (
     id           BIGSERIAL PRIMARY KEY,
     username     VARCHAR(255) NOT NULL,
@@ -39,11 +28,6 @@ CREATE TABLE permission_groups (
     created_at        TIMESTAMP
 );
 
--- Renamed from the entity's former "sub-permission-group" @Table value.
--- A hyphenated identifier needs to be double-quoted on every single
--- reference or Postgres (and most tooling) folds/mangles it - a
--- portability trap with no upside. SubPermissionGroup.java's @Table
--- annotation is updated to match in this same patch.
 CREATE TABLE sub_permission_group (
     id                BIGSERIAL PRIMARY KEY,
     group_name        VARCHAR(255),
@@ -100,13 +84,6 @@ CREATE TABLE user_roles (
 CREATE INDEX idx_ur_user_id ON user_roles (user_id);
 CREATE INDEX idx_ur_role_id ON user_roles (role_id);
 
--- No live code references PermissionScopesRepository (repo-wide grep finds
--- zero callers beyond its own declaration) - this looks like dead/orphaned
--- design. Included anyway because the JPA entity + @Table mapping still
--- exist, and ddl-auto=validate will fail app startup if its table is
--- missing. Worth confirming and dropping (table, entity, repository
--- together) in a later cleanup pass - flagging here rather than deciding
--- unilaterally.
 CREATE TABLE permission_scope (
     id          BIGSERIAL PRIMARY KEY,
     scope_type  VARCHAR(255),

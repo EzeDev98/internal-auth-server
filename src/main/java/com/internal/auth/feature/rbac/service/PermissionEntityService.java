@@ -6,6 +6,7 @@ import com.internal.auth.feature.rbac.response.GroupCreationResponse;
 import com.internal.auth.feature.rbac.response.RoleResponse;
 import com.internal.auth.feature.rbac.response.SubGroupCreationResponse;
 
+/** Operations for creating and managing roles and groups. */
 public interface PermissionEntityService {
     RoleResponse createRole(String roleName, String description);
     GroupCreationResponse createSuperGroup(String groupName, String description);
